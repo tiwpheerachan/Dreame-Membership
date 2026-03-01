@@ -141,10 +141,11 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
                       warrantyOk ? 'bg-green-900/20 text-green-400 border border-green-800/30'
                                  : 'bg-gray-800/60 text-gray-500 border border-gray-700/40'
                     }`}>
-                      <Shield size={11} />
-                      {warrantyOk
+                      <span className="inline-flex"><Shield size={11} /></span>
+                      <span>{warrantyOk
                         ? `ประกันคงเหลือ ${daysLeft} วัน (ถึง ${formatDate(String(p.warranty_end))})`
                         : `ประกันหมด ${formatDate(String(p.warranty_end))}`}
+                      </span>
                     </div>
                   )}
 
@@ -152,7 +153,8 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
                   {Boolean(p.receipt_image_url) && (
                     <a href={String(p.receipt_image_url)} target="_blank" rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-2 ml-2 transition-colors">
-                      <span className="inline-flex"><ExternalLink size={11} /></span> ดูใบเสร็จ
+                      <span className="inline-flex"><ExternalLink size={11} /></span>
+                      <span>ดูใบเสร็จ</span>
                     </a>
                   )}
 

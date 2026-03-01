@@ -83,3 +83,16 @@ ORDER BY
 -- ลบ Admin (ถ้าต้องการ)
 -- ================================================================
 -- DELETE FROM admin_staff WHERE email = 'someone@email.com';
+
+5. กด Deploy
+กด "Deploy site" รอประมาณ 2-3 นาที
+เว็บจะได้ชื่อแบบนี้: https://dreame-xxx.netlify.app
+
+6. แก้ Supabase ให้รับ Domain ใหม่
+ไปที่ Supabase → Authentication → URL Configuration
+Site URL:      https://dreame-xxx.netlify.app
+Redirect URLs: https://dreame-xxx.netlify.app/**
+กด Save แล้วทดสอบ login ได้เลยครับ ✅
+
+
+💡 ต่อไปนี้ ทุกครั้งที่ git push เว็บจะ deploy ใหม่อัตโนมัติเลย ไม่ต้องทำอะไรเพิ่ม
