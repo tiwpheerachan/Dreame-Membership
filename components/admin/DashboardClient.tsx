@@ -333,7 +333,7 @@ export default function DashboardClient({ data }: { data: DashboardData }) {
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
             <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 11 }} />
             <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-            <Tooltip content={<CustomTooltip />} formatter={(v: number | string) => [`฿${Number(v).toLocaleString()}`, 'รายได้']} />
+            <Tooltip content={<CustomTooltip />} formatter={(v: number | string | undefined) => [`฿${Number(v ?? 0).toLocaleString()}`, 'รายได้']} />
             <Bar dataKey="revenue" name="รายได้ (฿)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>

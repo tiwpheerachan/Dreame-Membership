@@ -1,5 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import type { User, AdminStaff } from '@/lib/types'
 
@@ -31,7 +30,7 @@ export async function getCurrentAdmin(): Promise<AdminStaff | null> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const adminSupabase = await createAdminClient()
+  const adminSupabase = createServiceClient()
   const { data } = await adminSupabase
     .from('admin_staff')
     .select('*')
@@ -60,7 +59,7 @@ export async function upsertUserProfile(
   authUserId: string,
   data: { phone?: string; email?: string; full_name?: string }
 ) {
-  const supabase = await createAdminClient()
+  const supabase = createServiceClient()
 
   // Check if exists
   const { data: existing } = await supabase

@@ -64,20 +64,28 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   // คืนแต้ม ถ้าเคยได้รับแต้มไปแล้ว
   const pointsToRevert = Number(reg.points_awarded) || 0
   if (pointsToRevert > 0 && reg.user_id) {
-    await serviceSupabase.rpc('adjust_user_points', {
-      p_user_id: reg.user_id,
-      p_delta: -pointsToRevert,
-    }).catch(() => {
-      // fallback: update directly
-      serviceSupabase.from('users')
-        .select('total_points, lifetime_points').eq('id', reg.user_id).single()
-        .then(({ data: u }) => {
-          if (u) serviceSupabase.from('users').update({
+    try {
+      const { error: rpcError } = await serviceSupabase.rpc('adjust_user_points', {
+        p_user_id: reg.user_id,
+        p_delta: -pointsToRevert,
+      })
+      // fallback ถ้า rpc ไม่มีหรือ error
+      if (rpcError) {
+        const { data: u } = await serviceSupabase
+          .from('users')
+          .select('total_points, lifetime_points')
+          .eq('id', reg.user_id)
+          .single()
+        if (u) {
+          await serviceSupabase.from('users').update({
             total_points: Math.max(0, u.total_points - pointsToRevert),
             lifetime_points: Math.max(0, u.lifetime_points - pointsToRevert),
           }).eq('id', reg.user_id)
-        })
-    })
+        }
+      }
+    } catch {
+      // ไม่ให้ error นี้หยุด request หลัก
+    }
   }
 
   await logAdminAction({

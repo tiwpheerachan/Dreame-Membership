@@ -1,7 +1,6 @@
 import type { PurchaseRegistration } from '@/lib/types'
 import { CHANNEL_LABELS, STATUS_LABELS } from '@/lib/types'
-import { formatDate, formatCurrency } from '@/lib/utils'
-import { getDaysUntilExpiry, isWarrantyValid } from '@/lib/points'
+import { formatDate, formatCurrency, warrantyDaysLeft } from '@/lib/utils'
 import { Badge } from '@/components/ui/index'
 import { Package, Calendar, Shield } from 'lucide-react'
 
@@ -19,8 +18,8 @@ interface PurchaseCardProps {
 }
 
 export function PurchaseCard({ purchase, onClick }: PurchaseCardProps) {
-  const warrantyValid = isWarrantyValid(purchase.warranty_expires_at)
-  const daysLeft = getDaysUntilExpiry(purchase.warranty_expires_at)
+  const daysLeft = warrantyDaysLeft(purchase.warranty_expires_at)
+  const warrantyValid = daysLeft > 0
 
   return (
     <div
