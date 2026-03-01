@@ -8,10 +8,18 @@ let bqClient: BigQuery | null = null
 
 function getBQClient(): BigQuery {
   if (!bqClient) {
-    // Support both file path and inline JSON credentials
     const credentialsJson = process.env.BQ_CREDENTIALS_JSON
     if (credentialsJson) {
-      const credentials = JSON.parse(credentialsJson)
+      // รองรับทั้ง raw JSON และ base64
+      let parsed: string = credentialsJson
+      try {
+        // ลอง parse ตรงๆ ก่อน
+        JSON.parse(credentialsJson)
+      } catch {
+        // ถ้า parse ไม่ได้ แสดงว่าเป็น base64
+        parsed = Buffer.from(credentialsJson, 'base64').toString('utf-8')
+      }
+      const credentials = JSON.parse(parsed)
       bqClient = new BigQuery({ projectId: process.env.BQ_PROJECT_ID, credentials })
     } else {
       bqClient = new BigQuery({ projectId: process.env.BQ_PROJECT_ID })
