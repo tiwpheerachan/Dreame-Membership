@@ -1,7 +1,25 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { formatDate, formatDateTime, channelLabel } from '@/lib/utils'
+import { formatDate, channelLabel } from '@/lib/utils'
 import ApprovePurchaseButtons from '@/components/admin/ApprovePurchaseButtons'
-import { Clock, Package } from 'lucide-react'
+import { Clock } from 'lucide-react'
+
+type PendingUser = {
+  full_name: string | null
+  phone: string | null
+  member_id: string | null
+}
+
+type PendingPurchase = {
+  id: string
+  order_sn: string
+  model_name: string | null
+  channel: string
+  created_at: string
+  serial_number: string | null
+  total_amount: number | null
+  receipt_image_url: string | null
+  users: PendingUser
+}
 
 export default async function PendingPage() {
   const supabase = createServiceClient()
@@ -26,63 +44,60 @@ export default async function PendingPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {pending.map((p: Record<string, unknown>) => {
-            const user = p.users as Record<string, unknown>
-            return (
-              <div key={p.id as string} className="bg-gray-900 border border-amber-800/30 rounded-xl p-4 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-white font-semibold">{p.model_name as string || `Order: ${p.order_sn}`}</p>
-                    <p className="text-gray-500 text-xs font-mono">{p.order_sn as string}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-amber-400 text-xs bg-amber-900/20 border border-amber-800/40 px-2 py-1 rounded-full">
-                    <Clock size={12} /> รอตรวจสอบ
-                  </div>
+          {(pending as unknown as PendingPurchase[]).map((p) => (
+            <div key={p.id} className="bg-gray-900 border border-amber-800/30 rounded-xl p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-white font-semibold">{p.model_name || `Order: ${p.order_sn}`}</p>
+                  <p className="text-gray-500 text-xs font-mono">{p.order_sn}</p>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <p className="text-gray-500">สมาชิก</p>
-                    <p className="text-gray-300">{user?.full_name as string}</p>
-                    <p className="text-gray-500 font-mono text-xs">{user?.member_id as string}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">เบอร์โทร</p>
-                    <p className="text-gray-300">{user?.phone as string || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">ช่องทาง</p>
-                    <p className="text-gray-300">{channelLabel(p.channel as string)}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">วันที่กรอก</p>
-                    <p className="text-gray-300">{formatDate(p.created_at as string)}</p>
-                  </div>
-                  {p.serial_number && (
-                    <div>
-                      <p className="text-gray-500">Serial No.</p>
-                      <p className="text-gray-300 font-mono">{p.serial_number as string}</p>
-                    </div>
-                  )}
-                  {p.total_amount && Number(p.total_amount) > 0 && (
-                    <div>
-                      <p className="text-gray-500">ยอดรวม</p>
-                      <p className="text-gray-300">฿{Number(p.total_amount).toLocaleString()}</p>
-                    </div>
-                  )}
+                <div className="flex items-center gap-1.5 text-amber-400 text-xs bg-amber-900/20 border border-amber-800/40 px-2 py-1 rounded-full">
+                  <Clock size={12} /> รอตรวจสอบ
                 </div>
-
-                {p.receipt_image_url && (
-                  <a href={p.receipt_image_url as string} target="_blank" rel="noopener noreferrer"
-                    className="block text-amber-400 text-xs hover:underline">
-                    📄 ดูรูปใบเสร็จ →
-                  </a>
-                )}
-
-                <ApprovePurchaseButtons purchaseId={p.id as string} />
               </div>
-            )
-          })}
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <p className="text-gray-500">สมาชิก</p>
+                  <p className="text-gray-300">{p.users?.full_name || '-'}</p>
+                  <p className="text-gray-500 font-mono text-xs">{p.users?.member_id || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">เบอร์โทร</p>
+                  <p className="text-gray-300">{p.users?.phone || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">ช่องทาง</p>
+                  <p className="text-gray-300">{channelLabel(p.channel)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">วันที่กรอก</p>
+                  <p className="text-gray-300">{formatDate(p.created_at)}</p>
+                </div>
+                {p.serial_number && (
+                  <div>
+                    <p className="text-gray-500">Serial No.</p>
+                    <p className="text-gray-300 font-mono">{p.serial_number}</p>
+                  </div>
+                )}
+                {p.total_amount && p.total_amount > 0 && (
+                  <div>
+                    <p className="text-gray-500">ยอดรวม</p>
+                    <p className="text-gray-300">฿{p.total_amount.toLocaleString()}</p>
+                  </div>
+                )}
+              </div>
+
+              {p.receipt_image_url && (
+                <a href={p.receipt_image_url} target="_blank" rel="noopener noreferrer"
+                  className="block text-amber-400 text-xs hover:underline">
+                  📄 ดูรูปใบเสร็จ →
+                </a>
+              )}
+
+              <ApprovePurchaseButtons purchaseId={p.id} />
+            </div>
+          ))}
         </div>
       )}
     </div>
