@@ -20,7 +20,7 @@ function getBQClient(): BigQuery {
   return bqClient
 }
 
-const PROJECT = process.env.BQ_PROJECT_ID ?? 'elated-channel-468406-t4'
+const PROJECT = process.env.BQ_PROJECT_ID ?? ''
 const DATASET = process.env.BQ_DATASET ?? 'Dashboard'
 
 // ============================================================
