@@ -4,6 +4,26 @@ import Link from 'next/link'
 import { formatDateTime } from '@/lib/utils'
 import { ArrowLeft, Package, Star, CheckCircle, XCircle, PlusCircle, Eye } from 'lucide-react'
 
+type AuditDetail = {
+  staff_name?: string
+  order_sn?: string
+  model_name?: string
+  admin_note?: string
+  delta?: number
+  description?: string
+  action?: string
+  points_reverted?: number
+}
+
+type AuditLog = {
+  id: string
+  action_type: string
+  created_at: string
+  user_id: string | null
+  detail: AuditDetail | null
+  user?: { full_name: string | null; member_id: string | null } | null
+}
+
 const ACTION_CONFIG: Record<string, {
   label: string; icon: React.ElementType
   bg: string; text: string; border: string; emoji: string
@@ -15,10 +35,9 @@ const ACTION_CONFIG: Record<string, {
   MEMBER_VIEWED:     { label: 'ดูข้อมูลสมาชิก',       icon: Eye,        bg: 'bg-gray-800',     text: 'text-gray-400',  border: 'border-gray-700',     emoji: '👁' },
 }
 
-function getLink(log: Record<string, unknown>): { href: string; label: string } | null {
-  const detail = log.detail as Record<string, unknown> | null
+function getLink(log: AuditLog): { href: string; label: string } | null {
   if (log.action_type === 'PURCHASE_APPROVED' || log.action_type === 'PURCHASE_REJECTED' || log.action_type === 'PURCHASE_ADDED' || log.action_type === 'POINTS_ADJUSTED') {
-    if (log.user_id) return { href: `/admin/members/${log.user_id as string}`, label: 'ดูสมาชิก →' }
+    if (log.user_id) return { href: `/admin/members/${log.user_id}`, label: 'ดูสมาชิก →' }
   }
   return null
 }
@@ -50,8 +69,8 @@ export default async function MyActivityPage() {
   }
 
   // Group by date
-  const grouped: Record<string, typeof logs> = {}
-  for (const log of (logs || [])) {
+  const grouped: Record<string, AuditLog[]> = {}
+  for (const log of ((logs || []) as AuditLog[])) {
     const date = new Date(log.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })
     if (!grouped[date]) grouped[date] = []
     grouped[date]!.push(log)
@@ -110,18 +129,18 @@ export default async function MyActivityPage() {
               </div>
 
               <div className="space-y-2">
-                {(dateLogs || []).map((log: Record<string, unknown>) => {
-                  const cfg = ACTION_CONFIG[log.action_type as string] || ACTION_CONFIG.MEMBER_VIEWED
-                  const detail = log.detail as Record<string, unknown> | null
-                  const user = log.user as Record<string, unknown> | null
+                {(dateLogs || []).map((log: AuditLog) => {
+                  const cfg = ACTION_CONFIG[log.action_type] || ACTION_CONFIG.MEMBER_VIEWED
+                  const detail = log.detail
+                  const user = log.user
                   const link = getLink(log)
 
                   return (
-                    <div key={log.id as string}
+                    <div key={log.id}
                       className={`${cfg.bg} border ${cfg.border} rounded-xl p-4 transition-colors hover:brightness-110`}>
                       <div className="flex items-start gap-3">
                         {/* Icon */}
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-lg`}>
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-lg">
                           {cfg.emoji}
                         </div>
 
@@ -130,34 +149,36 @@ export default async function MyActivityPage() {
                           <div className="flex items-start justify-between gap-2">
                             <p className={`text-sm font-semibold ${cfg.text}`}>{cfg.label}</p>
                             <p className="text-gray-600 text-xs flex-shrink-0">
-                              {new Date(log.created_at as string).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                              {new Date(log.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
                             </p>
                           </div>
 
                           {/* Member info */}
                           {user && (
                             <p className="text-gray-400 text-xs mt-0.5">
-                              สมาชิก: <span className="text-gray-300">{user.full_name as string || '-'}</span>
+                              สมาชิก: <span className="text-gray-300">{user.full_name || '-'}</span>
                               <span className="text-gray-600 mx-1">·</span>
-                              <span className="font-mono text-gray-500">{user.member_id as string}</span>
+                              <span className="font-mono text-gray-500">{user.member_id}</span>
                             </p>
                           )}
 
                           {/* Detail */}
                           <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500">
-                            {detail?.order_sn && <span>Order: <span className="font-mono text-gray-400">{String(detail.order_sn)}</span></span>}
-                            {detail?.model_name && <span>สินค้า: <span className="text-gray-400">{String(detail.model_name)}</span></span>}
-                            {detail?.admin_note && <span>หมายเหตุ: <span className="text-gray-400 italic">{String(detail.admin_note)}</span></span>}
+                            {detail?.order_sn && <span>Order: <span className="font-mono text-gray-400">{detail.order_sn}</span></span>}
+                            {detail?.model_name && <span>สินค้า: <span className="text-gray-400">{detail.model_name}</span></span>}
+                            {detail?.admin_note && <span>หมายเหตุ: <span className="text-gray-400 italic">{detail.admin_note}</span></span>}
                             {detail?.delta !== undefined && (
                               <span>
                                 แต้ม: <span className={Number(detail.delta) > 0 ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>
-                                  {Number(detail.delta) > 0 ? '+' : ''}{String(detail.delta)}
+                                  {Number(detail.delta) > 0 ? '+' : ''}{detail.delta}
                                 </span>
                               </span>
                             )}
-                            {detail?.description && <span>เหตุผล: <span className="text-gray-400">{String(detail.description)}</span></span>}
+                            {detail?.description && <span>เหตุผล: <span className="text-gray-400">{detail.description}</span></span>}
                             {detail?.action === 'DELETED' && (
-                              <span className="text-red-400/70">🗑 ลบรายการแล้ว {detail.points_reverted ? `(หัก ${detail.points_reverted} แต้ม)` : ''}</span>
+                              <span className="text-red-400/70">
+                                🗑 ลบรายการแล้ว {detail.points_reverted ? `(หัก ${detail.points_reverted} แต้ม)` : ''}
+                              </span>
                             )}
                           </div>
 
