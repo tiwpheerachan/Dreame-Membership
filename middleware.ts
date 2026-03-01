@@ -27,20 +27,52 @@ export async function middleware(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
   const path = request.nextUrl.pathname
 
-  // Protect user routes
-  if (path.startsWith('/(user)') || path === '/home' || path.startsWith('/purchases') || path.startsWith('/points') || path.startsWith('/coupons') || path.startsWith('/profile')) {
-    if (!session) return NextResponse.redirect(new URL('/login', request.url))
+  // ─── User routes ───────────────────────────────────────────
+  const isUserRoute = path === '/home' || path.startsWith('/purchases') ||
+    path.startsWith('/points') || path.startsWith('/coupons') ||
+    path.startsWith('/profile')
+
+  if (isUserRoute) {
+    if (!session) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+    // ตรวจ terms — ยกเว้นหน้า /terms เอง
+    if (path !== '/terms') {
+      const { data: user } = await supabase
+        .from('users')
+        .select('terms_accepted_at')
+        .eq('id', session.user.id)
+        .single()
+      if (user && !user.terms_accepted_at) {
+        return NextResponse.redirect(new URL('/terms', request.url))
+      }
+    }
   }
 
-  // Protect admin routes
+  // ─── Admin routes ──────────────────────────────────────────
   if (path.startsWith('/admin')) {
-    if (!session) return NextResponse.redirect(new URL('/login', request.url))
-    // Additional admin check handled in page components
+    if (!session) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+  }
+
+  // ─── ถ้า login แล้วพยายามเข้า /login → redirect ไป /home ──
+  if (path === '/login' && session) {
+    return NextResponse.redirect(new URL('/home', request.url))
   }
 
   return response
 }
 
 export const config = {
-  matcher: ['/home', '/purchases/:path*', '/points', '/coupons', '/profile', '/admin/:path*'],
+  matcher: [
+    '/home',
+    '/purchases/:path*',
+    '/points',
+    '/coupons',
+    '/profile',
+    '/admin/:path*',
+    '/login',
+    '/terms',
+  ],
 }

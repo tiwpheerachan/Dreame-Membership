@@ -21,11 +21,12 @@ function LoginForm() {
 
   // Handle ?new=1 from magic link callback (new user needs name)
   useEffect(() => {
+    const errorParam = searchParams.get('error')
     if (searchParams.get('new') === '1') {
       setStep('name')
     }
-    if (searchParams.get('error') === '1') {
-      setError('ลิงก์หมดอายุหรือไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง')
+    if (errorParam === '1' || errorParam === 'expired') {
+      setError('ลิงก์หมดอายุหรือถูกใช้งานไปแล้ว กรุณาขอลิงก์ใหม่อีกครั้ง')
     }
   }, [searchParams])
 
