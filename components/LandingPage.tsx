@@ -2,6 +2,29 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
+const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&family=Sarabun:wght@300;400;500&display=swap');
+  * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; margin: 0; padding: 0; }
+  @keyframes fadeUp   { from { opacity:0; transform:translateY(28px) } to { opacity:1; transform:none } }
+  @keyframes fadeIn   { from { opacity:0 } to { opacity:1 } }
+  @keyframes floatA   { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-20px) rotate(4deg)} }
+  @keyframes floatB   { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-14px) rotate(-3deg)} }
+  @keyframes floatC   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+  @keyframes shimmer  { 0%{background-position:200% center} 100%{background-position:-200% center} }
+  @keyframes spin     { to{transform:rotate(360deg)} }
+  @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:0.6} }
+  @keyframes scaleIn  { from{transform:scale(0.92);opacity:0} to{transform:scale(1);opacity:1} }
+  .dreame-logo {
+    font-family: 'Kanit', sans-serif;
+    font-weight: 800;
+    background: linear-gradient(135deg, #f59e0b, #fde68a, #d97706, #fbbf24);
+    background-size: 300% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 4s linear infinite;
+  }
+`
+
 export default function LandingPage() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
@@ -20,28 +43,7 @@ export default function LandingPage() {
 
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&family=Sarabun:wght@300;400;500&display=swap');
-        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; margin: 0; padding: 0; }
-        @keyframes fadeUp   { from { opacity:0; transform:translateY(28px) } to { opacity:1; transform:none } }
-        @keyframes fadeIn   { from { opacity:0 } to { opacity:1 } }
-        @keyframes floatA   { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-20px) rotate(4deg)} }
-        @keyframes floatB   { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-14px) rotate(-3deg)} }
-        @keyframes floatC   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
-        @keyframes shimmer  { 0%{background-position:200% center} 100%{background-position:-200% center} }
-        @keyframes spin     { to{transform:rotate(360deg)} }
-        @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:0.6} }
-        @keyframes scaleIn  { from{transform:scale(0.92);opacity:0} to{transform:scale(1);opacity:1} }
-        .dreame-logo {
-          font-family: 'Kanit', sans-serif;
-          font-weight: 800;
-          background: linear-gradient(135deg, #f59e0b, #fde68a, #d97706, #fbbf24);
-          background-size: 300% auto;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          animation: shimmer 4s linear infinite;
-        }
-      `}</style>
+      <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: CSS }} />
 
       <div style={{
         minHeight: '100vh',

@@ -3,219 +3,326 @@ import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-type Step = 'input' | 'otp' | 'name'
+type Mode = 'login' | 'register' | 'forgot'
+const KEY_EMAIL = 'dreame_email'
+const KEY_REMEMBER = 'dreame_remember'
 
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
-  const [step, setStep] = useState<Step>('input')
-  const [inputType, setInputType] = useState<'phone' | 'email'>('email')
-  const [value, setValue] = useState('')
-  const [otp, setOtp] = useState('')
+
+  const [mode, setMode] = useState<Mode>('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [showPass, setShowPass] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [countdown, setCountdown] = useState(0)
-  const [magicSent, setMagicSent] = useState(false)
+  const [success, setSuccess] = useState('')
 
-  // Handle ?new=1 from magic link callback (new user needs name)
   useEffect(() => {
+    try {
+      const savedEmail = localStorage.getItem(KEY_EMAIL)
+      const savedRemember = localStorage.getItem(KEY_REMEMBER)
+      if (savedRemember === '1' && savedEmail) {
+        setEmail(savedEmail)
+        setRememberMe(true)
+      }
+    } catch { /* ignore */ }
+
     const errorParam = searchParams.get('error')
-    if (searchParams.get('new') === '1') {
-      setStep('name')
-    }
-    if (errorParam === '1' || errorParam === 'expired') {
-      setError('ลิงก์หมดอายุหรือถูกใช้งานไปแล้ว กรุณาขอลิงก์ใหม่อีกครั้ง')
-    }
+    if (errorParam === 'expired') setError('ลิงก์หมดอายุ กรุณาลองใหม่อีกครั้ง')
   }, [searchParams])
 
-  function startCountdown() {
-    setCountdown(60)
-    const t = setInterval(() => {
-      setCountdown(c => { if (c <= 1) { clearInterval(t); return 0 } return c - 1 })
-    }, 1000)
-  }
-
-  async function sendOtp() {
-    setLoading(true); setError(''); setMagicSent(false)
+  function saveCredential(val: string, remember: boolean) {
     try {
-      if (inputType === 'phone') {
-        const phone = value.startsWith('+') ? value : '+66' + value.replace(/^0/, '')
-        const { error: err } = await supabase.auth.signInWithOtp({ phone })
-        if (err) throw err
-        setStep('otp')
-        startCountdown()
+      if (remember) {
+        localStorage.setItem(KEY_EMAIL, val)
+        localStorage.setItem(KEY_REMEMBER, '1')
       } else {
-        // Email — sends Magic Link (user clicks link → auto login)
-        const { error: err } = await supabase.auth.signInWithOtp({
-          email: value,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-          },
-        })
-        if (err) throw err
-        setMagicSent(true)
+        localStorage.removeItem(KEY_EMAIL)
+        localStorage.removeItem(KEY_REMEMBER)
       }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'ส่งไม่สำเร็จ กรุณาลองใหม่')
-    } finally { setLoading(false) }
+    } catch { /* ignore */ }
   }
 
-  async function verifyOtp() {
-    setLoading(true); setError('')
+  // ─── LOGIN ────────────────────────────────────────────────
+  async function handleLogin() {
+    if (!email || !password) { setError('กรุณากรอกอีเมลและรหัสผ่าน'); return }
+    setLoading(true); setError(''); setSuccess('')
     try {
-      const phone = value.startsWith('+') ? value : '+66' + value.replace(/^0/, '')
-      const { error: err, data } = await supabase.auth.verifyOtp({
-        phone, token: otp, type: 'sms'
-      })
-      if (err) throw err
-      const { data: user } = await supabase.from('users').select('id, full_name').eq('id', data.session!.user.id).single()
-      if (!user || !user.full_name) setStep('name')
+      const { data, error: err } = await supabase.auth.signInWithPassword({ email, password })
+      if (err) {
+        if (err.message.includes('Invalid login') || err.message.includes('invalid')) {
+          setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง')
+        } else if (err.message.includes('Email not confirmed')) {
+          setError('กรุณายืนยันอีเมลก่อน login หรือติดต่อแอดมิน')
+        } else {
+          setError(err.message)
+        }
+        return
+      }
+      saveCredential(email, rememberMe)
+      // ตรวจสอบ profile และ terms
+      const { data: user } = await supabase
+        .from('users').select('terms_accepted_at').eq('id', data.user!.id).single()
+      if (!user?.terms_accepted_at) router.push('/terms')
       else router.push('/home')
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'รหัส OTP ไม่ถูกต้อง')
-    } finally { setLoading(false) }
+    } catch { setError('เกิดข้อผิดพลาด กรุณาลองใหม่') }
+    finally { setLoading(false) }
   }
 
-  async function saveName() {
-    setLoading(true); setError('')
+  // ─── REGISTER ─────────────────────────────────────────────
+  async function handleRegister() {
+    if (!fullName.trim()) { setError('กรุณากรอกชื่อ-นามสกุล'); return }
+    if (!email) { setError('กรุณากรอกอีเมล'); return }
+    if (password.length < 8) { setError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
+    if (password !== confirmPassword) { setError('รหัสผ่านไม่ตรงกัน'); return }
+    setLoading(true); setError(''); setSuccess('')
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Session expired')
+      const { data, error: err } = await supabase.auth.signUp({ email, password })
+      if (err) {
+        if (err.message.includes('already registered') || err.message.includes('User already')) {
+          setError('อีเมลนี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบ')
+          setMode('login')
+        } else {
+          setError(err.message)
+        }
+        return
+      }
+      if (!data.user) { setError('เกิดข้อผิดพลาด กรุณาลองใหม่'); return }
+
+      // บันทึกชื่อลง users table
       await supabase.from('users').upsert({
-        id: user.id,
-        full_name: fullName,
-        phone: inputType === 'phone' ? value : user.phone,
-        email: inputType === 'email' ? value : user.email,
+        id: data.user.id,
+        full_name: fullName.trim(),
+        email: email,
       })
-      // new user → ต้องยอมรับ terms ก่อน
-      router.push('/terms')
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ')
-    } finally { setLoading(false) }
+      saveCredential(email, true)
+
+      if (data.session) {
+        // ปิด confirm email → เข้าได้เลย
+        router.push('/terms')
+      } else {
+        // ยังเปิด confirm email อยู่
+        setSuccess('📧 กรุณาเช็คอีเมลและกดยืนยันก่อน login ครับ')
+        setMode('login')
+      }
+    } catch { setError('เกิดข้อผิดพลาด กรุณาลองใหม่') }
+    finally { setLoading(false) }
+  }
+
+  // ─── FORGOT PASSWORD ──────────────────────────────────────
+  async function handleForgot() {
+    if (!email) { setError('กรุณากรอกอีเมล'); return }
+    setLoading(true); setError(''); setSuccess('')
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      })
+      if (err) { setError(err.message); return }
+      setSuccess('📧 ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว! เช็คอีเมลของคุณได้เลย')
+    } catch { setError('เกิดข้อผิดพลาด กรุณาลองใหม่') }
+    finally { setLoading(false) }
+  }
+
+  function switchMode(m: Mode) {
+    setMode(m); setError(''); setSuccess('')
+    setPassword(''); setConfirmPassword('')
+  }
+
+  const inp = {
+    width: '100%', background: 'rgba(31,41,55,1)',
+    border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
+    padding: '12px 14px', color: '#fff', fontSize: 14,
+    outline: 'none', boxSizing: 'border-box' as const,
+  }
+  const isLoginReady = !loading && !!email && !!password
+  const isRegReady = !loading && !!fullName && !!email && password.length >= 8 && password === confirmPassword
+  const isForgotReady = !loading && !!email
+
+  function PrimaryBtn({ onClick, disabled, children }: { onClick: () => void, disabled: boolean, children: React.ReactNode }) {
+    return (
+      <button onClick={onClick} disabled={disabled} style={{
+        width: '100%', border: 'none', borderRadius: 12, padding: '14px 0',
+        fontSize: 15, fontWeight: 700, transition: 'all 0.2s', cursor: disabled ? 'not-allowed' : 'pointer',
+        background: disabled ? 'rgba(255,255,255,0.07)' : 'linear-gradient(135deg,#f59e0b,#d97706)',
+        color: disabled ? '#6b7280' : '#000',
+        boxShadow: disabled ? 'none' : '0 4px 16px rgba(245,158,11,0.35)',
+      }}>{children}</button>
+    )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 p-4">
-      <div className="fixed top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#030712 0%,#111827 50%,#030712 100%)', padding: 16 }}>
+      <div style={{ position: 'fixed', top: '25%', left: '50%', transform: 'translateX(-50%)', width: 400, height: 400, background: 'radial-gradient(circle,rgba(245,158,11,0.06) 0%,transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
 
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-lg shadow-amber-500/30 mb-4">
-            <span className="text-2xl font-black text-gray-900">D</span>
+      <div style={{ width: '100%', maxWidth: 400, position: 'relative' }}>
+
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 58, height: 58, borderRadius: 18, background: 'linear-gradient(135deg,#f59e0b,#d97706)', boxShadow: '0 8px 24px rgba(245,158,11,0.4)', marginBottom: 12 }}>
+            <span style={{ fontSize: 22, fontWeight: 900, color: '#000' }}>D</span>
           </div>
-          <h1 className="text-2xl font-bold text-white">Dreame Membership</h1>
-          <p className="text-gray-400 text-sm mt-1">สมัครหรือเข้าสู่ระบบ</p>
+          <h1 style={{ fontSize: 21, fontWeight: 700, color: '#fff', margin: '0 0 4px' }}>Dreame Membership</h1>
+          <p style={{ color: '#6b7280', fontSize: 13, margin: 0 }}>
+            {mode === 'login' ? 'เข้าสู่ระบบสมาชิก' : mode === 'register' ? 'สมัครสมาชิกใหม่' : 'รีเซ็ตรหัสผ่าน'}
+          </p>
         </div>
 
-        <div className="bg-gray-900/80 border border-gray-800 rounded-2xl p-6 backdrop-blur">
+        {/* Tabs */}
+        {mode !== 'forgot' && (
+          <div style={{ display: 'flex', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 12 }}>
+            {(['login', 'register'] as Mode[]).map(m => (
+              <button key={m} onClick={() => switchMode(m)} style={{
+                flex: 1, padding: '11px 0', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+                background: mode === m ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(17,24,39,1)',
+                color: mode === m ? '#000' : '#6b7280',
+              }}>
+                {m === 'login' ? '🔑 เข้าสู่ระบบ' : '✨ สมัครสมาชิก'}
+              </button>
+            ))}
+          </div>
+        )}
 
-          {/* Step 1: Input */}
-          {step === 'input' && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-white">เข้าสู่ระบบ</h2>
+        {/* Card */}
+        <div style={{ background: 'rgba(17,24,39,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, padding: 24 }}>
 
-              <div className="flex rounded-lg overflow-hidden border border-gray-700">
-                <button onClick={() => { setInputType('email'); setMagicSent(false) }}
-                  className={`flex-1 py-2 text-sm font-medium transition-colors ${inputType === 'email' ? 'bg-amber-500 text-gray-900' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
-                  ✉️ Email
-                </button>
-                <button onClick={() => { setInputType('phone'); setMagicSent(false) }}
-                  className={`flex-1 py-2 text-sm font-medium transition-colors ${inputType === 'phone' ? 'bg-amber-500 text-gray-900' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
-                  📱 เบอร์โทร
-                </button>
-              </div>
+          {success && (
+            <div style={{ background: 'rgba(20,83,45,0.4)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 10, padding: '12px 14px', color: '#4ade80', fontSize: 13, marginBottom: 14, lineHeight: 1.6 }}>
+              {success}
+            </div>
+          )}
+          {error && (
+            <div style={{ background: 'rgba(127,29,29,0.3)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10, padding: '12px 14px', color: '#fca5a5', fontSize: 13, marginBottom: 14 }}>
+              ⚠️ {error}
+            </div>
+          )}
 
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+
+            {/* ชื่อ */}
+            {mode === 'register' && (
               <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  {inputType === 'email' ? 'อีเมล' : 'เบอร์โทรศัพท์'}
-                </label>
-                <input
-                  type={inputType === 'email' ? 'email' : 'tel'}
-                  placeholder={inputType === 'email' ? 'you@example.com' : '0812345678'}
-                  value={value}
-                  onChange={e => setValue(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && value && sendOtp()}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-sm"
+                <label style={{ display: 'block', color: '#9ca3af', fontSize: 12, marginBottom: 6 }}>ชื่อ-นามสกุล</label>
+                <input type="text" placeholder="สมชาย ใจดี" value={fullName}
+                  onChange={e => setFullName(e.target.value)} autoComplete="name"
+                  style={inp}
+                  onFocus={e => (e.target as HTMLInputElement).style.borderColor = '#f59e0b'}
+                  onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'rgba(255,255,255,0.1)'}
                 />
               </div>
+            )}
 
-              {error && <p className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{error}</p>}
+            {/* Email */}
+            <div>
+              <label style={{ display: 'block', color: '#9ca3af', fontSize: 12, marginBottom: 6 }}>อีเมล</label>
+              <input type="email" placeholder="you@example.com" value={email}
+                onChange={e => setEmail(e.target.value)} autoComplete="email"
+                style={inp}
+                onFocus={e => (e.target as HTMLInputElement).style.borderColor = '#f59e0b'}
+                onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'rgba(255,255,255,0.1)'}
+                onKeyDown={e => { if (e.key === 'Enter' && mode === 'forgot') handleForgot() }}
+              />
+            </div>
 
-              {/* Magic link sent state */}
-              {magicSent && (
-                <div className="bg-green-900/20 border border-green-800/40 rounded-xl p-4 text-center space-y-2">
-                  <p className="text-2xl">📬</p>
-                  <p className="text-green-400 font-semibold text-sm">ส่งลิงก์เข้าสู่ระบบแล้ว!</p>
-                  <p className="text-gray-400 text-xs">เช็คอีเมล <span className="text-white font-medium">{value}</span><br/>คลิกปุ่ม <strong>"Log In"</strong> ในอีเมลได้เลย</p>
-                  <p className="text-gray-600 text-xs mt-2">ไม่เห็นอีเมล? เช็ค Spam folder ด้วยนะครับ</p>
-                  <button onClick={() => { setMagicSent(false); sendOtp() }} disabled={loading}
-                    className="mt-2 text-amber-400 text-xs hover:underline">
-                    ส่งใหม่
+            {/* Password */}
+            {mode !== 'forgot' && (
+              <div>
+                <label style={{ display: 'block', color: '#9ca3af', fontSize: 12, marginBottom: 6 }}>
+                  รหัสผ่าน {mode === 'register' && <span style={{ color: '#6b7280' }}>(อย่างน้อย 8 ตัวอักษร)</span>}
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    placeholder={mode === 'register' ? 'ตั้งรหัสผ่านของคุณ' : '••••••••'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                    style={{ ...inp, paddingRight: 44 }}
+                    onFocus={e => (e.target as HTMLInputElement).style.borderColor = '#f59e0b'}
+                    onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'rgba(255,255,255,0.1)'}
+                    onKeyDown={e => { if (e.key === 'Enter' && mode === 'login') handleLogin() }}
+                  />
+                  <button onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 15, padding: 0 }}>
+                    {showPass ? '🙈' : '👁️'}
                   </button>
                 </div>
-              )}
 
-              {!magicSent && (
-                <button onClick={sendOtp} disabled={loading || !value}
-                  className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 font-semibold py-3 rounded-lg transition-colors text-sm">
-                  {loading ? 'กำลังส่ง...' : inputType === 'email' ? 'รับลิงก์เข้าสู่ระบบ' : 'รับรหัส OTP'}
+                {/* Password strength (register only) */}
+                {mode === 'register' && password && (
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                      {[1,2,3,4].map(i => (
+                        <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: password.length >= i * 2 + 2 ? (password.length >= 12 ? '#4ade80' : password.length >= 8 ? '#f59e0b' : '#ef4444') : 'rgba(255,255,255,0.1)' }} />
+                      ))}
+                    </div>
+                    <p style={{ color: password.length >= 12 ? '#4ade80' : password.length >= 8 ? '#f59e0b' : '#ef4444', fontSize: 11, margin: 0 }}>
+                      {password.length >= 12 ? '✓ รหัสผ่านแข็งแกร่ง' : password.length >= 8 ? '~ รหัสผ่านปานกลาง' : '✗ รหัสผ่านสั้นเกินไป'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Confirm Password */}
+            {mode === 'register' && (
+              <div>
+                <label style={{ display: 'block', color: '#9ca3af', fontSize: 12, marginBottom: 6 }}>ยืนยันรหัสผ่าน</label>
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  placeholder="กรอกรหัสผ่านอีกครั้ง"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  style={{ ...inp, borderColor: confirmPassword && confirmPassword !== password ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.1)' }}
+                  onFocus={e => (e.target as HTMLInputElement).style.borderColor = '#f59e0b'}
+                  onBlur={e => (e.target as HTMLInputElement).style.borderColor = confirmPassword && confirmPassword !== password ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.1)'}
+                  onKeyDown={e => { if (e.key === 'Enter') handleRegister() }}
+                />
+                {confirmPassword && (
+                  <p style={{ color: confirmPassword === password ? '#4ade80' : '#f87171', fontSize: 11, marginTop: 4 }}>
+                    {confirmPassword === password ? '✓ รหัสผ่านตรงกัน' : '✗ รหัสผ่านไม่ตรงกัน'}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Remember me + Forgot (login only) */}
+            {mode === 'login' && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: -4 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <div
+                    onClick={() => setRememberMe(!rememberMe)}
+                    style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${rememberMe ? '#f59e0b' : 'rgba(255,255,255,0.2)'}`, background: rememberMe ? '#f59e0b' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0 }}>
+                    {rememberMe && <span style={{ color: '#000', fontSize: 11, fontWeight: 900 }}>✓</span>}
+                  </div>
+                  <span style={{ color: '#9ca3af', fontSize: 12 }}>จำอีเมลของฉัน</span>
+                </label>
+                <button onClick={() => switchMode('forgot')} style={{ color: '#f59e0b', background: 'none', border: 'none', fontSize: 12, cursor: 'pointer' }}>
+                  ลืมรหัสผ่าน?
                 </button>
-              )}
-
-              {inputType === 'email' && !magicSent && (
-                <p className="text-gray-600 text-xs text-center">ระบบจะส่งลิงก์ Magic Link ไปยังอีเมลของคุณ</p>
-              )}
-            </div>
-          )}
-
-          {/* Step 2: Phone OTP */}
-          {step === 'otp' && (
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-lg font-semibold text-white">กรอก OTP</h2>
-                <p className="text-gray-400 text-sm mt-1">ส่งรหัส 6 หลักไปยัง {value}</p>
               </div>
-              <input type="text" inputMode="numeric" placeholder="------" maxLength={6}
-                value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                onKeyDown={e => e.key === 'Enter' && otp.length === 6 && verifyOtp()}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-center text-2xl tracking-widest font-mono focus:outline-none focus:border-amber-500" />
-              {error && <p className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{error}</p>}
-              <button onClick={verifyOtp} disabled={loading || otp.length !== 6}
-                className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-gray-900 font-semibold py-3 rounded-lg text-sm">
-                {loading ? 'กำลังตรวจสอบ...' : 'ยืนยัน OTP'}
-              </button>
-              <div className="flex items-center justify-between">
-                <button onClick={() => setStep('input')} className="text-gray-400 hover:text-white text-sm">← กลับ</button>
-                {countdown > 0
-                  ? <span className="text-gray-500 text-sm">ส่งใหม่ใน {countdown}s</span>
-                  : <button onClick={sendOtp} className="text-amber-400 text-sm">ส่ง OTP ใหม่</button>}
-              </div>
-            </div>
-          )}
+            )}
 
-          {/* Step 3: Name (new user) */}
-          {step === 'name' && (
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-lg font-semibold text-white">ยินดีต้อนรับ! 🎉</h2>
-                <p className="text-gray-400 text-sm mt-1">กรุณากรอกชื่อเพื่อสมัครสมาชิก</p>
-              </div>
-              <input type="text" placeholder="ชื่อ-นามสกุล" value={fullName}
-                onChange={e => setFullName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && fullName && saveName()}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 text-sm" />
-              {error && <p className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{error}</p>}
-              <button onClick={saveName} disabled={loading || !fullName.trim()}
-                className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-gray-900 font-semibold py-3 rounded-lg text-sm">
-                {loading ? 'กำลังบันทึก...' : 'เริ่มต้นใช้งาน →'}
-              </button>
-            </div>
-          )}
+            {/* Submit */}
+            {mode === 'login' && <PrimaryBtn onClick={handleLogin} disabled={!isLoginReady}>{loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}</PrimaryBtn>}
+            {mode === 'register' && <PrimaryBtn onClick={handleRegister} disabled={!isRegReady}>{loading ? 'กำลังสมัคร...' : 'สมัครสมาชิก'}</PrimaryBtn>}
+            {mode === 'forgot' && (
+              <>
+                <PrimaryBtn onClick={handleForgot} disabled={!isForgotReady}>{loading ? 'กำลังส่ง...' : 'ส่งลิงก์รีเซ็ตรหัสผ่าน'}</PrimaryBtn>
+                <button onClick={() => switchMode('login')} style={{ color: '#9ca3af', background: 'none', border: 'none', fontSize: 13, cursor: 'pointer', textAlign: 'center' }}>
+                  ← กลับไปหน้าเข้าสู่ระบบ
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
-        <p className="text-center text-gray-600 text-xs mt-6">© 2024 Dreame Thailand · Membership System</p>
+        <p style={{ textAlign: 'center', color: '#374151', fontSize: 11, marginTop: 18 }}>© 2025 Dreame Thailand · Membership System</p>
       </div>
     </div>
   )
@@ -224,8 +331,9 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <div className="w-8 h-8 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#030712' }}>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        <div style={{ width: 36, height: 36, border: '3px solid rgba(245,158,11,0.15)', borderTop: '3px solid #f59e0b', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} />
       </div>
     }>
       <LoginForm />

@@ -6,32 +6,26 @@ import { type NextRequest } from 'next/server'
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
-  const next = requestUrl.searchParams.get('next') ?? '/home'
+  const type = requestUrl.searchParams.get('type')
 
   if (!code) {
-    // ไม่มี code → ลิงก์ผิดพลาดหรือหมดอายุ
     return NextResponse.redirect(new URL('/login?error=expired', requestUrl.origin))
   }
 
   const cookieStore = cookies()
-
-  // สร้าง response ก่อนแล้วค่อย set cookies ลงไป
-  const response = NextResponse.redirect(new URL(next, requestUrl.origin))
+  const sessionCookies: { name: string; value: string; options: Record<string, unknown> }[] = []
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
+        get(name: string) { return cookieStore.get(name)?.value },
         set(name: string, value: string, options: Record<string, unknown>) {
-          // Set บน response เพื่อให้ browser รับ session cookie ได้
-          response.cookies.set({ name, value, ...(options as Record<string, string>) })
+          sessionCookies.push({ name, value, options })
         },
         remove(name: string, options: Record<string, unknown>) {
-          response.cookies.set({ name, value: '', ...(options as Record<string, string>) })
+          sessionCookies.push({ name, value: '', options })
         },
       },
     }
@@ -40,33 +34,32 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
   if (error || !data.session) {
-    // Code ใช้ไปแล้ว หรือหมดอายุ
     return NextResponse.redirect(new URL('/login?error=expired', requestUrl.origin))
   }
 
-  // ดึงข้อมูล user profile
+  // กรณี reset password → ไปหน้าตั้งรหัสใหม่
+  if (type === 'recovery') {
+    const response = NextResponse.redirect(new URL('/auth/reset-password', requestUrl.origin))
+    for (const { name, value, options } of sessionCookies) {
+      response.cookies.set({ name, value, ...(options as Record<string, string>) })
+    }
+    return response
+  }
+
+  // กรณีปกติ → ตรวจสอบ user profile
   const { data: user } = await supabase
     .from('users')
     .select('id, full_name, terms_accepted_at')
     .eq('id', data.session.user.id)
     .single()
 
-  if (!user || !user.full_name) {
-    // User ใหม่ → ไปกรอกชื่อก่อน
-    return NextResponse.redirect(new URL('/login?new=1', requestUrl.origin))
-  }
+  let redirectUrl = '/home'
+  if (!user || !user.full_name) redirectUrl = '/login?new=1'
+  else if (!user.terms_accepted_at) redirectUrl = '/terms'
 
-  if (!user.terms_accepted_at) {
-    // User เก่าที่ยังไม่เคย accept terms
-    // ต้อง redirect พร้อม session cookie
-    const termsResponse = NextResponse.redirect(new URL('/terms', requestUrl.origin))
-    // Copy cookies จาก response ไปยัง termsResponse
-    response.cookies.getAll().forEach(cookie => {
-      termsResponse.cookies.set(cookie)
-    })
-    return termsResponse
+  const response = NextResponse.redirect(new URL(redirectUrl, requestUrl.origin))
+  for (const { name, value, options } of sessionCookies) {
+    response.cookies.set({ name, value, ...(options as Record<string, string>) })
   }
-
-  // User ปกติ → เข้าหน้าหลัก (session cookie ถูก set ใน response แล้ว)
   return response
 }
