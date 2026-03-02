@@ -49,7 +49,7 @@ function LoginForm() {
     } catch { /* ignore */ }
   }
 
-  // ─── LOGIN ────────────────────────────────────────────────
+  // ─── LOGIN ────────────
   async function handleLogin() {
     if (!email || !password) { setError('กรุณากรอกอีเมลและรหัสผ่าน'); return }
     setLoading(true); setError(''); setSuccess('')
