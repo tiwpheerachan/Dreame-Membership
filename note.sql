@@ -96,3 +96,8 @@ Redirect URLs: https://dreame-xxx.netlify.app/**
 
 
 💡 ต่อไปนี้ ทุกครั้งที่ git push เว็บจะ deploy ใหม่อัตโนมัติเลย ไม่ต้องทำอะไรเพิ่ม
+
+NEXT_PUBLIC_SUPABASE_URL=https://wifbppzpnubrfybhvxes.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndpZmJwcHpwbnVicmZ5Ymh2eGVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTk0MjAsImV4cCI6MjA4ODAzNTQyMH0.ggBFFUtBt1uZYY4cZ12WPs7_8LiG_KWKPhzvnTF2nYA
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndpZmJwcHpwbnVicmZ5Ymh2eGVzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjQ1OTQyMCwiZXhwIjoyMDg4MDM1NDIwfQ.NdPApTgTrAnheIEw73jnf3YnhpCg_Hj7EF8hVHJVMWs
+NEXT_PUBLIC_APP_URL=http://localhost:3000
