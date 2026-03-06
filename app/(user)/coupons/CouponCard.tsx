@@ -1,81 +1,67 @@
 'use client'
-import { useState } from 'react'
-import type { Coupon } from '@/lib/types'
+import type { Coupon } from '@/types'
 import { formatDate } from '@/lib/utils'
-import { Copy, Check } from 'lucide-react'
+import { Copy, Check, Clock } from 'lucide-react'
+import { useState } from 'react'
 
-export default function CouponCard({ coupon }: { coupon: Coupon }) {
+interface Props { coupon: Coupon; status: 'active' | 'used' | 'expired' }
+
+export default function CouponCard({ coupon, status }: Props) {
   const [copied, setCopied] = useState(false)
 
-  const handleCopy = () => {
+  function copy() {
     navigator.clipboard.writeText(coupon.code)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const daysLeft = Math.ceil(
-    (new Date(coupon.valid_until).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  )
+  const discountText = coupon.discount_type === 'PERCENT'
+    ? `${coupon.discount_value}%` : `฿${Number(coupon.discount_value).toLocaleString()}`
+
+  const isActive = status === 'active'
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-      {/* Top stripe */}
-      <div className="h-1.5 bg-gradient-to-r from-dreame-400 to-dreame-600" />
+    <div style={{ background:'#fff', borderRadius:16, overflow:'hidden', border: isActive ? '1px solid rgba(212,175,55,0.3)' : '1px solid #f0f0ee', boxShadow: isActive ? '0 2px 12px rgba(212,175,55,0.08)' : '0 1px 4px rgba(0,0,0,0.04)', display:'flex' }}>
+      {/* Left */}
+      <div style={{ width:76, flexShrink:0, background: isActive ? '#0d0d0d' : '#f7f7f5', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, padding:'12px 0' }}>
+        <p style={{ fontSize:20, fontWeight:800, color: isActive ? '#d4af37' : '#9ca3af', margin:0, lineHeight:1 }}>{discountText}</p>
+        <p style={{ fontSize:9, color: isActive ? 'rgba(212,175,55,0.6)' : '#c4c4c4', margin:0, letterSpacing:'0.06em', textTransform:'uppercase' }}>ส่วนลด</p>
+      </div>
 
-      <div className="p-4">
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <p className="font-bold text-gray-900">{coupon.title || 'ส่วนลดพิเศษ'}</p>
-            {coupon.description && (
-              <p className="text-xs text-gray-500 mt-0.5">{coupon.description}</p>
-            )}
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-black text-dreame-600">
-              {coupon.discount_type === 'PERCENT'
-                ? `${coupon.discount_value}%`
-                : `฿${coupon.discount_value.toLocaleString()}`}
-            </p>
-            <p className="text-xs text-gray-400">
-              {coupon.discount_type === 'PERCENT' ? 'ส่วนลด' : 'บาท'}
-            </p>
-          </div>
-        </div>
+      {/* Dashed divider */}
+      <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', gap:3, padding:'0 1px' }}>
+        {Array.from({length:7}).map((_,i)=>(
+          <div key={i} style={{ width:2, height:4, background: isActive ? 'rgba(212,175,55,0.25)' : '#f0f0ee', borderRadius:1 }}/>
+        ))}
+      </div>
 
-        {/* Divider */}
-        <div className="relative my-3">
-          <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-gray-50 rounded-full border border-gray-100" />
-          <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-gray-50 rounded-full border border-gray-100" />
-          <div className="border-t border-dashed border-gray-200" />
-        </div>
-
-        {/* Code + expiry */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <code className="bg-dreame-50 text-dreame-700 px-3 py-1.5 rounded-lg font-mono font-bold text-sm tracking-wider">
-              {coupon.code}
-            </code>
-            <button
-              onClick={handleCopy}
-              className={`p-1.5 rounded-lg transition-colors ${copied ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500 hover:bg-dreame-100 hover:text-dreame-600'}`}
-            >
-              {copied ? <Check size={14} /> : <Copy size={14} />}
-            </button>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-400">ถึง {formatDate(coupon.valid_until)}</p>
-            {daysLeft <= 7 && (
-              <p className="text-xs font-semibold text-red-500">เหลือ {daysLeft} วัน!</p>
-            )}
-          </div>
-        </div>
-
-        {coupon.min_purchase > 0 && (
-          <p className="text-xs text-gray-400 mt-2">
-            * ขั้นต่ำ {coupon.min_purchase.toLocaleString()} บาท
-            {coupon.max_discount ? ` (สูงสุด ${coupon.max_discount.toLocaleString()} บาท)` : ''}
-          </p>
+      {/* Right */}
+      <div style={{ flex:1, padding:'12px 12px 12px 10px', minWidth:0 }}>
+        <p style={{ fontSize:13, fontWeight:700, color:'#111', margin:'0 0 2px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+          {coupon.title || `ส่วนลด ${discountText}`}
+        </p>
+        {coupon.description && (
+          <p style={{ fontSize:11, color:'#6b7280', margin:'0 0 4px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{coupon.description}</p>
         )}
+        {coupon.min_purchase > 0 && (
+          <p style={{ fontSize:10, color:'#9ca3af', margin:'0 0 6px' }}>ขั้นต่ำ ฿{Number(coupon.min_purchase).toLocaleString()}</p>
+        )}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+          <div>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 8px', borderRadius:8, background:'#f7f7f5', border:'1px solid #f0f0ee' }}>
+              <span style={{ fontSize:11, fontFamily:'monospace', fontWeight:600, color:'#374151' }}>{coupon.code}</span>
+            </div>
+            <p style={{ fontSize:9, color:'#9ca3af', margin:'3px 0 0', display:'flex', alignItems:'center', gap:3 }}>
+              <Clock size={9}/> หมดอายุ {formatDate(coupon.valid_until)}
+            </p>
+          </div>
+          {isActive && (
+            <button onClick={copy} style={{ display:'flex', alignItems:'center', gap:4, padding:'6px 12px', borderRadius:10, background: copied ? '#f0fdf4' : '#0d0d0d', border: copied ? '1px solid #bbf7d0' : '1px solid transparent', color: copied ? '#16a34a' : '#d4af37', fontSize:11, fontWeight:700, cursor:'pointer', transition:'all 0.2s', flexShrink:0 }}>
+              {copied ? <Check size={11}/> : <Copy size={11}/>}
+              {copied ? 'คัดลอก!' : 'คัดลอก'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

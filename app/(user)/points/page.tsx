@@ -2,14 +2,41 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Star, TrendingUp, TrendingDown, RefreshCw, Settings } from 'lucide-react'
 import type { User, PointsLog } from '@/types'
-import { formatDateTime, formatDate } from '@/lib/utils'
+import { formatDateTime } from '@/lib/utils'
 import { getNextTierInfo } from '@/lib/points'
 
-const pointsTypeConfig = {
-  EARNED:      { label: 'ได้รับ', icon: TrendingUp, color: 'text-green-400', prefix: '+' },
-  REDEEMED:    { label: 'แลก',   icon: TrendingDown, color: 'text-red-400', prefix: '-' },
-  EXPIRED:     { label: 'หมดอายุ', icon: RefreshCw, color: 'text-gray-500', prefix: '-' },
-  ADMIN_ADJUST:{ label: 'ปรับโดย Admin', icon: Settings, color: 'text-amber-400', prefix: '' },
+const CSS = `
+  .ptw { padding:0 0 16px; }
+  .pt-hdr { background:#0d0d0d; padding:48px 20px 28px; position:relative; overflow:hidden; }
+  .pt-hdr::before { content:''; position:absolute; top:-60px; right:-60px; width:200px; height:200px; border-radius:50%; background:radial-gradient(circle,rgba(212,175,55,0.15) 0%,transparent 70%); }
+  .pt-hdr-line { position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,rgba(212,175,55,0.4),transparent); }
+  .pt-body { padding:16px; display:flex; flex-direction:column; gap:12px; }
+
+  .pt-summary { background:#fff; border-radius:18px; padding:20px; box-shadow:0 1px 6px rgba(0,0,0,0.06); border:1px solid rgba(0,0,0,0.04); }
+  .pt-big { font-size:38px; font-weight:800; color:#0d0d0d; margin:0; line-height:1; }
+  .pt-big span { font-size:16px; color:#d4af37; font-weight:600; margin-left:6px; }
+
+  .tier-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:14px; padding-top:14px; border-top:1px solid #f7f7f5; }
+  .tier-box { border-radius:12px; padding:10px 6px; text-align:center; border:1px solid transparent; }
+  .tier-box-active { background:#0d0d0d; border-color:#d4af37; }
+  .tier-box-inactive { background:#f7f7f5; }
+
+  .prog-wrap { margin-top:14px; padding-top:14px; border-top:1px solid #f7f7f5; }
+  .prog-bar { height:6px; background:#f3f4f6; border-radius:100px; overflow:hidden; margin-top:8px; }
+  .prog-fill { height:100%; border-radius:100px; background:linear-gradient(90deg,#b8860b,#d4af37,#f5d060); }
+
+  .log-card { background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,0.06); border:1px solid rgba(0,0,0,0.04); }
+  .log-hdr { padding:14px 16px; border-bottom:1px solid #f7f7f5; }
+  .log-row { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid #fafafa; }
+  .log-row:last-child { border-bottom:none; }
+  .log-ico { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+`
+
+const typeCfg = {
+  EARNED:       { label:'ได้รับแต้ม',      Icon: TrendingUp,   bg:'#f0fdf4', color:'#16a34a', val:(n:number)=>`+${n.toLocaleString()}` },
+  REDEEMED:     { label:'แลกแต้ม',         Icon: TrendingDown,  bg:'#fef2f2', color:'#dc2626', val:(n:number)=>`-${Math.abs(n).toLocaleString()}` },
+  EXPIRED:      { label:'หมดอายุ',         Icon: RefreshCw,     bg:'#f9fafb', color:'#9ca3af', val:(n:number)=>`-${Math.abs(n).toLocaleString()}` },
+  ADMIN_ADJUST: { label:'ปรับโดย Admin',   Icon: Settings,      bg:'#fffbeb', color:'#d97706', val:(n:number)=> n > 0 ? `+${n.toLocaleString()}` : n.toLocaleString() },
 }
 
 export default async function PointsPage() {
@@ -19,108 +46,116 @@ export default async function PointsPage() {
 
   const [{ data: user }, { data: logs }] = await Promise.all([
     supabase.from('users').select('*').eq('id', session.user.id).single(),
-    supabase.from('points_log').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(50),
+    supabase.from('points_log').select('*').eq('user_id', session.user.id)
+      .order('created_at', { ascending: false }).limit(50),
   ])
-
   if (!user) redirect('/login')
 
   const tierInfo = getNextTierInfo(user.tier, user.lifetime_points)
-  const tierColors = { SILVER: 'text-gray-400', GOLD: 'text-yellow-400', PLATINUM: 'text-cyan-400' }
-  const tierBgs = {
-    SILVER: 'from-gray-700 to-gray-500',
-    GOLD: 'from-amber-700 to-yellow-400',
-    PLATINUM: 'from-cyan-700 to-cyan-400',
-  }
+  const tiers = [
+    { key:'SILVER', label:'Silver', mult:'1×' },
+    { key:'GOLD',   label:'Gold',   mult:'1.5×' },
+    { key:'PLATINUM', label:'Platinum', mult:'2×' },
+  ]
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="pt-4">
-        <h1 className="text-white text-xl font-bold">คะแนนสะสม</h1>
-      </div>
-
-      {/* Points summary card */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-400 text-sm">คะแนนคงเหลือ</p>
-            <p className="text-white text-4xl font-black mt-1">
-              {user.total_points.toLocaleString()}
-              <span className="text-amber-400 text-lg ml-1">แต้ม</span>
-            </p>
-          </div>
-          <div className={`flex flex-col items-center gap-1 bg-gradient-to-br ${tierBgs[user.tier as keyof typeof tierBgs]} p-3 rounded-xl`}>
-            <Star size={20} className="text-white" />
-            <span className="text-white text-xs font-bold">{user.tier}</span>
+    <>
+      <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: CSS }} />
+      <div className="ptw">
+        {/* Header */}
+        <div className="pt-hdr">
+          <div className="pt-hdr-line" />
+          <div style={{ position:'relative', zIndex:1 }}>
+            <p style={{ color:'rgba(255,255,255,0.4)', fontSize:11, margin:'0 0 3px', letterSpacing:'0.06em', textTransform:'uppercase' }}>Dreame Rewards</p>
+            <h1 style={{ color:'#fff', fontSize:20, fontWeight:700, margin:0 }}>คะแนนสะสม</h1>
           </div>
         </div>
 
-        {/* Tier progress */}
-        {tierInfo.nextTier && (
-          <div>
-            <div className="flex justify-between text-xs text-gray-400 mb-1.5">
-              <span>แต้มสะสมตลอดกาล: <span className="text-white">{user.lifetime_points.toLocaleString()}</span></span>
-              <span>อีก {tierInfo.pointsNeeded} แต้ม → {tierInfo.nextTier}</span>
+        <div className="pt-body">
+          {/* Summary card */}
+          <div className="pt-summary">
+            <p style={{ fontSize:11, color:'#9ca3af', fontWeight:500, margin:'0 0 6px', textTransform:'uppercase', letterSpacing:'0.06em' }}>คะแนนคงเหลือ</p>
+            <p className="pt-big">{user.total_points.toLocaleString()}<span>แต้ม</span></p>
+
+            <div style={{ display:'flex', gap:16, marginTop:12, paddingTop:12, borderTop:'1px solid #f7f7f5' }}>
+              <div>
+                <p style={{ fontSize:10, color:'#9ca3af', margin:'0 0 2px', textTransform:'uppercase', letterSpacing:'0.05em' }}>สะสมตลอดกาล</p>
+                <p style={{ fontSize:16, fontWeight:700, color:'#7c3aed', margin:0 }}>{user.lifetime_points.toLocaleString()}</p>
+              </div>
+              <div style={{ width:1, background:'#f3f4f6' }}/>
+              <div>
+                <p style={{ fontSize:10, color:'#9ca3af', margin:'0 0 2px', textTransform:'uppercase', letterSpacing:'0.05em' }}>ระดับสมาชิก</p>
+                <p style={{ fontSize:16, fontWeight:700, color:'#d4af37', margin:0 }}>{user.tier}</p>
+              </div>
             </div>
-            <div className="w-full bg-gray-800 rounded-full h-2">
-              <div className={`h-2 rounded-full bg-gradient-to-r ${tierBgs[user.tier as keyof typeof tierBgs]}`} style={{ width: `${tierInfo.progress}%` }} />
+
+            {/* Tier boxes */}
+            <div className="tier-grid">
+              {tiers.map(t => (
+                <div key={t.key} className={`tier-box ${user.tier === t.key ? 'tier-box-active' : 'tier-box-inactive'}`}>
+                  <p style={{ fontSize:10, fontWeight:700, margin:'0 0 2px', color: user.tier === t.key ? '#d4af37' : '#9ca3af', letterSpacing:'0.04em' }}>{t.label}</p>
+                  <p style={{ fontSize:17, fontWeight:800, margin:0, color: user.tier === t.key ? '#fff' : '#d1d5db' }}>{t.mult}</p>
+                  <p style={{ fontSize:9, color: user.tier === t.key ? 'rgba(255,255,255,0.5)' : '#d1d5db', margin:0 }}>แต้ม</p>
+                </div>
+              ))}
             </div>
+
+            {/* Progress */}
+            {tierInfo.nextTier && (
+              <div className="prog-wrap">
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <p style={{ fontSize:12, fontWeight:600, color:'#374151', margin:0 }}>
+                    สู่ระดับ <span style={{ color:'#d4af37' }}>{tierInfo.nextTier}</span>
+                  </p>
+                  <p style={{ fontSize:11, color:'#d4af37', fontWeight:700, margin:0 }}>
+                    อีก {tierInfo.pointsNeeded?.toLocaleString()} แต้ม
+                  </p>
+                </div>
+                <div className="prog-bar">
+                  <div className="prog-fill" style={{ width:`${tierInfo.progress}%` }}/>
+                </div>
+              </div>
+            )}
+            {user.tier === 'PLATINUM' && (
+              <div style={{ marginTop:14, paddingTop:14, borderTop:'1px solid #f7f7f5', textAlign:'center' }}>
+                <p style={{ fontSize:13, color:'#0891b2', fontWeight:600, margin:0 }}>◆ คุณอยู่ในระดับสูงสุด Platinum แล้ว!</p>
+              </div>
+            )}
           </div>
-        )}
 
-        {user.tier === 'PLATINUM' && (
-          <div className="text-center text-cyan-400 text-sm font-medium">
-            💎 คุณอยู่ในระดับสูงสุด Platinum แล้ว!
-          </div>
-        )}
-
-        {/* Tier benefits */}
-        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-800">
-          {[{t:'SILVER',m:'1x'},{t:'GOLD',m:'1.5x'},{t:'PLATINUM',m:'2x'}].map(({t,m}) => (
-            <div key={t} className={`text-center p-2 rounded-lg ${user.tier === t ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-gray-800/50'}`}>
-              <p className={`text-xs font-semibold ${user.tier === t ? 'text-amber-400' : 'text-gray-500'}`}>{t}</p>
-              <p className={`text-lg font-bold ${user.tier === t ? 'text-white' : 'text-gray-600'}`}>{m}</p>
-              <p className={`text-xs ${user.tier === t ? 'text-gray-300' : 'text-gray-600'}`}>แต้ม</p>
+          {/* Log */}
+          <div className="log-card">
+            <div className="log-hdr">
+              <p style={{ fontSize:14, fontWeight:700, color:'#111', margin:0 }}>ประวัติแต้ม</p>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Points log */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-800">
-          <h2 className="text-white font-semibold text-sm">ประวัติแต้ม</h2>
-        </div>
-        {!logs || logs.length === 0 ? (
-          <div className="py-12 text-center text-gray-500 text-sm">ยังไม่มีประวัติ</div>
-        ) : (
-          <div className="divide-y divide-gray-800/50">
-            {(logs as PointsLog[]).map(log => {
-              const cfg = pointsTypeConfig[log.type]
-              const Icon = cfg.icon
+            {!logs || logs.length === 0 ? (
+              <div style={{ padding:'40px 16px', textAlign:'center', color:'#9ca3af', fontSize:13 }}>ยังไม่มีประวัติ</div>
+            ) : (logs as PointsLog[]).map(log => {
+              const cfg = typeCfg[log.type] || typeCfg.EARNED
+              const Icon = cfg.Icon
               return (
-                <div key={log.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className="w-9 h-9 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0">
-                    <Icon size={16} className={cfg.color} />
+                <div key={log.id} className="log-row">
+                  <div className="log-ico" style={{ background: cfg.bg }}>
+                    <Icon size={15} color={cfg.color}/>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm">{log.description || cfg.label}</p>
-                    <p className="text-gray-500 text-xs">{formatDateTime(log.created_at)}</p>
-                    {log.expires_at && log.type === 'EARNED' && (
-                      <p className="text-gray-600 text-xs">หมดอายุ {formatDate(log.expires_at)}</p>
-                    )}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className={`font-bold text-sm ${cfg.color}`}>
-                      {cfg.prefix}{log.points_delta > 0 ? '+' : ''}{log.points_delta.toLocaleString()}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <p style={{ fontSize:13, fontWeight:500, color:'#111827', margin:'0 0 2px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {log.description || cfg.label}
                     </p>
-                    <p className="text-gray-600 text-xs">{log.balance_after.toLocaleString()} แต้ม</p>
+                    <p style={{ fontSize:10, color:'#9ca3af', margin:0 }}>{formatDateTime(log.created_at)}</p>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
+                    <p style={{ fontSize:14, fontWeight:700, margin:'0 0 2px', color: cfg.color }}>
+                      {cfg.val(log.points_delta)}
+                    </p>
+                    <p style={{ fontSize:10, color:'#9ca3af', margin:0 }}>{log.balance_after.toLocaleString()} แต้ม</p>
                   </div>
                 </div>
               )
             })}
           </div>
-        )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }

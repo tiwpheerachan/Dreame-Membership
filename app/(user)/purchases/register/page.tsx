@@ -1,57 +1,79 @@
 'use client'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Search, Upload, CheckCircle, Clock, X } from 'lucide-react'
+import { ArrowLeft, Search, Upload, CheckCircle, Clock, X, Package, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
-type Step = 'order' | 'details' | 'upload' | 'done'
+type Step = 'order' | 'upload' | 'done'
 type VerifyStatus = 'idle' | 'loading' | 'verified' | 'pending' | 'error'
 
 const CHANNELS = [
-  { value: 'SHOPEE', label: '🛍️ Shopee', type: 'ONLINE' },
-  { value: 'LAZADA', label: '🛒 Lazada', type: 'ONLINE' },
-  { value: 'WEBSITE', label: '🌐 Website', type: 'ONLINE' },
-  { value: 'TIKTOK', label: '🎵 TikTok', type: 'ONLINE' },
-  { value: 'STORE', label: '🏪 หน้าร้าน', type: 'ONSITE' },
+  { value:'SHOPEE',  label:'Shopee',    emoji:'🛍️', type:'ONLINE' },
+  { value:'LAZADA',  label:'Lazada',    emoji:'🛒', type:'ONLINE' },
+  { value:'WEBSITE', label:'Website',   emoji:'🌐', type:'ONLINE' },
+  { value:'TIKTOK',  label:'TikTok',    emoji:'🎵', type:'ONLINE' },
+  { value:'STORE',   label:'หน้าร้าน', emoji:'🏪', type:'ONSITE' },
 ]
+
+const CSS = `
+  .rgw { min-height:100vh; background:#f7f7f5;  }
+  .rg-hdr { background:#0d0d0d; padding:48px 20px 22px; position:relative; overflow:hidden; }
+  .rg-hdr::before { content:''; position:absolute; top:-60px; right:-60px; width:200px; height:200px; border-radius:50%; background:radial-gradient(circle,rgba(212,175,55,0.15) 0%,transparent 70%); }
+  .rg-hdr-line { position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,rgba(212,175,55,0.4),transparent); }
+  .rg-body { padding:16px; display:flex; flex-direction:column; gap:14px; }
+  .rg-card { background:#fff; border-radius:18px; padding:18px; box-shadow:0 1px 6px rgba(0,0,0,0.06); border:1px solid rgba(0,0,0,0.04); }
+  .rg-label { font-size:11px; font-weight:600; color:#6b7280; margin:0 0 8px; text-transform:uppercase; letter-spacing:0.05em; }
+  .rg-input { width:100%; background:#f7f7f5; border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; font-size:14px; color:#111; outline:none; font-family:inherit; transition:border 0.15s; box-sizing:border-box; }
+  .rg-input:focus { border-color:#d4af37; background:#fff; }
+  .rg-textarea { width:100%; background:#f7f7f5; border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; font-size:14px; color:#111; outline:none; font-family:inherit; resize:none; transition:border 0.15s; box-sizing:border-box; }
+  .rg-textarea:focus { border-color:#d4af37; background:#fff; }
+  .ch-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .ch-btn { padding:11px 12px; border-radius:12px; font-size:13px; font-weight:600; text-align:left; cursor:pointer; transition:all 0.15s; border:1.5px solid #e5e7eb; background:#f7f7f5; color:#374151; display:flex; align-items:center; gap:8px; }
+  .ch-btn-active { border-color:#d4af37; background:#0d0d0d; color:#d4af37; }
+  .prog-steps { display:flex; gap:6px; }
+  .prog-step { flex:1; height:4px; border-radius:100px; }
+  .prog-step-done { background:linear-gradient(90deg,#b8860b,#d4af37); }
+  .prog-step-todo { background:#e5e7eb; }
+  .btn-gold { width:100%; padding:14px; border-radius:14px; border:none; background:linear-gradient(135deg,#b8860b,#d4af37,#f5d060); color:#0d0d0d; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; transition:opacity 0.15s; }
+  .btn-gold:disabled { opacity:0.4; cursor:not-allowed; }
+  .btn-outline { flex:1; padding:14px; border-radius:14px; border:1.5px solid #e5e7eb; background:#fff; color:#374151; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
+  .verified-box { border-radius:14px; padding:14px; background:#f0fdf4; border:1px solid #bbf7d0; }
+  .pending-box { border-radius:14px; padding:14px; background:#fffbeb; border:1px solid #fde68a; }
+  .error-box { border-radius:14px; padding:14px; background:#fef2f2; border:1px solid #fecaca; }
+  .upload-area { border-radius:14px; border:2px dashed #e5e7eb; padding:40px 24px; text-align:center; cursor:pointer; background:#f7f7f5; transition:all 0.15s; }
+  .upload-area:hover { border-color:#d4af37; background:#fffbeb; }
+`
 
 export default function RegisterPage() {
   const router = useRouter()
   const [step, setStep] = useState<Step>('order')
   const [orderSn, setOrderSn] = useState('')
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>('idle')
-  const [verifiedData, setVerifiedData] = useState<Record<string, unknown> | null>(null)
+  const [verifiedData, setVerifiedData] = useState<Record<string,unknown>|null>(null)
   const [channel, setChannel] = useState('SHOPEE')
-  const [form, setForm] = useState({ serialNumber: '', invoiceNo: '', address: '' })
-  const [receipt, setReceipt] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [receipt, setReceipt] = useState<File|null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string|null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
-
   const selectedChannel = CHANNELS.find(c => c.value === channel)
+
+  const steps = ['order','upload'] as const
+  const stepIdx = (['order','upload'] as string[]).indexOf(step)
 
   async function verifyOrder() {
     if (!orderSn.trim()) return
     setVerifyStatus('loading')
     try {
       const res = await fetch('/api/purchases/verify-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ order_sn: orderSn, channel }),
       })
       const data = await res.json()
-      if (data.status === 'VERIFIED') {
-        setVerifiedData(data.order)
-        setVerifyStatus('verified')
-      } else if (data.status === 'PENDING') {
-        setVerifyStatus('pending')
-      } else {
-        setVerifyStatus('error')
-      }
-    } catch {
-      setVerifyStatus('error')
-    }
+      if (data.status === 'VERIFIED') { setVerifiedData(data.order); setVerifyStatus('verified') }
+      else if (data.status === 'PENDING') setVerifyStatus('pending')
+      else setVerifyStatus('error')
+    } catch { setVerifyStatus('error') }
   }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -65,192 +87,171 @@ export default function RegisterPage() {
     setSubmitting(true); setError('')
     try {
       const fd = new FormData()
-      fd.append('order_sn', orderSn)
-      fd.append('channel', channel)
+      fd.append('order_sn', orderSn); fd.append('channel', channel)
       fd.append('channel_type', selectedChannel?.type || 'ONLINE')
-      fd.append('serial_number', form.serialNumber)
-      fd.append('invoice_no', form.invoiceNo)
-      fd.append('address', form.address)
       if (verifiedData) fd.append('bq_data', JSON.stringify(verifiedData))
       if (receipt) fd.append('receipt', receipt)
-
-      const res = await fetch('/api/purchases/register', { method: 'POST', body: fd })
+      const res = await fetch('/api/purchases/register', { method:'POST', body:fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'บันทึกไม่สำเร็จ')
       setStep('done')
-    } catch (e: unknown) {
+    } catch(e: unknown) {
       setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด')
     } finally { setSubmitting(false) }
   }
 
   if (step === 'done') return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
-      <CheckCircle size={64} className="text-green-400 mb-4" />
-      <h2 className="text-white text-xl font-bold mb-2">ลงทะเบียนสำเร็จ!</h2>
-      <p className="text-gray-400 text-sm mb-6">
-        {verifyStatus === 'verified'
-          ? 'ยืนยันสินค้าเรียบร้อย คะแนนจะถูกเพิ่มภายใน 24 ชั่วโมง'
-          : 'รับข้อมูลแล้ว กำลังตรวจสอบ อาจใช้เวลาสูงสุด 6 ชั่วโมง'}
-      </p>
-      <button onClick={() => router.push('/purchases')} className="bg-amber-500 text-gray-900 px-8 py-3 rounded-xl font-semibold">
-        ดูประวัติสินค้า
-      </button>
-    </div>
+    <>
+      <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: CSS }} />
+      <div style={{ minHeight:'100vh', background:'#f7f7f5', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:32, textAlign:'center' }}>
+        <div style={{ width:80, height:80, borderRadius:24, background:'linear-gradient(135deg,#d4af37,#f5d060)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 20px', boxShadow:'0 8px 24px rgba(212,175,55,0.3)' }}>
+          <CheckCircle size={40} color="#0d0d0d"/>
+        </div>
+        <h2 style={{ fontSize:22, fontWeight:700, color:'#0d0d0d', margin:'0 0 8px' }}>ลงทะเบียนสำเร็จ!</h2>
+        <p style={{ color:'#6b7280', fontSize:13, margin:'0 0 28px', lineHeight:1.6 }}>
+          {verifyStatus === 'verified' ? 'ยืนยันสินค้าเรียบร้อย คะแนนจะถูกเพิ่มภายใน 24 ชั่วโมง' : 'รับข้อมูลแล้ว กำลังตรวจสอบ อาจใช้เวลาสูงสุด 6 ชั่วโมง'}
+        </p>
+        <button onClick={() => router.push('/purchases')} style={{ padding:'14px 32px', background:'#0d0d0d', color:'#d4af37', borderRadius:14, fontWeight:700, fontSize:14, border:'none', cursor:'pointer', fontFamily:'inherit' }}>
+          ดูประวัติสินค้า →
+        </button>
+      </div>
+    </>
   )
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex items-center gap-3 pt-4">
-        <Link href="/purchases"><ArrowLeft size={20} className="text-gray-400" /></Link>
-        <h1 className="text-white text-xl font-bold">ลงทะเบียนสินค้า</h1>
-      </div>
+    <>
+      <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: CSS }} />
+      <div className="rgw">
+        {/* Header */}
+        <div className="rg-hdr">
+          <div className="rg-hdr-line"/>
+          <div style={{ position:'relative', zIndex:1, display:'flex', alignItems:'center', gap:12 }}>
+            <Link href="/purchases" style={{ width:36, height:36, borderRadius:12, background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.12)', display:'flex', alignItems:'center', justifyContent:'center', color:'rgba(255,255,255,0.7)', textDecoration:'none', flexShrink:0 }}>
+              <ArrowLeft size={16}/>
+            </Link>
+            <div>
+              <p style={{ color:'rgba(255,255,255,0.4)', fontSize:11, margin:'0 0 2px', letterSpacing:'0.06em', textTransform:'uppercase' }}>ลงทะเบียน</p>
+              <h1 style={{ color:'#fff', fontSize:18, fontWeight:700, margin:0 }}>สินค้า & ประกัน</h1>
+            </div>
+          </div>
+        </div>
 
-      {/* Progress */}
-      <div className="flex gap-1">
-        {['order','details','upload'].map((s,i) => (
-          <div key={s} className={`flex-1 h-1 rounded-full ${['order','details','upload'].indexOf(step) >= i ? 'bg-amber-500' : 'bg-gray-800'}`} />
-        ))}
-      </div>
-
-      {/* Step 1: Order verification */}
-      {step === 'order' && (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">ช่องทางการซื้อ</label>
-            <div className="grid grid-cols-2 gap-2">
-              {CHANNELS.map(c => (
-                <button key={c.value} onClick={() => setChannel(c.value)}
-                  className={`py-2.5 px-3 rounded-lg text-sm text-left transition-colors border ${channel === c.value ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-700'}`}>
-                  {c.label}
-                </button>
+        <div className="rg-body">
+          {/* Progress */}
+          {(step as string) !== 'done' && (
+            <div className="prog-steps">
+              {steps.map((s,i) => (
+                <div key={s} className={`prog-step ${stepIdx >= i ? 'prog-step-done' : 'prog-step-todo'}`}/>
               ))}
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Order ID / หมายเลขคำสั่งซื้อ</label>
-            <div className="flex gap-2">
-              <input type="text" placeholder="เช่น 250123456789" value={orderSn} onChange={e => setOrderSn(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && verifyOrder()}
-                className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500 text-sm font-mono" />
-              <button onClick={verifyOrder} disabled={verifyStatus === 'loading' || !orderSn.trim()}
-                className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-gray-900 px-4 rounded-lg font-semibold">
-                <Search size={18} />
-              </button>
-            </div>
-          </div>
-
-          {/* Verification result */}
-          {verifyStatus === 'loading' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center text-gray-400 text-sm">
-              <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-              กำลังตรวจสอบในระบบ...
-            </div>
-          )}
-          {verifyStatus === 'verified' && verifiedData && (
-            <div className="bg-green-900/20 border border-green-800/50 rounded-xl p-4 space-y-2">
-              <div className="flex items-center gap-2 text-green-400 font-semibold text-sm">
-                <CheckCircle size={16} /> ตรวจสอบสำเร็จ
-              </div>
-              <div className="space-y-1 text-sm">
-                <p className="text-gray-300"><span className="text-gray-500">Platform: </span>{verifiedData.platform as string}</p>
-                <p className="text-gray-300"><span className="text-gray-500">ยอดรวม: </span>฿{Number(verifiedData.total_amount).toLocaleString()}</p>
-                {Array.isArray(verifiedData.items) && (verifiedData.items as Record<string, unknown>[]).slice(0,2).map((item, i) => (
-                  <p key={i} className="text-gray-300"><span className="text-gray-500">สินค้า: </span>{item.item_name as string}</p>
-                ))}
-              </div>
-            </div>
-          )}
-          {verifyStatus === 'pending' && (
-            <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-xl p-4 flex items-start gap-3">
-              <Clock size={16} className="text-yellow-400 flex-shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="text-yellow-400 font-medium">ยังไม่พบข้อมูลใน BigQuery</p>
-                <p className="text-gray-400 mt-1">ออเดอร์อาจยังไม่ sync ระบบจะตรวจสอบอัตโนมัติทุก 1 ชั่วโมง คุณยังสามารถลงทะเบียนต่อได้</p>
-              </div>
-            </div>
-          )}
-          {verifyStatus === 'error' && (
-            <div className="bg-red-900/20 border border-red-800/50 rounded-xl p-4">
-              <p className="text-red-400 text-sm">ไม่พบ Order ID นี้ กรุณาตรวจสอบอีกครั้ง</p>
-            </div>
           )}
 
-          {(verifyStatus === 'verified' || verifyStatus === 'pending') && (
-            <button onClick={() => setStep('details')} className="w-full bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold py-3 rounded-xl">
-              ถัดไป →
-            </button>
+          {/* STEP 1: Order */}
+          {step === 'order' && (
+            <>
+              <div className="rg-card">
+                <p className="rg-label">ช่องทางการซื้อ</p>
+                <div className="ch-grid">
+                  {CHANNELS.map(c => (
+                    <button key={c.value} onClick={() => setChannel(c.value)}
+                      className={`ch-btn ${channel === c.value ? 'ch-btn-active' : ''}`}>
+                      <span style={{ fontSize:16 }}>{c.emoji}</span> {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rg-card">
+                <p className="rg-label">Order ID / หมายเลขคำสั่งซื้อ</p>
+                <div style={{ display:'flex', gap:8 }}>
+                  <input className="rg-input" style={{ flex:1 }} type="text"
+                    placeholder="เช่น 250123456789" value={orderSn}
+                    onChange={e => setOrderSn(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && verifyOrder()}/>
+                  <button onClick={verifyOrder} disabled={verifyStatus === 'loading' || !orderSn.trim()}
+                    style={{ padding:'0 16px', borderRadius:12, background: !orderSn.trim() ? '#e5e7eb' : '#0d0d0d', color: !orderSn.trim() ? '#9ca3af' : '#d4af37', border:'none', cursor:'pointer', display:'flex', alignItems:'center' }}>
+                    {verifyStatus === 'loading' ? <Loader2 size={18} style={{ animation:'spin 0.8s linear infinite' }}/> : <Search size={18}/>}
+                  </button>
+                </div>
+                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+
+                {verifyStatus === 'verified' && verifiedData && (
+                  <div className="verified-box" style={{ marginTop:12 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+                      <CheckCircle size={14} color="#16a34a"/>
+                      <p style={{ fontSize:13, fontWeight:700, color:'#15803d', margin:0 }}>ตรวจสอบสำเร็จ</p>
+                    </div>
+                    <p style={{ fontSize:12, color:'#374151', margin:'0 0 3px' }}>Platform: <span style={{ fontWeight:600 }}>{verifiedData.platform as string}</span></p>
+                    <p style={{ fontSize:12, color:'#374151', margin:0 }}>ยอดรวม: <span style={{ fontWeight:600 }}>฿{Number(verifiedData.total_amount).toLocaleString()}</span></p>
+                  </div>
+                )}
+                {verifyStatus === 'pending' && (
+                  <div className="pending-box" style={{ marginTop:12, display:'flex', gap:10 }}>
+                    <Clock size={16} color="#d97706" style={{ flexShrink:0, marginTop:1 }}/>
+                    <div>
+                      <p style={{ fontSize:13, fontWeight:600, color:'#92400e', margin:'0 0 3px' }}>ยังไม่พบข้อมูลใน BigQuery</p>
+                      <p style={{ fontSize:11, color:'#92400e', margin:0, opacity:0.8 }}>ระบบจะตรวจสอบอัตโนมัติ คุณสามารถลงทะเบียนต่อได้</p>
+                    </div>
+                  </div>
+                )}
+                {verifyStatus === 'error' && (
+                  <div className="error-box" style={{ marginTop:12 }}>
+                    <p style={{ fontSize:13, color:'#dc2626', margin:0, fontWeight:500 }}>ไม่พบ Order ID นี้ กรุณาตรวจสอบอีกครั้ง</p>
+                  </div>
+                )}
+              </div>
+
+              {(verifyStatus === 'verified' || verifyStatus === 'pending') && (
+                <button className="btn-gold" onClick={() => setStep('upload')}>ถัดไป →</button>
+              )}
+            </>
+          )}
+
+          {/* STEP 3: Upload */}
+          {step === 'upload' && (
+            <>
+              <div className="rg-card">
+                <p className="rg-label">อัพโหลดใบเสร็จ</p>
+                {!previewUrl ? (
+                  <div className="upload-area" onClick={() => fileRef.current?.click()}>
+                    <div style={{ width:52, height:52, borderRadius:16, background:'#fff', border:'1px solid #e5e7eb', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 12px' }}>
+                      <Upload size={24} color="#9ca3af"/>
+                    </div>
+                    <p style={{ fontSize:13, color:'#374151', fontWeight:600, margin:'0 0 4px' }}>กดเพื่อเลือกรูปใบเสร็จ</p>
+                    <p style={{ fontSize:11, color:'#9ca3af', margin:0 }}>JPG, PNG, PDF · ไม่เกิน 10MB</p>
+                  </div>
+                ) : (
+                  <div style={{ position:'relative', borderRadius:12, overflow:'hidden' }}>
+                    <img src={previewUrl} alt="receipt" style={{ width:'100%', objectFit:'contain', maxHeight:240 }}/>
+                    <button onClick={() => { setReceipt(null); setPreviewUrl(null) }}
+                      style={{ position:'absolute', top:8, right:8, width:28, height:28, borderRadius:'50%', background:'rgba(0,0,0,0.6)', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+                      <X size={14} color="#fff"/>
+                    </button>
+                  </div>
+                )}
+              </div>
+              <input ref={fileRef} type="file" accept="image/*,.pdf" style={{ display:'none' }} onChange={handleFile}/>
+
+              {error && (
+                <div style={{ padding:'12px 14px', background:'#fef2f2', border:'1px solid #fecaca', borderRadius:12 }}>
+                  <p style={{ color:'#dc2626', fontSize:13, margin:0 }}>⚠️ {error}</p>
+                </div>
+              )}
+
+              <div style={{ display:'flex', gap:8 }}>
+                <button className="btn-outline" onClick={() => setStep('order')}>← กลับ</button>
+                <button className="btn-gold" style={{ flex:1 }} onClick={submit} disabled={submitting}>
+                  {submitting ? (
+                    <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+                      <Loader2 size={16} style={{ animation:'spin 0.8s linear infinite' }}/> กำลังบันทึก...
+                    </span>
+                  ) : 'ยืนยัน ✓'}
+                </button>
+              </div>
+            </>
           )}
         </div>
-      )}
-
-      {/* Step 2: Details */}
-      {step === 'details' && (
-        <div className="space-y-4">
-          <h2 className="text-white font-semibold">ข้อมูลสินค้า</h2>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Serial Number <span className="text-red-400">*</span></label>
-              <input type="text" placeholder="กรอก Serial Number จากตัวเครื่อง"
-                value={form.serialNumber} onChange={e => setForm(f => ({...f, serialNumber: e.target.value}))}
-                className="w-full bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500 text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Invoice No. (ถ้ามี)</label>
-              <input type="text" placeholder="เลขที่ใบเสร็จ/ใบกำกับ"
-                value={form.invoiceNo} onChange={e => setForm(f => ({...f, invoiceNo: e.target.value}))}
-                className="w-full bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500 text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">ที่อยู่สำหรับจัดส่ง (ถ้าแตกต่างจาก Profile)</label>
-              <textarea placeholder="บ้านเลขที่ ถนน แขวง เขต จังหวัด รหัสไปรษณีย์"
-                value={form.address} onChange={e => setForm(f => ({...f, address: e.target.value}))}
-                rows={3}
-                className="w-full bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500 text-sm resize-none" />
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <button onClick={() => setStep('order')} className="flex-1 bg-gray-800 text-gray-300 py-3 rounded-xl font-medium">← กลับ</button>
-            <button onClick={() => setStep('upload')} disabled={!form.serialNumber.trim()}
-              className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-gray-900 font-semibold py-3 rounded-xl">ถัดไป →</button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Upload */}
-      {step === 'upload' && (
-        <div className="space-y-4">
-          <h2 className="text-white font-semibold">อัพโหลดใบเสร็จ</h2>
-
-          {!previewUrl ? (
-            <button onClick={() => fileRef.current?.click()}
-              className="w-full bg-gray-900 border-2 border-dashed border-gray-700 hover:border-amber-500 rounded-xl p-8 text-center transition-colors group">
-              <Upload size={32} className="text-gray-600 group-hover:text-amber-500 mx-auto mb-3 transition-colors" />
-              <p className="text-gray-400 text-sm">กดเพื่อเลือกรูปใบเสร็จ</p>
-              <p className="text-gray-600 text-xs mt-1">JPG, PNG, PDF • ไม่เกิน 10MB</p>
-            </button>
-          ) : (
-            <div className="relative rounded-xl overflow-hidden">
-              <img src={previewUrl} alt="receipt" className="w-full object-contain max-h-64" />
-              <button onClick={() => { setReceipt(null); setPreviewUrl(null) }}
-                className="absolute top-2 right-2 w-7 h-7 bg-gray-900/80 rounded-full flex items-center justify-center">
-                <X size={14} className="text-white" />
-              </button>
-            </div>
-          )}
-          <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFile} />
-
-          {error && <p className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{error}</p>}
-
-          <div className="flex gap-3">
-            <button onClick={() => setStep('details')} className="flex-1 bg-gray-800 text-gray-300 py-3 rounded-xl font-medium">← กลับ</button>
-            <button onClick={submit} disabled={submitting}
-              className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-gray-900 font-semibold py-3 rounded-xl">
-              {submitting ? 'กำลังบันทึก...' : 'ยืนยัน ✓'}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+      </div>
+    </>
   )
 }

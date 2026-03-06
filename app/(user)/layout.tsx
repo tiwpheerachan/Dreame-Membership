@@ -7,8 +7,8 @@ export default async function UserLayout({ children }: { children: React.ReactNo
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) redirect('/login')
   return (
-    <div className="min-h-screen bg-gray-950">
-      <div className="max-w-md mx-auto pb-24">
+    <div style={{ minHeight:'100vh', background:'#f7f7f5', fontFamily:"'Prompt',system-ui,sans-serif" }}>
+      <div style={{ maxWidth:480, margin:'0 auto', paddingBottom:'96px' }}>
         {children}
       </div>
       <Navbar />
