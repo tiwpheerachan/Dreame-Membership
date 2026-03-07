@@ -2,78 +2,135 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import {
+  User, Phone, Mail, MapPin, Lock, Eye, EyeOff,
+  Camera, LogOut, ChevronRight, TrendingUp, Shield, CheckCircle
+} from 'lucide-react'
 import type { User as UserType } from '@/types'
 
-function PressButton({ onClick, disabled, children, style, className }: {
-  onClick?: () => void; disabled?: boolean; children: React.ReactNode
-  style?: React.CSSProperties; className?: string
-}) {
-  const [pressed, setPressed] = useState(false)
-  return (
-    <button onClick={onClick} disabled={disabled} className={className}
-      onPointerDown={() => setPressed(true)}
-      onPointerUp={() => setPressed(false)}
-      onPointerLeave={() => setPressed(false)}
-      style={{ ...style, transform: pressed ? 'scale(0.96)' : 'scale(1)', transition: 'transform 0.12s cubic-bezier(0.34,1.56,0.64,1), opacity 0.12s', opacity: disabled ? 0.6 : 1 }}>
-      {children}
-    </button>
-  )
-}
+const CSS = `
+  * { box-sizing:border-box; }
+  .pfw { background:#f0f0ee; min-height:100vh; font-family:'Prompt',system-ui,sans-serif; }
+  @keyframes spin { to { transform:rotate(360deg) } }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:none} }
+  @keyframes slideDown { from{opacity:0;transform:translateX(-50%) translateY(-8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
 
-function GlassInput({ label, icon, type = 'text', value, onChange, placeholder, multiline }: {
-  label: string; icon: string; type?: string; value: string
-  onChange: (v: string) => void; placeholder?: string; multiline?: boolean
-}) {
-  const [focused, setFocused] = useState(false)
-  const base: React.CSSProperties = {
-    width: '100%', fontFamily: 'Prompt,sans-serif',
-    background: focused ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.5)',
-    border: focused ? '1.5px solid rgba(245,158,11,0.5)' : '1.5px solid rgba(255,255,255,0.7)',
-    borderRadius: 14, padding: '12px 14px 12px 44px',
-    fontSize: 15, color: '#1a1a2e', outline: 'none',
-    backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-    transition: 'all 0.2s ease', resize: 'none' as const,
-    boxShadow: focused ? '0 0 0 3px rgba(245,158,11,0.12), 0 4px 20px rgba(0,0,0,0.07)' : '0 2px 8px rgba(0,0,0,0.05)',
-  }
-  return (
-    <div>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8a8aaa', letterSpacing: '0.07em', textTransform: 'uppercase' as const, marginBottom: 6 }}>{label}</label>
-      <div style={{ position: 'relative' }}>
-        <span style={{ position: 'absolute', left: 13, top: multiline ? 13 : '50%', transform: multiline ? 'none' : 'translateY(-50%)', fontSize: 18, pointerEvents: 'none' as const }}>{icon}</span>
-        {multiline
-          ? <textarea value={value} onChange={e => onChange(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder={placeholder} rows={3} style={base} />
-          : <input type={type} value={value} onChange={e => onChange(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder={placeholder} style={base} />}
-      </div>
-    </div>
-  )
-}
+  /* HEADER */
+  .pf-hdr { background:#0d0d0d; padding:52px 20px 80px; position:relative; overflow:hidden; }
+  .pf-hdr-glow { position:absolute; top:-80px; right:-80px; width:280px; height:280px; border-radius:50%;
+    background:radial-gradient(circle,rgba(212,175,55,0.16) 0%,transparent 65%); pointer-events:none; }
+  .pf-hdr-line { position:absolute; top:0; left:0; right:0; height:1px;
+    background:linear-gradient(90deg,transparent,rgba(212,175,55,0.5),transparent); }
 
-const TIER = {
-  SILVER:   { g: 'linear-gradient(135deg,#b0b0b0,#e0e0e0,#909090)', glow: 'rgba(180,180,180,0.4)', emoji: '🥈', name: 'Silver' },
-  GOLD:     { g: 'linear-gradient(135deg,#f59e0b,#fde68a,#d97706)', glow: 'rgba(245,158,11,0.4)', emoji: '🥇', name: 'Gold' },
-  PLATINUM: { g: 'linear-gradient(135deg,#67e8f9,#a5f3fc,#0891b2)', glow: 'rgba(103,232,249,0.4)', emoji: '💎', name: 'Platinum' },
-} as const
+  /* AVATAR HERO */
+  .av-wrap { position:relative; display:inline-block; }
+  .av-ring { width:88px; height:88px; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; font-size:28px; font-weight:800; color:#0d0d0d;
+    border:3px solid rgba(212,175,55,0.6); box-shadow:0 0 0 5px rgba(212,175,55,0.1); }
+  .av-img { width:88px; height:88px; border-radius:50%; object-fit:cover;
+    border:3px solid rgba(212,175,55,0.6); box-shadow:0 0 0 5px rgba(212,175,55,0.1); }
+  .av-btn { position:absolute; bottom:0; right:0; width:28px; height:28px; border-radius:50%;
+    background:linear-gradient(135deg,#d4af37,#f5d060); border:2.5px solid #0d0d0d;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; }
+
+  /* TIER BADGE */
+  .tier-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 14px;
+    border-radius:100px; font-size:11px; font-weight:700; letter-spacing:0.06em; margin-top:10px; }
+  .tier-gold     { background:rgba(212,175,55,0.15); color:#d4af37; border:1px solid rgba(212,175,55,0.35); }
+  .tier-silver   { background:rgba(180,180,180,0.15); color:#aaa; border:1px solid rgba(180,180,180,0.3); }
+  .tier-platinum { background:rgba(78,201,232,0.15); color:#4ec9e8; border:1px solid rgba(78,201,232,0.35); }
+
+  /* CARDS */
+  .pf-card { background:#fff; border-radius:20px; box-shadow:0 2px 12px rgba(0,0,0,0.07);
+    border:1px solid rgba(0,0,0,0.05); overflow:hidden; }
+
+  /* STAT STRIP */
+  .stat-row { display:grid; grid-template-columns:1fr 1fr 1fr; }
+  .stat-cell { padding:14px 10px; text-align:center; position:relative; }
+  .stat-cell:not(:last-child)::after { content:''; position:absolute; right:0; top:18%; bottom:18%;
+    width:1px; background:#f0f0ee; }
+
+  /* FORM */
+  .pf-label { font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase;
+    letter-spacing:0.07em; margin:0 0 6px; }
+  .pf-input-wrap { position:relative; }
+  .pf-input { width:100%; background:#f7f7f5; border:1.5px solid #ebebeb; border-radius:12px;
+    padding:11px 14px 11px 42px; font-size:14px; color:#111; outline:none;
+    font-family:inherit; transition:all 0.15s; }
+  .pf-input:focus { border-color:#d4af37; background:#fff;
+    box-shadow:0 0 0 3px rgba(212,175,55,0.1); }
+  .pf-icon { position:absolute; left:13px; top:50%; transform:translateY(-50%); color:#c4c4c4; flex-shrink:0; }
+  .pf-textarea { width:100%; background:#f7f7f5; border:1.5px solid #ebebeb; border-radius:12px;
+    padding:11px 14px 11px 42px; font-size:14px; color:#111; outline:none;
+    font-family:inherit; transition:all 0.15s; resize:none; }
+  .pf-textarea:focus { border-color:#d4af37; background:#fff;
+    box-shadow:0 0 0 3px rgba(212,175,55,0.1); }
+  .pf-icon-top { position:absolute; left:13px; top:13px; color:#c4c4c4; }
+
+  /* PROGRESS */
+  .prog-track { height:5px; background:#f0f0ee; border-radius:100px; overflow:hidden; margin-top:8px; }
+  .prog-gold { height:100%; border-radius:100px;
+    background:linear-gradient(90deg,#92600a,#d4af37,#f5d060); }
+
+  /* BUTTONS */
+  .btn-gold { width:100%; padding:13px; border-radius:14px; border:none;
+    background:linear-gradient(135deg,#b8860b,#d4af37,#f5d060); color:#0d0d0d;
+    font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    transition:opacity 0.15s; }
+  .btn-gold:disabled { opacity:0.45; cursor:not-allowed; }
+  .btn-indigo { width:100%; padding:13px; border-radius:14px; border:none;
+    background:linear-gradient(135deg,#4f46e5,#6366f1); color:#fff;
+    font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    transition:opacity 0.15s; }
+  .btn-indigo:disabled { opacity:0.45; cursor:not-allowed; }
+  .btn-text { background:none; border:none; font-family:inherit; cursor:pointer; }
+
+  /* SECTION ROW */
+  .sec-row { display:flex; align-items:center; gap:12px; padding:14px 16px;
+    border-bottom:1px solid #f7f7f5; }
+  .sec-row:last-child { border-bottom:none; }
+  .sec-ico { width:38px; height:38px; border-radius:12px;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+
+  /* STRENGTH BAR */
+  .str-bar { display:flex; gap:4px; margin-top:6px; }
+  .str-seg { flex:1; height:3px; border-radius:2px; transition:background 0.3s; }
+
+  /* TOAST */
+  .toast { position:fixed; top:20px; left:50%; transform:translateX(-50%);
+    z-index:9999; padding:10px 22px; border-radius:100px; font-size:13px; font-weight:600;
+    font-family:inherit; white-space:nowrap; box-shadow:0 8px 28px rgba(0,0,0,0.18);
+    animation:slideDown 0.25s ease; }
+  .toast-ok  { background:#0d0d0d; color:#d4af37; }
+  .toast-err { background:#dc2626; color:#fff; }
+`
+
+const TIER_CFG = {
+  GOLD:     { pill:'tier-gold',     gradient:'linear-gradient(135deg,#d4af37,#f5d060)', label:'GOLD MEMBER' },
+  SILVER:   { pill:'tier-silver',   gradient:'linear-gradient(135deg,#9ca3af,#d1d5db)', label:'SILVER MEMBER' },
+  PLATINUM: { pill:'tier-platinum', gradient:'linear-gradient(135deg,#0891b2,#67e8f9)', label:'PLATINUM MEMBER' },
+}
 
 export default function ProfilePage() {
   const supabase = createClient()
   const router = useRouter()
   const [user, setUser] = useState<UserType | null>(null)
-  const [form, setForm] = useState({ full_name: '', phone: '', email: '', address: '' })
+  const [form, setForm] = useState({ full_name:'', phone:'', email:'', address:'' })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  // Password change state
-  const [pwSection, setPwSection] = useState(false)
+  const [toast, setToast] = useState<{ msg:string; ok:boolean } | null>(null)
+  const [pwOpen, setPwOpen] = useState(false)
   const [newPass, setNewPass] = useState('')
   const [confirmPass, setConfirmPass] = useState('')
-  const [showNewPass, setShowNewPass] = useState(false)
+  const [showPass, setShowPass] = useState(false)
   const [savingPass, setSavingPass] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const showToast = useCallback((msg: string, ok: boolean) => {
     setToast({ msg, ok })
-    setTimeout(() => setToast(null), 2600)
+    setTimeout(() => setToast(null), 2500)
   }, [])
 
   useEffect(() => {
@@ -81,7 +138,7 @@ export default function ProfilePage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return router.push('/login')
       const { data } = await supabase.from('users').select('*').eq('id', session.user.id).single()
-      if (data) { setUser(data); setForm({ full_name: data.full_name||'', phone: data.phone||'', email: data.email||'', address: data.address||'' }) }
+      if (data) { setUser(data); setForm({ full_name:data.full_name||'', phone:data.phone||'', email:data.email||'', address:data.address||'' }) }
     }
     load()
   }, [])
@@ -92,7 +149,7 @@ export default function ProfilePage() {
     if (!session) return
     const { error } = await supabase.from('users').update(form).eq('id', session.user.id)
     setSaving(false)
-    if (!error) { setUser(u => u ? { ...u, ...form } : u); showToast('บันทึกสำเร็จแล้ว ✓', true) }
+    if (!error) { setUser(u => u ? { ...u, ...form } : u); showToast('บันทึกสำเร็จแล้ว', true) }
     else showToast('บันทึกไม่สำเร็จ กรุณาลองใหม่', false)
   }
 
@@ -103,8 +160,8 @@ export default function ProfilePage() {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPass })
       if (error) throw error
-      showToast('เปลี่ยนรหัสผ่านสำเร็จ ✓', true)
-      setNewPass(''); setConfirmPass(''); setPwSection(false)
+      showToast('เปลี่ยนรหัสผ่านสำเร็จ', true)
+      setNewPass(''); setConfirmPass(''); setPwOpen(false)
     } catch (e: unknown) {
       showToast(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด', false)
     } finally { setSavingPass(false) }
@@ -115,269 +172,267 @@ export default function ProfilePage() {
     if (!file || !user) return
     setUploading(true)
     const fd = new FormData(); fd.append('file', file)
-    const res = await fetch('/api/users/me/avatar', { method: 'POST', body: fd })
+    const res = await fetch('/api/users/me/avatar', { method:'POST', body:fd })
     const data = await res.json()
-    if (data.url) { setUser(u => u ? { ...u, profile_image_url: data.url } : u); showToast('เปลี่ยนรูปโปรไฟล์สำเร็จ ✓', true) }
+    if (data.url) { setUser(u => u ? { ...u, profile_image_url:data.url } : u); showToast('เปลี่ยนรูปสำเร็จ', true) }
     else showToast('อัพโหลดไม่สำเร็จ', false)
     setUploading(false)
   }
 
   if (!user) return (
-    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'linear-gradient(135deg,#fffbf0,#f0f4ff,#fdf0ff)', fontFamily:'Prompt,sans-serif' }}>
-      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
-        <div style={{ width:40, height:40, border:'3px solid rgba(245,158,11,0.2)', borderTop:'3px solid #f59e0b', borderRadius:'50%', animation:'spin 0.9s linear infinite' }} />
-        <p style={{ color:'#9ca3af', fontSize:13 }}>กำลังโหลด...</p>
+    <div style={{ minHeight:'100vh', background:'#f0f0ee', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'Prompt,system-ui' }}>
+      <div style={{ textAlign:'center' }}>
+        <div style={{ width:36, height:36, border:'3px solid #f0f0ee', borderTop:'3px solid #d4af37', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto 10px' }}/>
+        <p style={{ color:'#9ca3af', fontSize:13, margin:0 }}>กำลังโหลด...</p>
       </div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
 
-  const tier = TIER[user.tier as keyof typeof TIER] || TIER.SILVER
-  const initials = (user.full_name||'U').split(' ').map((n:string)=>n[0]).join('').slice(0,2).toUpperCase()
-  const tierProgress = user.tier === 'SILVER' ? { label:'สู่ Gold', cur:user.lifetime_points, max:500 }
-    : user.tier === 'GOLD' ? { label:'สู่ Platinum', cur:user.lifetime_points, max:2000 } : null
-
-  const glass: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.58)',
-    backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
-    border: '1.5px solid rgba(255,255,255,0.8)',
-    borderRadius: 24,
-    boxShadow: '0 8px 40px rgba(0,0,0,0.07), 0 1px 0 rgba(255,255,255,0.95) inset',
-  }
+  const tc = TIER_CFG[user.tier as keyof typeof TIER_CFG] || TIER_CFG.SILVER
+  const init = (user.full_name || 'U').split(' ').map((n:string) => n[0]).join('').slice(0,2).toUpperCase()
+  const tierNext = user.tier === 'SILVER' ? { label:'Gold', max:500 } : user.tier === 'GOLD' ? { label:'Platinum', max:2000 } : null
+  const pct = tierNext ? Math.min(100, Math.round(user.lifetime_points / tierNext.max * 100)) : 100
+  const passOk = newPass.length >= 8 && newPass === confirmPass
+  const strength = newPass.length === 0 ? 0 : newPass.length < 8 ? 1 : newPass.length < 12 ? 2 : newPass.length < 16 ? 3 : 4
+  const strengthColor = ['#e5e7eb','#dc2626','#f59e0b','#3b82f6','#16a34a']
+  const strengthLabel = ['','สั้นเกินไป','ปานกลาง','ดี','แข็งแกร่ง']
 
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
-        * { -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
-        @keyframes spin { to{transform:rotate(360deg)} }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:none} }
-        @keyframes slideDown { from{opacity:0;transform:translateX(-50%) translateY(-10px) scale(0.95)} to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)} }
-        @keyframes floatA { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-16px) rotate(3deg)} }
-        @keyframes floatB { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-10px) rotate(-2deg)} }
-        @keyframes ring { 0%{box-shadow:0 0 0 0 rgba(245,158,11,0.35)} 70%{box-shadow:0 0 0 12px rgba(245,158,11,0)} 100%{box-shadow:0 0 0 0 rgba(245,158,11,0)} }
-        input::placeholder, textarea::placeholder { color:#c0c0d0; }
-      `}</style>
+      <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: CSS }} />
+      {toast && <div className={`toast ${toast.ok ? 'toast-ok' : 'toast-err'}`}>{toast.msg}</div>}
+      <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }} onChange={uploadAvatar}/>
 
-      {/* BG */}
-      <div style={{ position:'fixed', inset:0, background:'linear-gradient(145deg,#fffbf0 0%,#eef2ff 40%,#fdf4ff 75%,#f0fdf4 100%)', zIndex:0, overflow:'hidden' }}>
-        <div style={{ position:'absolute', width:320, height:320, top:-100, left:-80, background:'radial-gradient(circle,rgba(251,191,36,0.22),transparent 70%)', borderRadius:'50%', animation:'floatA 9s ease-in-out infinite' }} />
-        <div style={{ position:'absolute', width:260, height:260, top:'25%', right:-70, background:'radial-gradient(circle,rgba(167,139,250,0.18),transparent 70%)', borderRadius:'50%', animation:'floatB 11s ease-in-out infinite 2s' }} />
-        <div style={{ position:'absolute', width:200, height:200, bottom:'18%', left:'5%', background:'radial-gradient(circle,rgba(34,211,238,0.16),transparent 70%)', borderRadius:'50%', animation:'floatA 13s ease-in-out infinite 4s' }} />
-        <div style={{ position:'absolute', width:160, height:160, bottom:-40, right:'15%', background:'radial-gradient(circle,rgba(249,115,22,0.14),transparent 70%)', borderRadius:'50%', animation:'floatB 8s ease-in-out infinite 1s' }} />
-      </div>
+      <div className="pfw">
 
-      {/* Toast */}
-      {toast && (
-        <div style={{
-          position:'fixed', top:20, left:'50%',
-          transform:'translateX(-50%)',
-          zIndex:1000,
-          background: toast.ok ? 'rgba(16,185,129,0.93)' : 'rgba(239,68,68,0.93)',
-          backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)',
-          color:'#fff', fontFamily:'Prompt,sans-serif', fontSize:14, fontWeight:500,
-          padding:'10px 24px', borderRadius:100,
-          boxShadow:'0 8px 32px rgba(0,0,0,0.18)',
-          animation:'slideDown 0.3s cubic-bezier(0.34,1.56,0.64,1)',
-          whiteSpace:'nowrap',
-        }}>{toast.msg}</div>
-      )}
-
-      {/* Content */}
-      <div style={{ position:'relative', zIndex:1, minHeight:'100vh', padding:'16px 16px 110px', fontFamily:'Prompt,sans-serif', maxWidth:480, margin:'0 auto' }}>
-
-        {/* Header */}
-        <div style={{ paddingTop:12, marginBottom:20, animation:'fadeUp 0.4s ease' }}>
-          <h1 style={{ fontSize:26, fontWeight:700, color:'#1a1a2e', margin:0 }}>โปรไฟล์</h1>
-          <p style={{ fontSize:13, color:'#9ca3af', margin:'2px 0 0' }}>จัดการข้อมูลส่วนตัวของคุณ</p>
-        </div>
-
-        {/* ── Hero Card ── */}
-        <div style={{ ...glass, padding:'28px 20px 22px', marginBottom:14, animation:'fadeUp 0.42s ease 0.05s both', textAlign:'center' }}>
-          {/* Avatar */}
-          <div style={{ position:'relative', display:'inline-block', marginBottom:14 }}>
-            <div style={{ width:96, height:96, borderRadius:'50%', background:user.profile_image_url ? 'transparent' : tier.g, padding:user.profile_image_url ? 3 : 0, boxShadow:`0 0 0 4px rgba(255,255,255,0.85), 0 8px 28px ${tier.glow}`, animation:'ring 2.8s ease-in-out infinite' }}>
+        {/* ── DARK HEADER ── */}
+        <div className="pf-hdr">
+          <div className="pf-hdr-glow"/><div className="pf-hdr-line"/>
+          {/* Avatar + name centered */}
+          <div style={{ position:'relative', zIndex:1, textAlign:'center' }}>
+            <div className="av-wrap">
               {user.profile_image_url
-                ? <img src={user.profile_image_url} alt="" style={{ width:'100%', height:'100%', borderRadius:'50%', objectFit:'cover', display:'block' }} />
-                : <div style={{ width:'100%', height:'100%', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:30, fontWeight:700, color:'#fff', textShadow:'0 2px 8px rgba(0,0,0,0.25)' }}>{initials}</div>}
+                ? <img src={user.profile_image_url} alt="" className="av-img"/>
+                : <div className="av-ring" style={{ background: tc.gradient }}>{init}</div>}
+              <button className="av-btn" onClick={() => fileRef.current?.click()} style={{ border:'none', padding:0 }}>
+                {uploading
+                  ? <div style={{ width:10, height:10, border:'2px solid rgba(0,0,0,0.2)', borderTop:'2px solid #0d0d0d', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>
+                  : <Camera size={12} color="#0d0d0d"/>}
+              </button>
             </div>
-            <PressButton onClick={() => fileRef.current?.click()} disabled={uploading} style={{ position:'absolute', bottom:1, right:1, width:30, height:30, background:'linear-gradient(135deg,#f59e0b,#d97706)', borderRadius:'50%', border:'2.5px solid #fff', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 14px rgba(245,158,11,0.45)', cursor:'pointer' }}>
-              {uploading
-                ? <div style={{ width:12, height:12, border:'2px solid rgba(255,255,255,0.35)', borderTop:'2px solid #fff', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />
-                : <span style={{ fontSize:13 }}>📷</span>}
-            </PressButton>
+            <h1 style={{ color:'#fff', fontSize:20, fontWeight:700, margin:'12px 0 2px' }}>
+              {user.full_name || 'สมาชิก'}
+            </h1>
+            <p style={{ color:'rgba(255,255,255,0.38)', fontSize:11, margin:'0 0 4px', fontFamily:'monospace', letterSpacing:'0.1em' }}>
+              {user.member_id}
+            </p>
+            <span className={`tier-pill ${tc.pill}`}>✦ {tc.label}</span>
           </div>
-          <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }} onChange={uploadAvatar} />
-
-          <h2 style={{ fontSize:20, fontWeight:700, color:'#1a1a2e', margin:'0 0 3px' }}>{user.full_name || 'สมาชิก'}</h2>
-          <p style={{ fontSize:12, color:'#9ca3af', fontFamily:'monospace', margin:'0 0 12px' }}>{user.member_id}</p>
-
-          <div style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'6px 16px', background:tier.g, borderRadius:100, boxShadow:`0 4px 18px ${tier.glow}`, marginBottom:18 }}>
-            <span style={{ fontSize:14 }}>{tier.emoji}</span>
-            <span style={{ fontSize:12, fontWeight:700, color:'#fff', textShadow:'0 1px 4px rgba(0,0,0,0.2)', letterSpacing:'0.05em' }}>{tier.name} Member</span>
-          </div>
-
-          {/* Stats */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1px 1fr 1px 1fr' }}>
-            {[
-              { label:'คะแนนคงเหลือ', val:user.total_points.toLocaleString(), color:'#f59e0b' },
-              null,
-              { label:'สะสมตลอดกาล', val:user.lifetime_points.toLocaleString(), color:'#8b5cf6' },
-              null,
-              { label:'Tier', val:user.tier, color:'#06b6d4' },
-            ].map((item, i) => item === null
-              ? <div key={i} style={{ background:'rgba(0,0,0,0.06)', width:1 }} />
-              : <div key={i} style={{ padding:'8px 4px', textAlign:'center' }}>
-                  <p style={{ fontSize:16, fontWeight:700, color:item.color, margin:0 }}>{item.val}</p>
-                  <p style={{ fontSize:10, color:'#9ca3af', margin:'2px 0 0', lineHeight:1.3 }}>{item.label}</p>
-                </div>)}
-          </div>
-
-          {/* Progress */}
-          {tierProgress && (
-            <div style={{ marginTop:14, padding:'10px 14px', background:'rgba(245,158,11,0.07)', borderRadius:14, border:'1px solid rgba(245,158,11,0.14)', textAlign:'left' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                <span style={{ fontSize:11, color:'#9ca3af' }}>ความคืบหน้า{tierProgress.label}</span>
-                <span style={{ fontSize:11, fontWeight:600, color:'#f59e0b' }}>{Math.min(tierProgress.cur,tierProgress.max).toLocaleString()} / {tierProgress.max.toLocaleString()}</span>
-              </div>
-              <div style={{ height:6, background:'rgba(0,0,0,0.07)', borderRadius:100, overflow:'hidden' }}>
-                <div style={{ height:'100%', width:`${Math.min(100,(tierProgress.cur/tierProgress.max)*100)}%`, background:tier.g, borderRadius:100, transition:'width 1s cubic-bezier(0.34,1.56,0.64,1)' }} />
-              </div>
-              {tierProgress.cur < tierProgress.max && <p style={{ fontSize:10, color:'#9ca3af', marginTop:4 }}>อีก {(tierProgress.max-tierProgress.cur).toLocaleString()} คะแนน</p>}
-            </div>
-          )}
         </div>
 
-        {/* ── Edit Form ── */}
-        <div style={{ ...glass, padding:'20px 18px', marginBottom:14, animation:'fadeUp 0.42s ease 0.10s both' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
-            <div style={{ width:32, height:32, borderRadius:10, background:'linear-gradient(135deg,#f59e0b,#d97706)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>✏️</div>
-            <h2 style={{ fontSize:15, fontWeight:600, color:'#1a1a2e', margin:0 }}>ข้อมูลส่วนตัว</h2>
-          </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:13 }}>
-            <GlassInput label="ชื่อ-นามสกุล" icon="👤" value={form.full_name} onChange={v => setForm(f=>({...f,full_name:v}))} placeholder="ชื่อ นามสกุล" />
-            <GlassInput label="เบอร์โทรศัพท์" icon="📱" type="tel" value={form.phone} onChange={v => setForm(f=>({...f,phone:v}))} placeholder="0812345678" />
-            <GlassInput label="อีเมล" icon="✉️" type="email" value={form.email} onChange={v => setForm(f=>({...f,email:v}))} placeholder="you@example.com" />
-            <GlassInput label="ที่อยู่" icon="📍" value={form.address} onChange={v => setForm(f=>({...f,address:v}))} placeholder="บ้านเลขที่ ถนน แขวง เขต จังหวัด" multiline />
-          </div>
-          <PressButton onClick={save} disabled={saving} style={{ width:'100%', marginTop:18, background:saving?'rgba(245,158,11,0.55)':'linear-gradient(135deg,#f59e0b,#d97706)', border:'none', borderRadius:16, padding:'14px 0', fontSize:15, fontWeight:600, fontFamily:'Prompt,sans-serif', color:'#fff', cursor:saving?'not-allowed':'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow:'0 6px 24px rgba(245,158,11,0.32)' }}>
-            {saving
-              ? <><div style={{ width:16, height:16, border:'2px solid rgba(255,255,255,0.35)', borderTop:'2px solid #fff', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} /> กำลังบันทึก...</>
-              : <><span>💾</span> บันทึกการเปลี่ยนแปลง</>}
-          </PressButton>
-        </div>
+        {/* ── BODY ── */}
+        <div style={{ padding:'0 16px', marginTop:-36, position:'relative', zIndex:2, display:'flex', flexDirection:'column', gap:12 }}>
 
-        {/* ── Password Section ── */}
-        <div style={{ ...glass, padding:'20px 18px', marginBottom:14, animation:'fadeUp 0.42s ease 0.13s both' }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: pwSection ? 18 : 0 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-              <div style={{ width:32, height:32, borderRadius:10, background:'linear-gradient(135deg,#6366f1,#4f46e5)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>🔑</div>
-              <div>
-                <h2 style={{ fontSize:15, fontWeight:600, color:'#1a1a2e', margin:0 }}>รหัสผ่าน</h2>
-                <p style={{ fontSize:11, color:'#9ca3af', margin:'2px 0 0' }}>เปลี่ยนรหัสผ่านของคุณ</p>
+          {/* Stat Strip */}
+          <div className="pf-card">
+            <div className="stat-row">
+              <div className="stat-cell">
+                <p style={{ fontSize:19, fontWeight:800, color:'#d4af37', margin:'0 0 2px', lineHeight:1 }}>{user.total_points.toLocaleString()}</p>
+                <p style={{ fontSize:9, color:'#9ca3af', fontWeight:500, textTransform:'uppercase', letterSpacing:'0.05em', margin:0 }}>คะแนนคงเหลือ</p>
+              </div>
+              <div className="stat-cell">
+                <p style={{ fontSize:19, fontWeight:800, color:'#7c3aed', margin:'0 0 2px', lineHeight:1 }}>{user.lifetime_points.toLocaleString()}</p>
+                <p style={{ fontSize:9, color:'#9ca3af', fontWeight:500, textTransform:'uppercase', letterSpacing:'0.05em', margin:0 }}>สะสมตลอดกาล</p>
+              </div>
+              <div className="stat-cell">
+                <p style={{ fontSize:19, fontWeight:800, color:'#0891b2', margin:'0 0 2px', lineHeight:1 }}>{user.tier}</p>
+                <p style={{ fontSize:9, color:'#9ca3af', fontWeight:500, textTransform:'uppercase', letterSpacing:'0.05em', margin:0 }}>ระดับสมาชิก</p>
               </div>
             </div>
-            <PressButton onClick={() => { setPwSection(!pwSection); setNewPass(''); setConfirmPass('') }}
-              style={{ background: pwSection ? 'rgba(239,68,68,0.1)' : 'rgba(99,102,241,0.1)', border: `1px solid ${pwSection ? 'rgba(239,68,68,0.2)' : 'rgba(99,102,241,0.2)'}`, borderRadius:10, padding:'7px 14px', fontSize:12, fontWeight:600, color: pwSection ? '#ef4444' : '#6366f1', cursor:'pointer', fontFamily:'Prompt,sans-serif' }}>
-              {pwSection ? 'ยกเลิก' : 'เปลี่ยน'}
-            </PressButton>
-          </div>
-
-          {pwSection && (
-            <div style={{ display:'flex', flexDirection:'column', gap:13 }}>
-              {/* New Password */}
-              <div>
-                <label style={{ display:'block', fontSize:11, fontWeight:600, color:'#8a8aaa', letterSpacing:'0.07em', textTransform:'uppercase', marginBottom:6 }}>รหัสผ่านใหม่</label>
-                <div style={{ position:'relative' }}>
-                  <span style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', fontSize:18, pointerEvents:'none' }}>🔒</span>
-                  <input
-                    type={showNewPass ? 'text' : 'password'}
-                    placeholder="อย่างน้อย 8 ตัวอักษร"
-                    value={newPass}
-                    onChange={e => setNewPass(e.target.value)}
-                    autoComplete="new-password"
-                    style={{ width:'100%', fontFamily:'Prompt,sans-serif', background:'rgba(255,255,255,0.6)', border:'1.5px solid rgba(255,255,255,0.7)', borderRadius:14, padding:'12px 44px 12px 44px', fontSize:15, color:'#1a1a2e', outline:'none', boxSizing:'border-box' }}
-                    onFocus={e => { e.target.style.borderColor = 'rgba(99,102,241,0.5)'; e.target.style.background = 'rgba(255,255,255,0.85)' }}
-                    onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.7)'; e.target.style.background = 'rgba(255,255,255,0.6)' }}
-                  />
-                  <button onClick={() => setShowNewPass(!showNewPass)} style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', fontSize:16, padding:0, color:'#9ca3af' }}>
-                    {showNewPass ? '🙈' : '👁️'}
-                  </button>
-                </div>
-                {/* Strength bar */}
-                {newPass && (
-                  <div style={{ marginTop:6 }}>
-                    <div style={{ display:'flex', gap:4, marginBottom:4 }}>
-                      {[1,2,3,4].map(i => (
-                        <div key={i} style={{ flex:1, height:3, borderRadius:2, transition:'background 0.3s', background: newPass.length >= i*2+2 ? (newPass.length >= 12 ? '#4ade80' : newPass.length >= 8 ? '#f59e0b' : '#ef4444') : 'rgba(0,0,0,0.08)' }} />
-                      ))}
-                    </div>
-                    <p style={{ fontSize:11, margin:0, color: newPass.length >= 12 ? '#16a34a' : newPass.length >= 8 ? '#d97706' : '#dc2626' }}>
-                      {newPass.length >= 12 ? '✓ รหัสผ่านแข็งแกร่ง' : newPass.length >= 8 ? '~ รหัสผ่านปานกลาง' : '✗ สั้นเกินไป'}
-                    </p>
+            {/* Tier progress */}
+            {tierNext && (
+              <div style={{ padding:'0 16px 14px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                    <TrendingUp size={12} color="#d4af37"/>
+                    <span style={{ fontSize:11, fontWeight:600, color:'#374151' }}>สู่ระดับ <span style={{ color:'#b8860b' }}>{tierNext.label}</span></span>
                   </div>
-                )}
-              </div>
-
-              {/* Confirm Password */}
-              <div>
-                <label style={{ display:'block', fontSize:11, fontWeight:600, color:'#8a8aaa', letterSpacing:'0.07em', textTransform:'uppercase', marginBottom:6 }}>ยืนยันรหัสผ่านใหม่</label>
-                <div style={{ position:'relative' }}>
-                  <span style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', fontSize:18, pointerEvents:'none' }}>🔒</span>
-                  <input
-                    type={showNewPass ? 'text' : 'password'}
-                    placeholder="กรอกรหัสผ่านอีกครั้ง"
-                    value={confirmPass}
-                    onChange={e => setConfirmPass(e.target.value)}
-                    autoComplete="new-password"
-                    style={{ width:'100%', fontFamily:'Prompt,sans-serif', background:'rgba(255,255,255,0.6)', border:`1.5px solid ${confirmPass && confirmPass !== newPass ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.7)'}`, borderRadius:14, padding:'12px 14px 12px 44px', fontSize:15, color:'#1a1a2e', outline:'none', boxSizing:'border-box' }}
-                    onFocus={e => { e.target.style.background = 'rgba(255,255,255,0.85)' }}
-                    onBlur={e => { e.target.style.background = 'rgba(255,255,255,0.6)' }}
-                    onKeyDown={e => { if (e.key === 'Enter') changePassword() }}
-                  />
+                  <span style={{ fontSize:11, fontWeight:700, color:'#d4af37' }}>{pct}%</span>
                 </div>
-                {confirmPass && (
-                  <p style={{ fontSize:11, margin:'4px 0 0', color: confirmPass === newPass ? '#16a34a' : '#dc2626' }}>
-                    {confirmPass === newPass ? '✓ รหัสผ่านตรงกัน' : '✗ รหัสผ่านไม่ตรงกัน'}
-                  </p>
-                )}
+                <div className="prog-track">
+                  <div className="prog-gold" style={{ width:`${pct}%` }}/>
+                </div>
               </div>
+            )}
+          </div>
 
-              <PressButton onClick={changePassword} disabled={savingPass || newPass.length < 8 || newPass !== confirmPass}
-                style={{ width:'100%', background: newPass.length >= 8 && newPass === confirmPass ? 'linear-gradient(135deg,#6366f1,#4f46e5)' : 'rgba(0,0,0,0.07)', border:'none', borderRadius:16, padding:'14px 0', fontSize:15, fontWeight:600, fontFamily:'Prompt,sans-serif', color: newPass.length >= 8 && newPass === confirmPass ? '#fff' : '#9ca3af', cursor: newPass.length >= 8 && newPass === confirmPass ? 'pointer' : 'not-allowed', display:'flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow: newPass.length >= 8 && newPass === confirmPass ? '0 6px 24px rgba(99,102,241,0.3)' : 'none', transition:'all 0.2s' }}>
-                {savingPass
-                  ? <><div style={{ width:16, height:16, border:'2px solid rgba(255,255,255,0.35)', borderTop:'2px solid #fff', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} /> กำลังบันทึก...</>
-                  : <><span>🔑</span> บันทึกรหัสผ่านใหม่</>}
-              </PressButton>
+          {/* Personal Info */}
+          <div className="pf-card" style={{ padding:'18px 16px' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
+              <div style={{ width:36, height:36, borderRadius:11, background:'#0d0d0d', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <User size={16} color="#d4af37"/>
+              </div>
+              <div>
+                <p style={{ fontSize:14, fontWeight:700, color:'#111', margin:0 }}>ข้อมูลส่วนตัว</p>
+                <p style={{ fontSize:11, color:'#9ca3af', margin:0 }}>ชื่อ, เบอร์, ที่อยู่</p>
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* ── Quick Actions ── */}
-        <div style={{ ...glass, padding:8, marginBottom:14, animation:'fadeUp 0.42s ease 0.15s both' }}>
-          {[
-            { icon:'🔒', label:'ความเป็นส่วนตัว', sub:'จัดการข้อมูลของคุณ', color:'#8b5cf6' },
-            { icon:'🔔', label:'การแจ้งเตือน', sub:'SMS, อีเมล, Push', color:'#06b6d4' },
-            { icon:'🎁', label:'โปรแกรม Referral', sub:'เชิญเพื่อน รับแต้มพิเศษ', color:'#10b981' },
-          ].map((item, i, arr) => (
-            <PressButton key={item.label} style={{ width:'100%', display:'flex', alignItems:'center', gap:12, padding:'12px 12px', background:'transparent', border:'none', borderRadius:16, cursor:'pointer', borderBottom:i<arr.length-1?'1px solid rgba(0,0,0,0.05)':'none', fontFamily:'Prompt,sans-serif' }}>
-              <div style={{ width:40, height:40, borderRadius:12, background:`${item.color}18`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>{item.icon}</div>
-              <div style={{ flex:1, textAlign:'left' }}>
-                <p style={{ fontSize:14, fontWeight:600, color:'#1a1a2e', margin:0 }}>{item.label}</p>
-                <p style={{ fontSize:11, color:'#9ca3af', margin:'2px 0 0' }}>{item.sub}</p>
+            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              {/* Name */}
+              <div>
+                <p className="pf-label">ชื่อ-นามสกุล</p>
+                <div className="pf-input-wrap">
+                  <User size={15} className="pf-icon" style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', color:'#c4c4c4' }}/>
+                  <input className="pf-input" type="text" placeholder="ชื่อ นามสกุล"
+                    value={form.full_name} onChange={e => setForm(f=>({...f,full_name:e.target.value}))}/>
+                </div>
               </div>
-              <span style={{ color:'#d1d5db', fontSize:20, fontWeight:300, lineHeight:1 }}>›</span>
-            </PressButton>
-          ))}
-        </div>
+              {/* Phone */}
+              <div>
+                <p className="pf-label">เบอร์โทรศัพท์</p>
+                <div className="pf-input-wrap">
+                  <Phone size={15} style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', color:'#c4c4c4' }}/>
+                  <input className="pf-input" type="tel" placeholder="0812345678"
+                    value={form.phone} onChange={e => setForm(f=>({...f,phone:e.target.value}))}/>
+                </div>
+              </div>
+              {/* Email */}
+              <div>
+                <p className="pf-label">อีเมล</p>
+                <div className="pf-input-wrap">
+                  <Mail size={15} style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', color:'#c4c4c4' }}/>
+                  <input className="pf-input" type="email" placeholder="you@example.com"
+                    value={form.email} onChange={e => setForm(f=>({...f,email:e.target.value}))}/>
+                </div>
+              </div>
+              {/* Address */}
+              <div>
+                <p className="pf-label">ที่อยู่</p>
+                <div className="pf-input-wrap">
+                  <MapPin size={15} style={{ position:'absolute', left:13, top:12, color:'#c4c4c4' }}/>
+                  <textarea className="pf-textarea" rows={3}
+                    placeholder="บ้านเลขที่ ถนน แขวง เขต จังหวัด"
+                    value={form.address} onChange={e => setForm(f=>({...f,address:e.target.value}))}/>
+                </div>
+              </div>
+            </div>
 
-        {/* ── Logout ── */}
-        <div style={{ animation:'fadeUp 0.42s ease 0.2s both' }}>
-          <PressButton onClick={() => { supabase.auth.signOut(); router.push('/login') }}
-            style={{ width:'100%', background:'rgba(255,255,255,0.58)', backdropFilter:'blur(28px)', WebkitBackdropFilter:'blur(28px)', border:'1.5px solid rgba(239,68,68,0.25)', borderRadius:20, padding:'14px 0', fontSize:15, fontWeight:600, fontFamily:'Prompt,sans-serif', color:'#ef4444', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow:'0 4px 20px rgba(239,68,68,0.07)' }}>
-            <span>🚪</span> ออกจากระบบ
-          </PressButton>
-          <p style={{ textAlign:'center', fontSize:11, color:'#c4c4d4', marginTop:16 }}>Dreame Thailand Membership v2.0</p>
+            <button className="btn-gold" onClick={save} disabled={saving} style={{ marginTop:16 }}>
+              {saving
+                ? <><div style={{ width:14, height:14, border:'2px solid rgba(0,0,0,0.2)', borderTop:'2px solid #0d0d0d', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/> กำลังบันทึก...</>
+                : <><CheckCircle size={15}/> บันทึกข้อมูล</>}
+            </button>
+          </div>
+
+          {/* Password */}
+          <div className="pf-card" style={{ padding:'16px' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ width:36, height:36, borderRadius:11, background:'#eef2ff', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <Lock size={16} color="#4f46e5"/>
+                </div>
+                <div>
+                  <p style={{ fontSize:14, fontWeight:700, color:'#111', margin:0 }}>รหัสผ่าน</p>
+                  <p style={{ fontSize:11, color:'#9ca3af', margin:0 }}>เปลี่ยนรหัสผ่านของคุณ</p>
+                </div>
+              </div>
+              <button className="btn-text" onClick={() => { setPwOpen(!pwOpen); setNewPass(''); setConfirmPass('') }}
+                style={{ fontSize:12, fontWeight:700, color: pwOpen ? '#dc2626' : '#4f46e5',
+                  background: pwOpen ? '#fef2f2' : '#eef2ff',
+                  padding:'6px 14px', borderRadius:10,
+                  border: pwOpen ? '1px solid #fecaca' : '1px solid #c7d2fe' }}>
+                {pwOpen ? 'ยกเลิก' : 'เปลี่ยน'}
+              </button>
+            </div>
+
+            {pwOpen && (
+              <div style={{ marginTop:16, display:'flex', flexDirection:'column', gap:12 }}>
+                {/* New password */}
+                <div>
+                  <p className="pf-label">รหัสผ่านใหม่</p>
+                  <div className="pf-input-wrap">
+                    <Lock size={15} style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', color:'#c4c4c4' }}/>
+                    <input className="pf-input" type={showPass ? 'text' : 'password'}
+                      placeholder="อย่างน้อย 8 ตัวอักษร" value={newPass}
+                      style={{ paddingRight:44 }}
+                      onChange={e => setNewPass(e.target.value)}
+                      autoComplete="new-password"/>
+                    <button className="btn-text" onClick={() => setShowPass(!showPass)}
+                      style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', color:'#9ca3af', padding:0 }}>
+                      {showPass ? <EyeOff size={16}/> : <Eye size={16}/>}
+                    </button>
+                  </div>
+                  {newPass.length > 0 && (
+                    <>
+                      <div className="str-bar">
+                        {[1,2,3,4].map(i => (
+                          <div key={i} className="str-seg" style={{ background: i <= strength ? strengthColor[strength] : '#e5e7eb' }}/>
+                        ))}
+                      </div>
+                      <p style={{ fontSize:11, color: strengthColor[strength], margin:'3px 0 0', fontWeight:600 }}>
+                        {strengthLabel[strength]}
+                      </p>
+                    </>
+                  )}
+                </div>
+                {/* Confirm password */}
+                <div>
+                  <p className="pf-label">ยืนยันรหัสผ่านใหม่</p>
+                  <div className="pf-input-wrap">
+                    <Lock size={15} style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', color:'#c4c4c4' }}/>
+                    <input className="pf-input" type={showPass ? 'text' : 'password'}
+                      placeholder="กรอกอีกครั้ง" value={confirmPass}
+                      onChange={e => setConfirmPass(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && passOk && changePassword()}
+                      autoComplete="new-password"/>
+                  </div>
+                  {confirmPass.length > 0 && (
+                    <p style={{ fontSize:11, color: confirmPass === newPass ? '#16a34a' : '#dc2626', margin:'3px 0 0', fontWeight:600 }}>
+                      {confirmPass === newPass ? '✓ รหัสผ่านตรงกัน' : '✗ รหัสผ่านไม่ตรงกัน'}
+                    </p>
+                  )}
+                </div>
+                <button className="btn-indigo" onClick={changePassword} disabled={savingPass || !passOk}>
+                  {savingPass
+                    ? <><div style={{ width:14, height:14, border:'2px solid rgba(255,255,255,0.3)', borderTop:'2px solid #fff', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/> กำลังบันทึก...</>
+                    : <><Lock size={14}/> บันทึกรหัสผ่านใหม่</>}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Menu Rows */}
+          <div className="pf-card">
+            {[
+              { icon:<Shield size={16} color="#7c3aed"/>, bg:'#f5f3ff', label:'ความเป็นส่วนตัว', sub:'จัดการข้อมูลของคุณ' },
+              { icon:<Mail size={16} color="#0891b2"/>,   bg:'#eff6ff', label:'การแจ้งเตือน',    sub:'SMS และอีเมล' },
+            ].map((r, i) => (
+              <div key={r.label} className="sec-row">
+                <div className="sec-ico" style={{ background: r.bg }}>{r.icon}</div>
+                <div style={{ flex:1 }}>
+                  <p style={{ fontSize:13, fontWeight:600, color:'#111', margin:'0 0 1px' }}>{r.label}</p>
+                  <p style={{ fontSize:11, color:'#9ca3af', margin:0 }}>{r.sub}</p>
+                </div>
+                <ChevronRight size={16} color="#d1d5db"/>
+              </div>
+            ))}
+          </div>
+
+          {/* Logout */}
+          <button onClick={() => { supabase.auth.signOut(); router.push('/login') }}
+            style={{ width:'100%', padding:'14px', borderRadius:18, border:'1.5px solid #fecaca',
+              background:'#fff', color:'#dc2626', fontSize:14, fontWeight:700,
+              fontFamily:'inherit', cursor:'pointer', display:'flex', alignItems:'center',
+              justifyContent:'center', gap:8 }}>
+            <LogOut size={15}/> ออกจากระบบ
+          </button>
+
+          <p style={{ textAlign:'center', fontSize:11, color:'#c4c4c4', margin:'0 0 8px' }}>
+            Dreame Thailand Membership v2.0
+          </p>
+
         </div>
       </div>
     </>
