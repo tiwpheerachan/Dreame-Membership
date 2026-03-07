@@ -107,13 +107,13 @@ export async function adjustPoints(
 
     if (!user) return { error: 'User not found' }
 
-    const newTotal = Math.max(0, user.total_points + delta)
-    const newLifetime = delta > 0 ? user.lifetime_points + delta : user.lifetime_points
+    const newTotal    = Math.max(0, user.total_points    + delta)
+    const newLifetime = Math.max(0, user.lifetime_points + delta)
 
     await supabase.from('users').update({
-      total_points: newTotal,
+      total_points:    newTotal,
       lifetime_points: newLifetime,
-      tier: getTierFromLifetimePoints(newLifetime),
+      tier:            getTierFromLifetimePoints(newLifetime),
     }).eq('id', userId)
 
     await supabase.from('points_log').insert({
