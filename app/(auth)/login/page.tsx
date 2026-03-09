@@ -24,9 +24,13 @@ const CSS = `
     position:fixed; inset:0; overflow:hidden;
     display:flex; justify-content:center; align-items:stretch;
     font-family:'Prompt',system-ui,sans-serif;
+    background:#0d0d0d;
   }
-  .lg-bg { position:absolute; inset:0; z-index:0; }
-  .lg-bg img { width:100%; height:100%; object-fit:cover; object-position:center; }
+  .lg-bg {
+    position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:100%; max-width:430px; height:100%; z-index:0;
+  }
+  .lg-bg img { width:100%; height:100%; object-fit:cover; object-position:center top; }
   .lg-overlay {
     position:absolute; inset:0;
     background:linear-gradient(to bottom,
@@ -36,7 +40,7 @@ const CSS = `
   }
   .lg-inner {
     position:relative; z-index:1;
-    width:100%; max-width:420px;
+    width:100%; max-width:430px;
     display:flex; flex-direction:column; height:100%;
   }
   .lg-logo-area {
