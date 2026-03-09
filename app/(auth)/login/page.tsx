@@ -199,7 +199,7 @@ function LoginForm() {
     setLoading(true); setError(''); setSuccess('')
     try {
       const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/reset-password`,
       })
       if (err) { setError(err.message); return }
       setSuccess('ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว กรุณาเช็คอีเมล')
