@@ -7,9 +7,10 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
   const type = requestUrl.searchParams.get('type')
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin
 
   if (!code) {
-    return NextResponse.redirect(new URL('/login?error=expired', requestUrl.origin))
+    return NextResponse.redirect(new URL('/login?error=expired', baseUrl))
   }
 
   const cookieStore = cookies()
@@ -34,12 +35,12 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
   if (error || !data.session) {
-    return NextResponse.redirect(new URL('/login?error=expired', requestUrl.origin))
+    return NextResponse.redirect(new URL('/login?error=expired', baseUrl))
   }
 
   // กรณี reset password → ไปหน้าตั้งรหัสใหม่
   if (type === 'recovery') {
-    const response = NextResponse.redirect(new URL('/auth/reset-password', requestUrl.origin))
+    const response = NextResponse.redirect(new URL('/auth/reset-password', baseUrl))
     for (const { name, value, options } of sessionCookies) {
       response.cookies.set({ name, value, ...(options as Record<string, string>) })
     }
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
   if (!user || !user.full_name) redirectUrl = '/login?new=1'
   else if (!user.terms_accepted_at) redirectUrl = '/terms'
 
-  const response = NextResponse.redirect(new URL(redirectUrl, requestUrl.origin))
+  const response = NextResponse.redirect(new URL(redirectUrl, baseUrl))
   for (const { name, value, options } of sessionCookies) {
     response.cookies.set({ name, value, ...(options as Record<string, string>) })
   }
