@@ -98,12 +98,12 @@ function Badge({ status }: { status: string }) {
 
 export default async function HomePage() {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+  const { data: { user: authUser } } = await supabase.auth.getUser()
+  if (!authUser) redirect('/login')
 
   const [{ data: user }, { data: purchases }, { data: promos }] = await Promise.all([
-    supabase.from('users').select('*').eq('id', session.user.id).single(),
-    supabase.from('purchase_registrations').select('*').eq('user_id', session.user.id)
+    supabase.from('users').select('*').eq('id', authUser.id).single(),
+    supabase.from('purchase_registrations').select('*').eq('user_id', authUser.id)
       .order('created_at', { ascending: false }).limit(3),
     supabase.from('promotions').select('*').eq('is_active', true)
       .order('created_at', { ascending: false }).limit(5),

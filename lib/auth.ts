@@ -11,7 +11,7 @@ export async function getCurrentUser(): Promise<User | null> {
   const { data } = await supabase
     .from('users')
     .select('*')
-    .eq('id', user.id)
+    .eq('id', user!.id)
     .single()
 
   return data as User | null
@@ -34,7 +34,7 @@ export async function getCurrentAdmin(): Promise<AdminStaff | null> {
   const { data } = await adminSupabase
     .from('admin_staff')
     .select('*')
-    .eq('auth_user_id', user.id)
+    .eq('auth_user_id', user!.id)
     .eq('is_active', true)
     .single()
 

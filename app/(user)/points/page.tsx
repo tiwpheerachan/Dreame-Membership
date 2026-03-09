@@ -41,12 +41,12 @@ const typeCfg = {
 
 export default async function PointsPage() {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+  const { data: { user: authUser } } = await supabase.auth.getUser()
+  if (!authUser) redirect('/login')
 
   const [{ data: user }, { data: logs }] = await Promise.all([
-    supabase.from('users').select('*').eq('id', session.user.id).single(),
-    supabase.from('points_log').select('*').eq('user_id', session.user.id)
+    supabase.from('users').select('*').eq('id', authUser.id).single(),
+    supabase.from('points_log').select('*').eq('user_id', authUser.id)
       .order('created_at', { ascending: false }).limit(50),
   ])
   if (!user) redirect('/login')

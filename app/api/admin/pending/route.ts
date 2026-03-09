@@ -4,12 +4,12 @@ import { NextResponse } from 'next/server'
 
 export async function GET(req: Request) {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const serviceSupabase = createServiceClient()
   const { data: staff } = await serviceSupabase.from('admin_staff')
-    .select('role, channel_access').eq('auth_user_id', session.user.id).eq('is_active', true).single()
+    .select('role, channel_access').eq('auth_user_id', user!.id).eq('is_active', true).single()
   if (!staff) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(req.url)

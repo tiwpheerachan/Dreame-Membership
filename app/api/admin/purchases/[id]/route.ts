@@ -6,12 +6,12 @@ import { logAdminAction } from '@/lib/audit'
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const serviceSupabase = createServiceClient()
   const { data: staff } = await serviceSupabase.from('admin_staff')
-    .select('id, name, role').eq('auth_user_id', session.user.id).eq('is_active', true).single()
+    .select('id, name, role').eq('auth_user_id', user!.id).eq('is_active', true).single()
   if (!staff) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { status, admin_note } = await req.json()
@@ -37,12 +37,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const serviceSupabase = createServiceClient()
   const { data: staff } = await serviceSupabase.from('admin_staff')
-    .select('id, name, role').eq('auth_user_id', session.user.id).eq('is_active', true).single()
+    .select('id, name, role').eq('auth_user_id', user!.id).eq('is_active', true).single()
   if (!staff) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   // ดึงข้อมูลก่อนลบ เพื่อ log

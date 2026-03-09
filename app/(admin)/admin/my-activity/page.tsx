@@ -44,12 +44,12 @@ function getLink(log: AuditLog): { href: string; label: string } | null {
 
 export default async function MyActivityPage() {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
   const serviceSupabase = createServiceClient()
   const { data: staff } = await serviceSupabase
-    .from('admin_staff').select('id, name, role').eq('auth_user_id', session.user.id).eq('is_active', true).single()
+    .from('admin_staff').select('id, name, role').eq('auth_user_id', user!.id).eq('is_active', true).single()
   if (!staff) redirect('/home')
 
   const { data: logs } = await serviceSupabase

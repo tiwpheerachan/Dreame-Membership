@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
   const { data: user } = await supabase
     .from('users')
     .select('id, full_name, terms_accepted_at')
-    .eq('id', data.session.user.id)
+    .eq('id', data.user.id)
     .single()
 
   let redirectUrl = '/home'

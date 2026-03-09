@@ -135,9 +135,9 @@ export default function ProfilePage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return router.push('/login')
-      const { data } = await supabase.from('users').select('*').eq('id', session.user.id).single()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return router.push('/login')
+      const { data } = await supabase.from('users').select('*').eq('id', user!.id).single()
       if (data) { setUser(data); setForm({ full_name:data.full_name||'', phone:data.phone||'', email:data.email||'', address:data.address||'' }) }
     }
     load()
@@ -145,9 +145,9 @@ export default function ProfilePage() {
 
   async function save() {
     setSaving(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    const { error } = await supabase.from('users').update(form).eq('id', session.user.id)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { error } = await supabase.from('users').update(form).eq('id', user!.id)
     setSaving(false)
     if (!error) { setUser(u => u ? { ...u, ...form } : u); showToast('บันทึกสำเร็จแล้ว', true) }
     else showToast('บันทึกไม่สำเร็จ กรุณาลองใหม่', false)

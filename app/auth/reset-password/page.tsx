@@ -16,8 +16,8 @@ function ResetPasswordForm() {
 
   useEffect(() => {
     // ตรวจสอบว่ามี session จาก reset link หรือเปล่า
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
         router.push('/login?error=expired')
       } else {
         setReady(true)

@@ -4,14 +4,14 @@ import AdminSidebar from '@/components/admin/AdminSidebar'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
   const supabaseAdmin = createServiceClient()
   const { data: staff } = await supabaseAdmin
     .from('admin_staff')
     .select('*')
-    .eq('auth_user_id', session.user.id)
+    .eq('auth_user_id', user!.id)
     .eq('is_active', true)
     .single()
 

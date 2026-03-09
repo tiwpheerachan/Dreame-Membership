@@ -22,8 +22,8 @@ async function uploadToSupabase(file: File, folder: string, serviceClient: Retur
 export async function POST(req: Request) {
   try {
     const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const formData = await req.formData()
     const order_sn = formData.get('order_sn') as string
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       .from('purchase_registrations')
       .select('id')
       .eq('order_sn', order_sn)
-      .eq('user_id', session.user.id)
+      .eq('user_id', user!.id)
       .single()
 
     if (existing) return NextResponse.json({ error: 'คุณลงทะเบียน Order ID นี้แล้ว' }, { status: 409 })
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
     const { data: reg, error: regError } = await serviceSupabase
       .from('purchase_registrations')
       .insert({
-        user_id: session.user.id,
+        user_id: user.id,
         order_sn: order_sn.trim(),
         invoice_no: invoice_no || null,
         channel,
@@ -111,7 +111,7 @@ export async function POST(req: Request) {
 
     // Update user address if provided
     if (address) {
-      await serviceSupabase.from('users').update({ address }).eq('id', session.user.id)
+      await serviceSupabase.from('users').update({ address }).eq('id', user!.id)
     }
 
     return NextResponse.json({ success: true, registration_id: reg.id, status: reg.status })

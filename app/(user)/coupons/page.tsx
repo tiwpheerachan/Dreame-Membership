@@ -16,12 +16,12 @@ const CSS = `
 
 export default async function CouponsPage() {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
   const today = new Date().toISOString().split('T')[0]
   const { data: coupons } = await supabase
-    .from('coupons').select('*').eq('user_id', session.user.id)
+    .from('coupons').select('*').eq('user_id', user!.id)
     .order('valid_until', { ascending: true })
 
   const active  = (coupons||[]).filter((c: Coupon) => !c.used_at && c.valid_until >= today)

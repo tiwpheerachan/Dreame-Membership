@@ -3,9 +3,9 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { data } = await supabase.from('purchase_registrations').select('*')
-    .eq('user_id', session.user.id).order('created_at', { ascending: false })
+    .eq('user_id', user!.id).order('created_at', { ascending: false })
   return NextResponse.json({ purchases: data })
 }

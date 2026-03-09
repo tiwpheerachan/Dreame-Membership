@@ -5,8 +5,8 @@ import { verifyOrderInBQ } from '@/lib/bigquery'
 export async function POST(req: Request) {
   try {
     const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { order_sn, channel } = await req.json()
     if (!order_sn) return NextResponse.json({ error: 'order_sn required' }, { status: 400 })

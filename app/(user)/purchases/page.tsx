@@ -79,12 +79,12 @@ function Badge({ status }: { status: string }) {
 
 export default async function PurchasesPage() {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
   const { data: purchases } = await supabase
     .from('purchase_registrations').select('*')
-    .eq('user_id', session.user.id).order('created_at', { ascending: false })
+    .eq('user_id', user!.id).order('created_at', { ascending: false })
 
   return (
     <>

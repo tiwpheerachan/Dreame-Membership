@@ -58,9 +58,9 @@ export default function TermsPage() {
   useEffect(() => {
     setMounted(true)
     async function check() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { router.push('/'); return }
-      const { data: user } = await supabase.from('users').select('terms_accepted_at').eq('id', session.user.id).single()
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) { router.push('/'); return }
+      const { data: user } = await supabase.from('users').select('terms_accepted_at').eq('id', authUser.id).single()
       if (user?.terms_accepted_at) { router.push('/home'); return }
       setChecking(false)
     }
@@ -211,12 +211,8 @@ export default function TermsPage() {
 
         {/* Header */}
         <div className="trm-hdr">
-          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
-            <div style={{ width:32, height:32, background:'#0d0d0d', borderRadius:9,
-              display:'flex', alignItems:'center', justifyContent:'center' }}>
-              <span style={{ color:'#d4af37', fontSize:15, fontWeight:900 }}>D</span>
-            </div>
-            <span style={{ fontWeight:700, fontSize:14, color:'#0d0d0d' }}>Dreame Thailand</span>
+          <div style={{ marginBottom:14 }}>
+            <img src="/dreame-logo.png" alt="Dreame Thailand" style={{ height:26, objectFit:'contain' }}/>
           </div>
           <h1 style={{ fontSize:20, fontWeight:800, color:'#111', margin:'0 0 4px' }}>
             นโยบายและเงื่อนไข

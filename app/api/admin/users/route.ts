@@ -4,11 +4,11 @@ import { NextResponse } from 'next/server'
 
 async function checkAdmin(req?: Request) {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return null
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
   const serviceSupabase = createServiceClient()
   const { data: staff } = await serviceSupabase.from('admin_staff').select('*')
-    .eq('auth_user_id', session.user.id).eq('is_active', true).single()
+    .eq('auth_user_id', user!.id).eq('is_active', true).single()
   return staff
 }
 
