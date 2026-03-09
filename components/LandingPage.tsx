@@ -1,142 +1,256 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Star, Shield, Gift, TrendingUp, ArrowRight, Sparkles } from 'lucide-react'
+
+// ── วางรูปพื้นหลังที่ public/images/landing-bg.jpg ──
+const BG_IMAGE = '/images/landing-bg.jpg'
+const LOGO_URL = 'https://mlvtgiqzoszz.i.optimole.com/cb:QxkM.102a3/w:134/h:40/q:mauto/dpr:2.6/f:best/https://www.appliancecity.co.uk/wp-content/uploads/2025/09/dreame-main-logo-1000x300-1.png'
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap');
-  * { -webkit-tap-highlight-color:transparent; box-sizing:border-box; margin:0; padding:0; }
-  @keyframes fadeUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:none} }
-  @keyframes pulse  { 0%,100%{opacity:1} 50%{opacity:0.5} }
-  .lp { min-height:100vh; background:#fafaf8; font-family:'Prompt',system-ui,sans-serif; overflow-x:hidden; }
-  .lp-nav { padding:20px 24px; display:flex; align-items:center; justify-content:space-between; }
-  .logo-box { width:36px; height:36px; background:#0d0d0d; border-radius:10px;
-    display:flex; align-items:center; justify-content:center; }
-  .logo-d { color:#d4af37; font-size:18px; font-weight:900; }
-  .lp-hero { padding:40px 24px 32px; }
-  .lp-badge { display:inline-flex; align-items:center; gap:7px; padding:6px 14px;
-    background:#fff; border:1px solid #e5e7eb; border-radius:100px;
-    font-size:11px; font-weight:600; color:#374151; margin-bottom:28px;
-    box-shadow:0 1px 4px rgba(0,0,0,0.06); }
-  .lp-title { font-size:38px; font-weight:800; line-height:1.15; letter-spacing:-0.02em;
-    color:#0d0d0d; margin-bottom:16px; }
-  .lp-title-gold { color:#b8860b; }
-  .lp-sub { font-size:15px; color:#6b7280; line-height:1.7; margin-bottom:36px; font-weight:400; }
-  .btn-primary { width:100%; padding:16px; background:#0d0d0d; color:#d4af37;
-    border:none; border-radius:16px; font-size:16px; font-weight:700;
-    font-family:inherit; cursor:pointer; display:flex; align-items:center;
-    justify-content:center; gap:8px; transition:transform 0.12s; }
-  .btn-outline { width:100%; padding:14px; background:#fff; color:#374151;
-    border:1.5px solid #e5e7eb; border-radius:16px; font-size:14px; font-weight:600;
-    font-family:inherit; cursor:pointer; margin-top:10px; transition:border-color 0.15s; }
-  .lp-feats { padding:0 24px 32px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .feat-card { background:#fff; border-radius:18px; padding:18px 16px;
-    box-shadow:0 1px 4px rgba(0,0,0,0.05); border:1px solid #f0f0ee; }
-  .feat-ico { width:38px; height:38px; border-radius:11px; display:flex;
-    align-items:center; justify-content:center; margin-bottom:10px; }
-  .lp-tiers { padding:0 24px 32px; }
-  .tier-row { display:flex; gap:8px; }
-  .tier-pill { flex:1; padding:10px 8px; border-radius:12px; text-align:center;
-    font-size:11px; font-weight:700; }
-  .divider { margin:0 24px 28px; height:1px; background:#f0f0ee; }
-  .sec-label { padding:0 24px; font-size:11px; font-weight:700; color:#9ca3af;
-    letter-spacing:0.08em; text-transform:uppercase; margin-bottom:14px; }
-  .lp-footer { padding:20px 24px 36px; text-align:center; }
+  *, *::before, *::after { -webkit-tap-highlight-color:transparent; box-sizing:border-box; margin:0; padding:0; }
+
+  @keyframes arrowBounce {
+    0%   { transform:translateY(0);   opacity:0.3; }
+    40%  { transform:translateY(-10px); opacity:1;   }
+    80%  { transform:translateY(0);   opacity:0.3; }
+    100% { transform:translateY(0);   opacity:0.3; }
+  }
+  @keyframes fadeIn  { from{opacity:0} to{opacity:1} }
+  @keyframes fadeUp  { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes glow {
+    0%,100% { text-shadow: 0 0 20px rgba(212,175,55,0.4); }
+    50%     { text-shadow: 0 0 40px rgba(212,175,55,0.9), 0 0 80px rgba(212,175,55,0.3); }
+  }
+  @keyframes slideUp {
+    from { transform:translateY(100%); }
+    to   { transform:translateY(0); }
+  }
+  @keyframes shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position:  200% center; }
+  }
+
+  .lp-root {
+    position: fixed; inset: 0;
+    font-family: 'Prompt', system-ui, sans-serif;
+    overflow: hidden;
+    max-width: 768px;
+    margin: 0 auto;
+  }
+
+  /* BG image fills entire screen */
+  .lp-bg {
+    position: absolute; inset: 0; z-index: 0;
+  }
+  .lp-bg img {
+    width: 100%; height: 100%;
+    object-fit: cover; object-position: center;
+    transition: transform 0.6s cubic-bezier(0.4,0,0.2,1);
+  }
+  .lp-bg img.lift {
+    transform: translateY(-8%);
+  }
+  .lp-gradient {
+    position: absolute; inset: 0;
+    background: linear-gradient(
+      to bottom,
+      rgba(0,0,0,0.15) 0%,
+      rgba(0,0,0,0.0)  35%,
+      rgba(0,0,0,0.0)  55%,
+      rgba(0,0,0,0.65) 80%,
+      rgba(0,0,0,0.88) 100%
+    );
+  }
+
+  /* Logo top center */
+  .lp-logo {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+    padding: 52px 0 0;
+    display: flex; justify-content: center;
+    animation: fadeIn 0.8s ease 0.3s both;
+  }
+
+  /* Bottom hint area */
+  .lp-bottom {
+    position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
+    padding: 0 0 max(env(safe-area-inset-bottom, 32px), 36px);
+    display: flex; flex-direction: column; align-items: center; gap: 0;
+    cursor: pointer; user-select: none;
+  }
+
+  /* Swipe hint text */
+  .lp-hint {
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 10px;
+    animation: fadeIn 1s ease 0.8s both;
+  }
+
+  /* Arrows container */
+  .lp-arrows {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 2px; margin-bottom: 8px;
+  }
+
+  /* Each arrow chevron */
+  .lp-arrow {
+    width: 22px; height: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lp-arrow svg {
+    width: 22px; height: 13px;
+    stroke: #d4af37; stroke-width: 2.5px;
+    fill: none; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .lp-arrow:nth-child(1) { animation: arrowBounce 1.6s ease-in-out infinite 0.0s; }
+  .lp-arrow:nth-child(2) { animation: arrowBounce 1.6s ease-in-out infinite 0.2s; }
+  .lp-arrow:nth-child(3) { animation: arrowBounce 1.6s ease-in-out infinite 0.4s; }
+
+  /* Swipe up label */
+  .lp-swipe-label {
+    font-size: 13px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    background: linear-gradient(90deg, #b8860b, #f0d060, #d4af37, #f0d060, #b8860b);
+    background-size: 300% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3s linear infinite, fadeIn 1s ease 0.8s both;
+    margin-bottom: 6px;
+  }
+
+  /* Thin gold line at very bottom */
+  .lp-line {
+    width: 40px; height: 4px; border-radius: 4px;
+    background: rgba(212,175,55,0.45);
+    animation: fadeIn 1s ease 1s both;
+  }
+
+  /* Transition overlay when navigating */
+  .lp-transition {
+    position: absolute; inset: 0; z-index: 10;
+    background: #0d0d0d;
+    transform: translateY(100%);
+    transition: transform 0.55s cubic-bezier(0.4,0,0.2,1);
+  }
+  .lp-transition.active {
+    transform: translateY(0);
+  }
 `
+
+function ArrowUp() {
+  return (
+    <svg viewBox="0 0 22 13">
+      <polyline points="1,12 11,2 21,12" />
+    </svg>
+  )
+}
 
 export default function LandingPage() {
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setTimeout(() => setMounted(true), 60) }, [])
+  const [mounted, setMounted]     = useState(false)
+  const [lifting, setLifting]     = useState(false)
+  const [transitioning, setTrans] = useState(false)
 
-  const features = [
-    { ico: <Star size={18} color="#b8860b"/>,    bg:'#fffbeb', title:'สะสมคะแนน',     desc:'ทุก ฿100 รับ 1 แต้ม' },
-    { ico: <Gift size={18} color="#7c3aed"/>,    bg:'#f5f3ff', title:'สิทธิพิเศษ',    desc:'คูปองและโปรโมชัน' },
-    { ico: <Shield size={18} color="#0891b2"/>,  bg:'#eff6ff', title:'รับประกันสินค้า', desc:'ติดตามสถานะประกัน' },
-    { ico: <TrendingUp size={18} color="#16a34a"/>, bg:'#f0fdf4', title:'อัปเกรด Tier',  desc:'Silver → Gold → Platinum' },
-  ]
+  // Touch / drag tracking
+  const touchStartY = useRef<number | null>(null)
+  const isDragging  = useRef(false)
+
+  useEffect(() => {
+    setTimeout(() => setMounted(true), 60)
+  }, [])
+
+  function goToLogin() {
+    if (transitioning) return
+    setLifting(true)
+    setTrans(true)
+    setTimeout(() => router.push('/login'), 520)
+  }
+
+  // Touch swipe up
+  function onTouchStart(e: React.TouchEvent) {
+    touchStartY.current = e.touches[0].clientY
+    isDragging.current = false
+  }
+  function onTouchMove(e: React.TouchEvent) {
+    if (touchStartY.current === null) return
+    const dy = touchStartY.current - e.changedTouches[0].clientY
+    if (dy > 8) isDragging.current = true
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    if (touchStartY.current === null) return
+    const dy = touchStartY.current - e.changedTouches[0].clientY
+    touchStartY.current = null
+    if (dy > 50) goToLogin()   // swipe up threshold 50px
+    isDragging.current = false
+  }
+
+  // Mouse drag (desktop/tablet)
+  const mouseStartY = useRef<number | null>(null)
+  function onMouseDown(e: React.MouseEvent) {
+    mouseStartY.current = e.clientY
+  }
+  function onMouseUp(e: React.MouseEvent) {
+    if (mouseStartY.current === null) return
+    const dy = mouseStartY.current - e.clientY
+    mouseStartY.current = null
+    if (dy > 40) goToLogin()
+  }
 
   return (
     <>
-      <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: CSS }}/>
-      <div className="lp">
+      <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: CSS }} />
 
-        {/* Nav */}
-        <div className="lp-nav" style={{ opacity: mounted ? 1 : 0, transition:'opacity 0.5s' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <div className="logo-box"><span className="logo-d">D</span></div>
-            <span style={{ fontWeight:700, fontSize:15, color:'#0d0d0d' }}>Dreame Thailand</span>
+      <div
+        className="lp-root"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onMouseDown={onMouseDown}
+        onMouseUp={onMouseUp}
+      >
+        {/* Background image */}
+        <div className="lp-bg">
+          <img
+            src={BG_IMAGE}
+            alt=""
+            draggable={false}
+            className={lifting ? 'lift' : ''}
+          />
+          <div className="lp-gradient" />
+        </div>
+
+        {/* Logo */}
+        <div className="lp-logo" style={{ opacity: mounted ? 1 : 0, transition: 'opacity 0.6s' }}>
+          <img
+            src={LOGO_URL}
+            alt="Dreame"
+            style={{ height: 36, objectFit: 'contain', filter: 'brightness(0) invert(1)', maxWidth: 200 }}
+            draggable={false}
+          />
+        </div>
+
+        {/* Bottom swipe hint */}
+        <div
+          className="lp-bottom"
+          onClick={goToLogin}
+          style={{ opacity: mounted ? 1 : 0, transition: 'opacity 0.6s 0.4s' }}
+        >
+          <p className="lp-hint">เลื่อนขึ้นหรือแตะเพื่อเข้าสู่ระบบ</p>
+
+          <div className="lp-arrows">
+            <div className="lp-arrow"><ArrowUp /></div>
+            <div className="lp-arrow"><ArrowUp /></div>
+            <div className="lp-arrow"><ArrowUp /></div>
           </div>
-          <button onClick={() => router.push('/login')}
-            style={{ background:'none', border:'none', cursor:'pointer',
-              fontSize:13, fontWeight:600, color:'#6b7280', fontFamily:'inherit' }}>
-            เข้าสู่ระบบ
-          </button>
+
+          <p className="lp-swipe-label">Swipe Up</p>
+          <div className="lp-line" />
         </div>
 
-        {/* Hero */}
-        <div className="lp-hero">
-          <div className="lp-badge" style={{ opacity: mounted ? 1 : 0, animation: mounted ? 'fadeUp 0.45s ease 0.05s both' : 'none' }}>
-            <div style={{ width:6, height:6, background:'#16a34a', borderRadius:'50%', animation:'pulse 2s infinite' }}/>
-            DREAME MEMBERSHIP PROGRAM
-          </div>
-
-          <h1 className="lp-title" style={{ opacity: mounted ? 1 : 0, animation: mounted ? 'fadeUp 0.45s ease 0.12s both' : 'none' }}>
-            ยกระดับ<br/>
-            <span className="lp-title-gold">ประสบการณ์</span><br/>
-            สมาชิก Dreame
-          </h1>
-
-          <p className="lp-sub" style={{ opacity: mounted ? 1 : 0, animation: mounted ? 'fadeUp 0.45s ease 0.18s both' : 'none' }}>
-            สะสมแต้ม รับสิทธิพิเศษ และติดตาม<br/>ประกันสินค้าทุกชิ้นในที่เดียว
-          </p>
-
-          <div style={{ opacity: mounted ? 1 : 0, animation: mounted ? 'fadeUp 0.45s ease 0.24s both' : 'none' }}>
-            <button className="btn-primary" onClick={() => router.push('/login')}>
-              เริ่มต้นเลย <ArrowRight size={16}/>
-            </button>
-            <button className="btn-outline" onClick={() => router.push('/login')}>
-              มีบัญชีอยู่แล้ว? เข้าสู่ระบบ
-            </button>
-          </div>
-        </div>
-
-        {/* Tier strip */}
-        <div style={{ padding:'0 24px 28px', opacity: mounted ? 1 : 0, animation: mounted ? 'fadeUp 0.45s ease 0.3s both' : 'none' }}>
-          <div className="tier-row">
-            <div className="tier-pill" style={{ background:'#f7f7f5', color:'#6b7280' }}>Silver</div>
-            <div className="tier-pill" style={{ background:'#fffbeb', color:'#92600a' }}>Gold</div>
-            <div className="tier-pill" style={{ background:'#f0fdff', color:'#0e7490' }}>Platinum</div>
-          </div>
-        </div>
-
-        <div className="divider"/>
-
-        {/* Features */}
-        <p className="sec-label" style={{ opacity: mounted ? 1 : 0, animation: mounted ? 'fadeUp 0.45s ease 0.34s both' : 'none' }}>
-          สิทธิประโยชน์
-        </p>
-        <div className="lp-feats" style={{ opacity: mounted ? 1 : 0, animation: mounted ? 'fadeUp 0.45s ease 0.38s both' : 'none' }}>
-          {features.map((f, i) => (
-            <div key={i} className="feat-card">
-              <div className="feat-ico" style={{ background: f.bg }}>{f.ico}</div>
-              <p style={{ fontSize:13, fontWeight:700, color:'#111', marginBottom:3 }}>{f.title}</p>
-              <p style={{ fontSize:11, color:'#9ca3af', lineHeight:1.4 }}>{f.desc}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Footer */}
-        <div className="lp-footer" style={{ opacity: mounted ? 1 : 0, animation: mounted ? 'fadeUp 0.45s ease 0.44s both' : 'none' }}>
-          <p style={{ color:'#9ca3af', fontSize:11 }}>
-            © 2026 Dreame Thailand ·{' '}
-            <button onClick={() => router.push('/terms')}
-              style={{ color:'#9ca3af', background:'none', border:'none', cursor:'pointer',
-                fontSize:11, fontFamily:'inherit', textDecoration:'underline' }}>
-              นโยบายและเงื่อนไข
-            </button>
-          </p>
-        </div>
+        {/* Slide-up transition overlay */}
+        <div className={`lp-transition ${transitioning ? 'active' : ''}`} />
       </div>
     </>
   )
