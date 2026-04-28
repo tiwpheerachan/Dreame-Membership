@@ -33,87 +33,134 @@ const DATASET = process.env.BQ_DATASET ?? 'Dashboard'
 
 // ============================================================
 // Verify single order by order_sn
+// Strategy:
+//   1) Try v_dreame_orders (pre-aggregated view, may not exist on all setups)
+//   2) Fallback to v_dreame_order_items aggregated on the fly
 // ============================================================
 export async function verifyOrderInBQ(order_sn: string): Promise<BQOrderData | null> {
-  try {
-    const bq = getBQClient()
-    const query = `
-      SELECT
-        order_sn,
-        platform,
-        CAST(order_create_time AS STRING) AS order_create_time,
-        CAST(order_date AS STRING) AS order_date,
-        total_amount,
-        items
-      FROM \`${PROJECT}.${DATASET}.v_dreame_orders\`
-      WHERE order_sn = @order_sn
-      LIMIT 1
-    `
-    const [rows] = await bq.query({ query, params: { order_sn } })
-    if (!rows || rows.length === 0) return null
+  const bq = getBQClient()
 
-    const row = rows[0]
-    return {
-      order_sn: row.order_sn,
-      platform: row.platform,
-      order_create_time: row.order_create_time,
-      order_date: row.order_date,
-      total_amount: Number(row.total_amount),
-      items: Array.isArray(row.items) ? row.items.map((item: Record<string, unknown>) => ({
-        item_id: item.item_id,
-        model_id: item.model_id,
-        item_name: item.item_name,
-        item_sku: item.item_sku,
-        model_name: item.model_name,
-        model_sku: item.model_sku,
-        quantity: Number(item.quantity),
-        price: Number(item.price),
-      })) : [],
-    }
-  } catch (error) {
-    console.error('[BQ] verifyOrderInBQ error:', error)
-    return null
+  // ── Attempt 1: v_dreame_orders ──
+  try {
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          order_sn, platform,
+          CAST(order_create_time AS STRING) AS order_create_time,
+          CAST(order_date AS STRING) AS order_date,
+          total_amount, items
+        FROM \`${PROJECT}.${DATASET}.v_dreame_orders\`
+        WHERE order_sn = @order_sn
+        LIMIT 1
+      `,
+      params: { order_sn },
+    })
+    if (rows && rows.length > 0) return mapRow(rows[0])
+  } catch (e) {
+    // table not found / permission / view doesn't exist — try fallback
+    console.warn('[BQ] v_dreame_orders unavailable, falling back to v_dreame_order_items', (e as Error).message)
+  }
+
+  // ── Attempt 2: aggregate from v_dreame_order_items ──
+  try {
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          order_sn,
+          ANY_VALUE(platform) AS platform,
+          CAST(ANY_VALUE(order_create_time) AS STRING) AS order_create_time,
+          CAST(ANY_VALUE(order_date) AS STRING) AS order_date,
+          SUM(price * quantity) AS total_amount,
+          ARRAY_AGG(STRUCT(
+            item_id, model_id, item_name, item_sku,
+            model_name, model_sku, quantity, price
+          )) AS items
+        FROM \`${PROJECT}.${DATASET}.v_dreame_order_items\`
+        WHERE order_sn = @order_sn
+        GROUP BY order_sn
+        LIMIT 1
+      `,
+      params: { order_sn },
+    })
+    if (rows && rows.length > 0) return mapRow(rows[0])
+  } catch (e) {
+    console.error('[BQ] verifyOrderInBQ fallback error:', e)
+  }
+
+  return null
+}
+
+// Shared mapper: BQ row → BQOrderData
+function mapRow(row: Record<string, unknown>): BQOrderData {
+  return {
+    order_sn: row.order_sn as string,
+    platform: row.platform as string,
+    order_create_time: row.order_create_time as string,
+    order_date: row.order_date as string,
+    total_amount: Number(row.total_amount),
+    items: Array.isArray(row.items) ? (row.items as Record<string, unknown>[]).map(item => ({
+      item_id: item.item_id as string,
+      model_id: item.model_id as string,
+      item_name: item.item_name as string,
+      item_sku: item.item_sku as string,
+      model_name: item.model_name as string,
+      model_sku: item.model_sku as string,
+      quantity: Number(item.quantity),
+      price: Number(item.price),
+    })) : [],
   }
 }
 
 // ============================================================
 // Batch verify pending orders (for cron job)
+// Same strategy: try v_dreame_orders, fallback to v_dreame_order_items.
 // ============================================================
 export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData[]> {
   if (orderSns.length === 0) return []
+  const bq = getBQClient()
+
+  // ── Attempt 1: v_dreame_orders ──
   try {
-    const bq = getBQClient()
-    const query = `
-      SELECT
-        order_sn,
-        platform,
-        CAST(order_create_time AS STRING) AS order_create_time,
-        CAST(order_date AS STRING) AS order_date,
-        total_amount,
-        items
-      FROM \`${PROJECT}.${DATASET}.v_dreame_orders\`
-      WHERE order_sn IN UNNEST(@sns)
-    `
-    const [rows] = await bq.query({ query, params: { sns: orderSns } })
-    return (rows || []).map((row: Record<string, unknown>) => ({
-      order_sn: row.order_sn as string,
-      platform: row.platform as string,
-      order_create_time: row.order_create_time as string,
-      order_date: row.order_date as string,
-      total_amount: Number(row.total_amount),
-      items: Array.isArray(row.items) ? (row.items as Record<string, unknown>[]).map(item => ({
-        item_id: item.item_id as string,
-        model_id: item.model_id as string,
-        item_name: item.item_name as string,
-        item_sku: item.item_sku as string,
-        model_name: item.model_name as string,
-        model_sku: item.model_sku as string,
-        quantity: Number(item.quantity),
-        price: Number(item.price),
-      })) : [],
-    }))
-  } catch (error) {
-    console.error('[BQ] batchVerifyOrders error:', error)
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          order_sn, platform,
+          CAST(order_create_time AS STRING) AS order_create_time,
+          CAST(order_date AS STRING) AS order_date,
+          total_amount, items
+        FROM \`${PROJECT}.${DATASET}.v_dreame_orders\`
+        WHERE order_sn IN UNNEST(@sns)
+      `,
+      params: { sns: orderSns },
+    })
+    if (rows && rows.length > 0) return rows.map(mapRow)
+  } catch (e) {
+    console.warn('[BQ] batchVerifyOrders fallback', (e as Error).message)
+  }
+
+  // ── Attempt 2: aggregate from items ──
+  try {
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          order_sn,
+          ANY_VALUE(platform) AS platform,
+          CAST(ANY_VALUE(order_create_time) AS STRING) AS order_create_time,
+          CAST(ANY_VALUE(order_date) AS STRING) AS order_date,
+          SUM(price * quantity) AS total_amount,
+          ARRAY_AGG(STRUCT(
+            item_id, model_id, item_name, item_sku,
+            model_name, model_sku, quantity, price
+          )) AS items
+        FROM \`${PROJECT}.${DATASET}.v_dreame_order_items\`
+        WHERE order_sn IN UNNEST(@sns)
+        GROUP BY order_sn
+      `,
+      params: { sns: orderSns },
+    })
+    return (rows || []).map(mapRow)
+  } catch (e) {
+    console.error('[BQ] batchVerifyOrders error:', e)
     return []
   }
 }
