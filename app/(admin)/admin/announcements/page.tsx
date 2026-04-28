@@ -9,11 +9,26 @@ interface A {
   is_active: boolean; starts_at?: string; ends_at?: string; created_at: string;
 }
 
-const empty = {
+type AudienceKind = 'ALL' | 'TIER' | 'SEGMENT'
+interface FormState {
+  title: string
+  body: string
+  link_url: string
+  badge_text: string
+  audience: AudienceKind
+  audience_tier: string
+  is_active: boolean
+  starts_at: string
+  ends_at: string
+  image_url: string
+  image: File | null
+}
+
+const empty: FormState = {
   title: '', body: '', link_url: '', badge_text: '',
-  audience: 'ALL' as const, audience_tier: '',
+  audience: 'ALL', audience_tier: '',
   is_active: true, starts_at: '', ends_at: '',
-  image_url: '', image: null as File | null,
+  image_url: '', image: null,
 }
 
 export default function AnnouncementsPage() {

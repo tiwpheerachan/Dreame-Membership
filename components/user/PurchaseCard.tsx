@@ -18,7 +18,7 @@ interface PurchaseCardProps {
 }
 
 export function PurchaseCard({ purchase, onClick }: PurchaseCardProps) {
-  const daysLeft = warrantyDaysLeft(purchase.warranty_expires_at)
+  const daysLeft = warrantyDaysLeft(purchase.warranty_end)
   const warrantyValid = daysLeft > 0
 
   return (
@@ -62,12 +62,12 @@ export function PurchaseCard({ purchase, onClick }: PurchaseCardProps) {
           <p className="text-xs text-gray-400 flex items-center gap-1">
             <Shield size={11} /> ประกัน
           </p>
-          {purchase.warranty_expires_at ? (
+          {purchase.warranty_end ? (
             <p className={`text-xs font-medium mt-0.5 ${warrantyValid ? 'text-green-600' : 'text-red-500'}`}>
               {warrantyValid
                 ? daysLeft && daysLeft <= 30
                   ? `เหลือ ${daysLeft} วัน`
-                  : formatDate(purchase.warranty_expires_at)
+                  : formatDate(purchase.warranty_end)
                 : 'หมดอายุแล้ว'}
             </p>
           ) : (
