@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react'
 
 const BG_IMAGE = '/images/login-bg.jpg'
-const LOGO_URL = 'https://mlvtgiqzoszz.i.optimole.com/cb:QxkM.102a3/w:134/h:40/q:mauto/dpr:2.6/f:best/https://www.appliancecity.co.uk/wp-content/uploads/2025/09/dreame-main-logo-1000x300-1.png'
+const LOGO_URL = '/dreame-logo.png'
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap');
