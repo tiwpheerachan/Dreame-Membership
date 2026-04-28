@@ -1,89 +1,146 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Search, ChevronRight } from 'lucide-react'
+import { Search, ChevronRight, Users as UsersIcon, Crown } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
-interface SearchParams { q?: string; tier?: string; page?: string }
+interface SearchParams { q?: string; tier?: string; tag?: string; page?: string; vip?: string }
+
+const TIER_PILL: Record<string, string> = {
+  PLUS:     'admin-pill',
+  PRO:      'admin-pill admin-pill-ink',
+  ULTRA:    'admin-pill admin-pill-amber',
+  MASTER:   'admin-pill admin-pill-gold',
+  SILVER:   'admin-pill',
+  GOLD:     'admin-pill admin-pill-ink',
+  PLATINUM: 'admin-pill admin-pill-gold',
+}
+const TIER_LABEL: Record<string, string> = {
+  PLUS: 'Plus', PRO: 'Pro', ULTRA: 'Ultra', MASTER: 'Master',
+  SILVER: 'Plus', GOLD: 'Pro', PLATINUM: 'Master',
+}
 
 export default async function MembersPage({ searchParams }: { searchParams: SearchParams }) {
   const supabase = createServiceClient()
-  const q = searchParams.q || ''
+  const q    = searchParams.q || ''
   const tier = searchParams.tier || ''
+  const tag  = searchParams.tag || ''
+  const vip  = searchParams.vip === '1'
   const page = parseInt(searchParams.page || '1')
-  const pageSize = 20
+  const pageSize = 25
 
-  let query = supabase.from('users').select('id, member_id, full_name, phone, email, tier, total_points, lifetime_points, created_at, is_active', { count: 'exact' })
+  let query = supabase.from('users').select('id, member_id, full_name, phone, email, tier, total_points, lifetime_points, created_at, is_active, tags, is_vip', { count: 'exact' })
 
-  if (q) query = query.or(`full_name.ilike.%${q}%,phone.ilike.%${q}%,email.ilike.%${q}%,member_id.ilike.%${q}%`)
+  if (q)    query = query.or(`full_name.ilike.%${q}%,phone.ilike.%${q}%,email.ilike.%${q}%,member_id.ilike.%${q}%`)
   if (tier) query = query.eq('tier', tier)
+  if (vip)  query = query.eq('is_vip', true)
+  if (tag)  query = query.contains('tags', [tag])
 
   const { data: users, count } = await query
     .order('created_at', { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1)
 
+  // Pull existing tags for filter chip suggestions
+  const { data: tagSamples } = await supabase
+    .from('users').select('tags').not('tags', 'is', null).limit(500)
+  const allTags = Array.from(new Set((tagSamples || []).flatMap(t => t.tags as string[]))).filter(Boolean).sort()
+
   const totalPages = Math.ceil((count || 0) / pageSize)
 
+  function buildQS(extra: Record<string, string>) {
+    const sp = new URLSearchParams()
+    if (q) sp.set('q', q)
+    if (tier) sp.set('tier', tier)
+    if (tag) sp.set('tag', tag)
+    if (vip) sp.set('vip', '1')
+    Object.entries(extra).forEach(([k, v]) => v ? sp.set(k, v) : sp.delete(k))
+    return '?' + sp.toString()
+  }
+
   return (
-    <div className="p-6 space-y-4">
-      <div>
-        <h1 className="text-white text-2xl font-bold">สมาชิกทั้งหมด</h1>
-        <p className="text-gray-400 text-sm">{count?.toLocaleString()} คน</p>
+    <div style={{ padding: '28px 32px', maxWidth: 1280 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 18 }}>
+        <div>
+          <h1 className="admin-h1">สมาชิก</h1>
+          <p className="admin-sub">{(count ?? 0).toLocaleString()} คน</p>
+        </div>
       </div>
 
-      {/* Search & filters */}
-      <div className="flex gap-3">
-        <form className="flex-1 flex gap-2" method="GET">
-          <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input name="q" defaultValue={q} placeholder="ค้นหาชื่อ, เบอร์, อีเมล, Member ID..."
-              className="w-full bg-gray-900 border border-gray-800 rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500 text-sm" />
-          </div>
-          <select name="tier" defaultValue={tier}
-            className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2.5 text-gray-400 focus:outline-none text-sm">
-            <option value="">ทุก Tier</option>
-            <option value="SILVER">Silver</option>
-            <option value="GOLD">Gold</option>
-            <option value="PLATINUM">Platinum</option>
+      {/* Filter bar */}
+      <form className="admin-card" style={{ padding: 14, marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }} method="GET">
+        <div style={{ position: 'relative', flex: '1 1 320px', minWidth: 200 }}>
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-faint)' }} />
+          <input name="q" defaultValue={q}
+            placeholder="ค้นหาชื่อ, เบอร์, อีเมล, Member ID..."
+            className="admin-field" style={{ paddingLeft: 36 }} />
+        </div>
+        <select name="tier" defaultValue={tier} className="admin-field" style={{ width: 140 }}>
+          <option value="">ทุก Tier</option>
+          <option value="PLUS">Plus</option>
+          <option value="PRO">Pro</option>
+          <option value="ULTRA">Ultra</option>
+          <option value="MASTER">Master</option>
+        </select>
+        {allTags.length > 0 && (
+          <select name="tag" defaultValue={tag} className="admin-field" style={{ width: 160 }}>
+            <option value="">ทุก Tag</option>
+            {allTags.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
-          <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-gray-900 px-4 rounded-lg font-semibold text-sm">ค้นหา</button>
-        </form>
-      </div>
+        )}
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>
+          <input type="checkbox" name="vip" value="1" defaultChecked={vip} /> VIP เท่านั้น
+        </label>
+        <button type="submit" className="admin-btn admin-btn-ink">ค้นหา</button>
+      </form>
 
       {/* Table */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="admin-card" style={{ overflow: 'hidden' }}>
+        <table className="admin-table">
           <thead>
-            <tr className="border-b border-gray-800 bg-gray-900/70">
-              {['Member ID', 'ชื่อ', 'ติดต่อ', 'Tier', 'คะแนน', 'วันสมัคร', ''].map(h => (
-                <th key={h} className="px-4 py-3 text-left text-gray-400 font-medium text-xs">{h}</th>
-              ))}
+            <tr>
+              <th>Member ID</th>
+              <th>ชื่อ</th>
+              <th>ติดต่อ</th>
+              <th>Tier</th>
+              <th>คะแนน</th>
+              <th>Tags</th>
+              <th>วันสมัคร</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {(users || []).map((u: Record<string, unknown>) => (
-              <tr key={u.id as string} className="border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors">
-                <td className="px-4 py-3 font-mono text-gray-400 text-xs">{u.member_id as string}</td>
-                <td className="px-4 py-3">
-                  <p className="text-white font-medium">{u.full_name as string || '-'}</p>
-                  {!u.is_active && <span className="text-red-400 text-xs">ปิดใช้งาน</span>}
+              <tr key={u.id as string}>
+                <td className="num muted">{u.member_id as string}</td>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>{(u.full_name as string) || '-'}</span>
+                    {u.is_vip ? <Crown size={11} color="var(--gold)" /> : null}
+                  </div>
+                  {!u.is_active ? <span style={{ fontSize: 10, color: 'var(--red)' }}>ปิดใช้งาน</span> : null}
                 </td>
-                <td className="px-4 py-3">
-                  <p className="text-gray-400 text-xs">{u.phone as string || '-'}</p>
-                  <p className="text-gray-500 text-xs">{u.email as string || '-'}</p>
+                <td>
+                  <p style={{ margin: 0, fontSize: 12 }}>{(u.phone as string) || '-'}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--ink-mute)' }}>{(u.email as string) || '-'}</p>
                 </td>
-                <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    u.tier === 'PLATINUM' ? 'bg-cyan-900/30 text-cyan-400' :
-                    u.tier === 'GOLD' ? 'bg-yellow-900/30 text-yellow-400' :
-                    'bg-gray-800 text-gray-400'}`}>
-                    {u.tier as string}
+                <td>
+                  <span className={TIER_PILL[u.tier as string] || 'admin-pill'}>
+                    {TIER_LABEL[u.tier as string] || (u.tier as string)}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-amber-400 font-semibold">{Number(u.total_points).toLocaleString()}</td>
-                <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(u.created_at as string)}</td>
-                <td className="px-4 py-3">
-                  <Link href={`/admin/members/${u.id}`} className="text-gray-400 hover:text-white transition-colors">
-                    <ChevronRight size={16} />
+                <td className="num" style={{ color: 'var(--gold-deep)', fontWeight: 700 }}>
+                  {Number(u.total_points).toLocaleString()}
+                </td>
+                <td>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {((u.tags as string[]) || []).slice(0, 3).map(t => (
+                      <span key={t} className="admin-pill admin-pill-blue" style={{ fontSize: 10 }}>{t}</span>
+                    ))}
+                  </div>
+                </td>
+                <td className="muted" style={{ fontSize: 11 }}>{formatDate(u.created_at as string)}</td>
+                <td>
+                  <Link href={`/admin/members/${u.id}`} style={{ color: 'var(--ink-mute)' }}>
+                    <ChevronRight size={15} />
                   </Link>
                 </td>
               </tr>
@@ -91,19 +148,25 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
           </tbody>
         </table>
         {(users || []).length === 0 && (
-          <div className="py-12 text-center text-gray-500">ไม่พบข้อมูล</div>
+          <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--ink-mute)' }}>
+            <UsersIcon size={28} style={{ margin: '0 auto 8px', display: 'block', color: 'var(--ink-faint)' }} />
+            <p style={{ margin: 0, fontSize: 13 }}>ไม่พบข้อมูล</p>
+          </div>
         )}
       </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex gap-2 justify-center">
-          {Array.from({ length: totalPages }, (_, i) => i + 1).slice(Math.max(0, page - 3), page + 2).map(p => (
-            <a key={p} href={`?q=${q}&tier=${tier}&page=${p}`}
-              className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm transition-colors ${p === page ? 'bg-amber-500 text-gray-900 font-bold' : 'bg-gray-900 border border-gray-800 text-gray-400 hover:border-gray-700'}`}>
-              {p}
-            </a>
-          ))}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 16, flexWrap: 'wrap' }}>
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .slice(Math.max(0, page - 4), page + 3)
+            .map(p => (
+              <a key={p} href={buildQS({ page: String(p) })}
+                className={p === page ? 'admin-btn admin-btn-ink' : 'admin-btn admin-btn-ghost'}
+                style={{ padding: '6px 12px', fontSize: 12, minWidth: 32 }}>
+                {p}
+              </a>
+            ))}
         </div>
       )}
     </div>

@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { awardPoints } from '@/lib/points'
 import { logAdminAction } from '@/lib/audit'
+
+const VALID_STATUSES = new Set(['ADMIN_APPROVED', 'REJECTED', 'PENDING', 'BQ_VERIFIED'])
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const supabase = createClient()
@@ -11,11 +11,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const serviceSupabase = createServiceClient()
   const { data: staff } = await serviceSupabase.from('admin_staff')
-    .select('id, name, role').eq('auth_user_id', user!.id).eq('is_active', true).single()
+    .select('id, name, role').eq('auth_user_id', user.id).eq('is_active', true).single()
   if (!staff) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { status, admin_note } = await req.json()
-  if (!status) return NextResponse.json({ error: 'status required' }, { status: 400 })
+  if (!status || !VALID_STATUSES.has(status)) {
+    return NextResponse.json({ error: 'invalid status' }, { status: 400 })
+  }
 
   const { data: reg, error } = await serviceSupabase
     .from('purchase_registrations')
@@ -23,7 +25,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     .eq('id', params.id).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-  if (status === 'ADMIN_APPROVED' && reg && reg.points_awarded === 0) await awardPoints(reg.id)
+  if (status === 'ADMIN_APPROVED' && reg && reg.points_awarded === 0) {
+    await serviceSupabase.rpc('award_points_for_purchase', { p_purchase_reg_id: reg.id })
+  }
 
   await logAdminAction({
     staffId: staff.id,
@@ -89,9 +93,9 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   }
 
   await logAdminAction({
-    staffId: staff.id, action: 'PURCHASE_ADDED', targetType: 'purchase',
+    staffId: staff.id, action: 'PURCHASE_DELETED', targetType: 'purchase',
     targetId: params.id, userId: reg.user_id,
-    detail: { staff_name: staff.name, action: 'DELETED', order_sn: reg.order_sn, model_name: reg.model_name, points_reverted: pointsToRevert },
+    detail: { staff_name: staff.name, order_sn: reg.order_sn, model_name: reg.model_name, points_reverted: pointsToRevert },
   })
 
   return NextResponse.json({ success: true, points_reverted: pointsToRevert, staff_name: staff.name })

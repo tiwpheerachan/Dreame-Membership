@@ -1,26 +1,33 @@
 // ============================================================
-// DREAME MEMBERSHIP — Type Definitions
+// DREAME MEMBERSHIP — Type Definitions (single source of truth)
 // ============================================================
 
-export type MemberTier = 'SILVER' | 'GOLD' | 'PLATINUM'
-export type SaleChannel = 'STORE' | 'SHOPEE' | 'LAZADA' | 'WEBSITE' | 'TIKTOK' | 'OTHER'
-export type ChannelType = 'ONLINE' | 'ONSITE'
+export type UserTier       = 'PLUS' | 'PRO' | 'ULTRA' | 'MASTER'
+// Backward-compat alias — prefer UserTier in new code
+export type MemberTier     = UserTier
+// Legacy enum values still present in DB but no longer used in new code
+export type LegacyUserTier = 'SILVER' | 'GOLD' | 'PLATINUM'
+export type ChannelType    = 'ONLINE' | 'ONSITE'
+export type SaleChannel    = 'STORE' | 'SHOPEE' | 'LAZADA' | 'WEBSITE' | 'TIKTOK' | 'OTHER'
 export type PurchaseStatus = 'PENDING' | 'BQ_VERIFIED' | 'ADMIN_APPROVED' | 'REJECTED'
-export type PointsType = 'EARNED' | 'REDEEMED' | 'EXPIRED' | 'ADMIN_ADJUST'
-export type StaffRole = 'SUPER_ADMIN' | 'ADMIN_ONLINE' | 'ADMIN_ONSITE' | 'STAFF_ONSITE' | 'STAFF_ONLINE'
+export type PointsType     = 'EARNED' | 'REDEEMED' | 'EXPIRED' | 'ADMIN_ADJUST'
+export type AdminRole      = 'SUPER_ADMIN' | 'ADMIN_ONLINE' | 'ADMIN_ONSITE' | 'STAFF_ONSITE' | 'STAFF_ONLINE'
+export type StaffRole      = AdminRole
 
 export interface User {
   id: string
   member_id: string
-  phone?: string
-  email?: string
-  full_name?: string
-  profile_image_url?: string
-  address?: string
+  phone: string | null
+  email: string | null
+  full_name: string | null
+  profile_image_url: string | null
+  address: string | null
+  date_of_birth: string | null
   total_points: number
   lifetime_points: number
-  tier: MemberTier
+  tier: UserTier
   is_active: boolean
+  terms_accepted_at: string | null
   created_at: string
   updated_at: string
 }
@@ -29,23 +36,29 @@ export interface PurchaseRegistration {
   id: string
   user_id: string
   order_sn: string
-  invoice_no?: string
+  invoice_no: string | null
   channel: SaleChannel
   channel_type: ChannelType
-  sku?: string
-  model_name?: string
-  serial_number?: string
-  purchase_date?: string
+  sku: string | null
+  model_name: string | null
+  item_name: string | null
+  platform: string | null
+  quantity: number
+  serial_number: string | null
+  purchase_date: string | null
   total_amount: number
-  receipt_image_url?: string
-  warranty_months: number
-  warranty_start?: string
-  warranty_end?: string
+  receipt_image_url: string | null
   bq_verified: boolean
-  bq_verified_at?: string
+  bq_verified_at: string | null
   status: PurchaseStatus
-  admin_note?: string
+  admin_note: string | null
+  approved_by: string | null
+  approved_at: string | null
   points_awarded: number
+  points_awarded_at: string | null
+  warranty_months: number
+  warranty_start: string | null
+  warranty_end: string | null
   created_at: string
   updated_at: string
 }
@@ -53,27 +66,30 @@ export interface PurchaseRegistration {
 export interface PointsLog {
   id: string
   user_id: string
-  purchase_reg_id?: string
+  purchase_reg_id: string | null
   points_delta: number
-  type: PointsType
-  description?: string
   balance_after: number
-  expires_at?: string
+  type: PointsType
+  description: string | null
+  expires_at: string | null
+  adjusted_by: string | null
   created_at: string
 }
 
 export interface Coupon {
   id: string
-  user_id: string
+  user_id: string | null
   code: string
-  title?: string
-  description?: string
+  title: string | null
+  description: string | null
   discount_type: 'PERCENT' | 'FIXED'
   discount_value: number
   min_purchase: number
+  max_discount: number | null
   valid_from: string
   valid_until: string
-  used_at?: string
+  used_at: string | null
+  theme?: string | null
   created_at: string
 }
 
@@ -81,21 +97,33 @@ export interface AdminStaff {
   id: string
   auth_user_id: string
   name: string
-  email?: string
-  role: StaffRole
+  email: string | null
+  role: AdminRole
   channel_access: ChannelType[]
   is_active: boolean
+  created_at: string
 }
 
-export interface BQOrderData {
-  order_sn: string
-  platform: string
-  order_create_time: string
-  order_date: string
-  total_amount: number
-  items: BQOrderItem[]
+export interface Promotion {
+  id: string
+  title: string
+  description: string | null
+  image_url: string | null
+  link_url: string | null
+  original_price: number | null
+  discounted_price: number | null
+  discount_label: string | null
+  badge_text: string | null
+  sort_order: number
+  layout: 'hero' | 'card' | 'feed'
+  is_active: boolean
+  show_on_home: boolean
+  starts_at: string | null
+  ends_at: string | null
+  created_at?: string
 }
 
+// ── BigQuery payload ──
 export interface BQOrderItem {
   item_id: string
   model_id: string
@@ -107,19 +135,20 @@ export interface BQOrderItem {
   price: number
 }
 
-export interface Promotion {
-  id: string
-  title: string
-  description?: string
-  image_url?: string
-  link_url?: string
-  is_active: boolean
-  starts_at?: string
-  ends_at?: string
+export interface BQOrderData {
+  order_sn: string
+  platform: string
+  order_create_time: string
+  order_date: string
+  total_amount: number
+  items: BQOrderItem[]
 }
+// Alias for back-compat
+export type BQOrder = BQOrderData
 
-// API Response types
+// ── API responses ──
 export interface ApiResponse<T = unknown> {
+  success?: boolean
   data?: T
   error?: string
   message?: string
@@ -129,4 +158,56 @@ export interface VerifyOrderResponse {
   status: 'VERIFIED' | 'PENDING' | 'NOT_FOUND'
   order?: BQOrderData
   message?: string
+}
+
+// ── Constants ──
+export const TIER_THRESHOLDS: Record<UserTier, number> = {
+  PLUS:   0,
+  PRO:    501,
+  ULTRA:  1501,
+  MASTER: 3501,
+}
+
+export const TIER_MULTIPLIER: Record<UserTier, number> = {
+  PLUS:   1.0,
+  PRO:    1.25,
+  ULTRA:  1.5,
+  MASTER: 2.0,
+}
+
+export const TIER_COLORS: Record<UserTier, string> = {
+  PLUS:   '#9CA3AF',  // silver
+  PRO:    '#1F1F1F',  // black
+  ULTRA:  '#E07A3C',  // orange
+  MASTER: '#A0782B',  // gold
+}
+
+export const TIER_LABEL: Record<UserTier, string> = {
+  PLUS:   'Plus',
+  PRO:    'Pro',
+  ULTRA:  'Ultra',
+  MASTER: 'Master',
+}
+
+export const TIER_RANGE: Record<UserTier, string> = {
+  PLUS:   '0 – 500 points',
+  PRO:    '501 – 1,500 points',
+  ULTRA:  '1,501 – 3,500 points',
+  MASTER: '3,500+ points',
+}
+
+export const CHANNEL_LABELS: Record<SaleChannel, string> = {
+  STORE: 'หน้าร้าน',
+  SHOPEE: 'Shopee',
+  LAZADA: 'Lazada',
+  WEBSITE: 'Website',
+  TIKTOK: 'TikTok Shop',
+  OTHER: 'อื่นๆ',
+}
+
+export const STATUS_LABELS: Record<PurchaseStatus, string> = {
+  PENDING: 'รอตรวจสอบ',
+  BQ_VERIFIED: 'ยืนยันแล้ว',
+  ADMIN_APPROVED: 'อนุมัติแล้ว',
+  REJECTED: 'ถูกปฏิเสธ',
 }

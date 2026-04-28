@@ -1,23 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { awardPoints } from '@/lib/points'
+import { uploadToSupabase } from '@/lib/upload'
 import type { BQOrderData } from '@/types'
-import { randomUUID } from 'crypto'
-
-async function uploadToSupabase(file: File, folder: string, serviceClient: ReturnType<typeof createServiceClient>): Promise<string | null> {
-  try {
-    const ext = file.name.split('.').pop() ?? 'jpg'
-    const path = `${folder}/${randomUUID()}.${ext}`
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const { error } = await serviceClient.storage
-      .from('dreame-files')
-      .upload(path, buffer, { contentType: file.type, upsert: true })
-    if (error) { console.error('[Upload]', error); return null }
-    const { data: { publicUrl } } = serviceClient.storage.from('dreame-files').getPublicUrl(path)
-    return publicUrl
-  } catch (e) { console.error('[Upload]', e); return null }
-}
 
 export async function POST(req: Request) {
   try {
@@ -26,14 +10,14 @@ export async function POST(req: Request) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const formData = await req.formData()
-    const order_sn = formData.get('order_sn') as string
-    const channel = formData.get('channel') as string
-    const channel_type = formData.get('channel_type') as string
-    const serial_number = formData.get('serial_number') as string
-    const invoice_no = formData.get('invoice_no') as string
-    const address = formData.get('address') as string
-    const bqDataStr = formData.get('bq_data') as string | null
-    const receiptFile = formData.get('receipt') as File | null
+    const order_sn      = (formData.get('order_sn') as string | null)?.trim() || ''
+    const channel       = (formData.get('channel') as string | null) || 'OTHER'
+    const channel_type  = (formData.get('channel_type') as string | null) || 'ONLINE'
+    const serial_number = (formData.get('serial_number') as string | null)?.trim() || ''
+    const invoice_no    = (formData.get('invoice_no') as string | null)?.trim() || ''
+    const address       = (formData.get('address') as string | null)?.trim() || ''
+    const bqDataStr     = formData.get('bq_data') as string | null
+    const receiptFile   = formData.get('receipt') as File | null
 
     if (!order_sn || !serial_number) {
       return NextResponse.json({ error: 'order_sn and serial_number are required' }, { status: 400 })
@@ -44,23 +28,25 @@ export async function POST(req: Request) {
       .from('purchase_registrations')
       .select('id')
       .eq('order_sn', order_sn)
-      .eq('user_id', user!.id)
-      .single()
+      .eq('user_id', user.id)
+      .maybeSingle()
 
     if (existing) return NextResponse.json({ error: 'คุณลงทะเบียน Order ID นี้แล้ว' }, { status: 409 })
 
     // Parse BQ data if available
     let bqData: BQOrderData | null = null
     if (bqDataStr) {
-      try { bqData = JSON.parse(bqDataStr) } catch {}
+      try { bqData = JSON.parse(bqDataStr) } catch { /* ignore malformed */ }
     }
 
-    const serviceSupabase = createServiceClient()
+    const service = createServiceClient()
 
-    // Upload receipt image to Supabase Storage
+    // Upload receipt with validation
     let receipt_image_url: string | null = null
     if (receiptFile && receiptFile.size > 0) {
-      receipt_image_url = await uploadToSupabase(receiptFile, 'receipts', serviceSupabase)
+      const { url, error } = await uploadToSupabase(service, receiptFile, 'receipts', 'receipt')
+      if (error) return NextResponse.json({ error }, { status: 400 })
+      receipt_image_url = url ?? null
     }
 
     // Calculate warranty end date
@@ -68,20 +54,20 @@ export async function POST(req: Request) {
     const warrantyEnd = new Date(purchaseDate)
     warrantyEnd.setMonth(warrantyEnd.getMonth() + 12)
 
-    // Get first item info
+    // First item from BQ
     const firstItem = bqData?.items?.[0]
 
-    const { data: reg, error: regError } = await serviceSupabase
+    const { data: reg, error: regError } = await service
       .from('purchase_registrations')
       .insert({
         user_id: user.id,
-        order_sn: order_sn.trim(),
+        order_sn,
         invoice_no: invoice_no || null,
         channel,
         channel_type,
         sku: firstItem?.item_sku || null,
         model_name: firstItem?.item_name || null,
-        serial_number: serial_number.trim(),
+        serial_number,
         purchase_date: bqData?.order_date || null,
         total_amount: bqData?.total_amount || 0,
         receipt_image_url,
@@ -98,20 +84,24 @@ export async function POST(req: Request) {
 
     if (regError) throw regError
 
-    // Add to pending queue if not verified
+    // Add to pending queue if not verified, else award points atomically
     if (!bqData) {
-      await serviceSupabase.from('pending_verifications').insert({
+      await service.from('pending_verifications').insert({
         purchase_reg_id: reg.id,
-        order_sn: order_sn.trim(),
+        order_sn,
       })
     } else {
-      // Award points immediately if BQ verified
-      await awardPoints(reg.id)
+      await service.rpc('award_points_for_purchase', { p_purchase_reg_id: reg.id })
     }
 
-    // Update user address if provided
+    // Only update profile address if user *typed* one in the form AND
+    // their profile address is currently empty (don't clobber existing data).
     if (address) {
-      await serviceSupabase.from('users').update({ address }).eq('id', user!.id)
+      const { data: prof } = await service
+        .from('users').select('address').eq('id', user.id).single()
+      if (!prof?.address) {
+        await service.from('users').update({ address }).eq('id', user.id)
+      }
     }
 
     return NextResponse.json({ success: true, registration_id: reg.id, status: reg.status })

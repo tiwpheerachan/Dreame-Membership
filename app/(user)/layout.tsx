@@ -7,10 +7,15 @@ export default async function UserLayout({ children }: { children: React.ReactNo
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
   return (
-    <div style={{ minHeight:'100vh', background:'#f7f7f5', fontFamily:"'Prompt',system-ui,sans-serif" }}>
-      <div style={{ maxWidth:480, margin:'0 auto', paddingBottom:'96px' }}>
+    <div style={{ minHeight: '100vh', background: '#fff' }}>
+      <main style={{
+        maxWidth: 480, margin: '0 auto',
+        paddingBottom: 'calc(96px + env(safe-area-inset-bottom))',
+        minHeight: '100vh',
+        position: 'relative',
+      }}>
         {children}
-      </div>
+      </main>
       <Navbar />
     </div>
   )

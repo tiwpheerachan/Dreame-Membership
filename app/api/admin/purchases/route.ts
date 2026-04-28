@@ -1,47 +1,31 @@
-import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { awardPoints } from '@/lib/points'
-import { randomUUID } from 'crypto'
 import { logAdminAction } from '@/lib/audit'
-
-async function uploadToSupabase(file: File, folder: string, serviceClient: ReturnType<typeof createServiceClient>): Promise<string | null> {
-  try {
-    const ext = file.name.split('.').pop() ?? 'jpg'
-    const path = `${folder}/${randomUUID()}.${ext}`
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const { error } = await serviceClient.storage
-      .from('dreame-files')
-      .upload(path, buffer, { contentType: file.type, upsert: true })
-    if (error) { console.error('[Upload]', error); return null }
-    const { data: { publicUrl } } = serviceClient.storage.from('dreame-files').getPublicUrl(path)
-    return publicUrl
-  } catch (e) { console.error('[Upload]', e); return null }
-}
+import { uploadToSupabase } from '@/lib/upload'
 
 export async function POST(req: Request) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const serviceSupabase = createServiceClient()
-  const { data: staff } = await serviceSupabase.from('admin_staff')
-    .select('id, name').eq('auth_user_id', user!.id).eq('is_active', true).single()
+  const service = createServiceClient()
+  const { data: staff } = await service.from('admin_staff')
+    .select('id, name').eq('auth_user_id', user.id).eq('is_active', true).single()
   if (!staff) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const formData = await req.formData()
-  const user_id = formData.get('user_id') as string
-  const order_sn = formData.get('order_sn') as string
-  const channel = formData.get('channel') as string || 'STORE'
-  const channel_type = formData.get('channel_type') as string || 'ONSITE'
-  const model_name = formData.get('model_name') as string
-  const sku = formData.get('sku') as string
-  const serial_number = formData.get('serial_number') as string
-  const purchase_date = formData.get('purchase_date') as string
-  const total_amount = formData.get('total_amount') as string
-  const invoice_no = formData.get('invoice_no') as string
-  const status = 'ADMIN_APPROVED'
-  const receiptFile = formData.get('receipt') as File | null
+  const user_id        = formData.get('user_id') as string
+  const order_sn       = (formData.get('order_sn') as string | null)?.trim() || ''
+  const channel        = (formData.get('channel') as string | null) || 'STORE'
+  const channel_type   = (formData.get('channel_type') as string | null) || 'ONSITE'
+  const model_name     = (formData.get('model_name') as string | null)?.trim() || ''
+  const sku            = (formData.get('sku') as string | null) || ''
+  const serial_number  = (formData.get('serial_number') as string | null)?.trim() || ''
+  const purchase_date  = formData.get('purchase_date') as string
+  const total_amount   = formData.get('total_amount') as string
+  const invoice_no     = formData.get('invoice_no') as string
+  const status         = 'ADMIN_APPROVED'
+  const receiptFile    = formData.get('receipt') as File | null
 
   if (!user_id || !order_sn) {
     return NextResponse.json({ error: 'user_id and order_sn required' }, { status: 400 })
@@ -49,14 +33,16 @@ export async function POST(req: Request) {
 
   let receipt_image_url: string | null = null
   if (receiptFile && receiptFile.size > 0) {
-    receipt_image_url = await uploadToSupabase(receiptFile, 'receipts', serviceSupabase)
+    const { url, error } = await uploadToSupabase(service, receiptFile, 'receipts', 'receipt')
+    if (error) return NextResponse.json({ error }, { status: 400 })
+    receipt_image_url = url ?? null
   }
 
   const purchaseDate = purchase_date ? new Date(purchase_date) : new Date()
   const warrantyEnd = new Date(purchaseDate)
   warrantyEnd.setMonth(warrantyEnd.getMonth() + 12)
 
-  const { data: reg, error } = await serviceSupabase
+  const { data: reg, error } = await service
     .from('purchase_registrations')
     .insert({
       user_id, order_sn, invoice_no, channel, channel_type,
@@ -75,9 +61,10 @@ export async function POST(req: Request) {
     .select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-  await awardPoints(reg.id)
 
-  // Log audit
+  // Atomic point award via DB function
+  await service.rpc('award_points_for_purchase', { p_purchase_reg_id: reg.id })
+
   await logAdminAction({
     staffId:    staff.id,
     action:     'PURCHASE_ADDED',

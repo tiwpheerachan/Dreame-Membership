@@ -7,7 +7,7 @@ import {
   ArrowLeft, LogIn, UserPlus, CheckCircle, AlertCircle
 } from 'lucide-react'
 
-type Mode = 'login' | 'register' | 'forgot'
+type Mode = 'login' | 'register' | 'forgot' | 'verify-sent'
 const KEY_EMAIL = 'dreame_email'
 const KEY_REMEMBER = 'dreame_remember'
 
@@ -125,8 +125,10 @@ function LoginForm() {
   const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
+  const [errorReason, setErrorReason] = useState<'invalid' | 'unverified' | 'other' | null>(null)
   const [success, setSuccess]   = useState('')
   const [mounted, setMounted]   = useState(false)
+  const [resending, setResending] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -146,30 +148,63 @@ function LoginForm() {
   }
 
   function switchMode(m: Mode) {
-    setMode(m); setError(''); setSuccess(''); setPassword(''); setConfirmPw('')
+    setMode(m); setError(''); setErrorReason(null); setSuccess(''); setPassword(''); setConfirmPw('')
   }
 
   async function handleLogin() {
-    if (!email || !password) { setError('กรุณากรอกอีเมลและรหัสผ่าน'); return }
-    setLoading(true); setError(''); setSuccess('')
+    if (!email || !password) { setError('กรุณากรอกอีเมลและรหัสผ่าน'); setErrorReason(null); return }
+    setLoading(true); setError(''); setErrorReason(null); setSuccess('')
     try {
       const { data, error: err } = await supabase.auth.signInWithPassword({ email, password })
       if (err) {
-        setError(
-          err.message.includes('Invalid login') || err.message.includes('invalid')
-            ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง'
-            : err.message.includes('Email not confirmed')
-            ? 'กรุณายืนยันอีเมลก่อน login'
-            : err.message
-        )
+        const msg = err.message.toLowerCase()
+        if (msg.includes('email not confirmed')) {
+          setError('กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ')
+          setErrorReason('unverified')
+        } else if (msg.includes('invalid login') || msg.includes('invalid credential')) {
+          // Modern Supabase masks "email not confirmed" as "invalid credentials"
+          // to prevent enumeration — so we can't tell which it is. Show both
+          // recovery actions (resend verification + forgot password).
+          setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง — หรืออีเมลยังไม่ได้ยืนยัน')
+          setErrorReason('invalid')
+        } else {
+          setError(err.message)
+          setErrorReason('other')
+        }
         return
       }
       saveCred(email, rememberMe)
+      await fetch('/api/users/ensure-profile', { method: 'POST' }).catch(() => {})
       const { data: user } = await supabase
-        .from('users').select('terms_accepted_at').eq('id', data.user!.id).single()
+        .from('users').select('terms_accepted_at').eq('id', data.user!.id).maybeSingle()
       router.push(user?.terms_accepted_at ? '/home' : '/terms')
-    } catch { setError('เกิดข้อผิดพลาด กรุณาลองใหม่') }
+    } catch {
+      setError('เชื่อมต่อไม่ได้ กรุณาลองใหม่')
+      setErrorReason('other')
+    }
     finally   { setLoading(false) }
+  }
+
+  async function resendVerification() {
+    if (!email) { setError('กรุณากรอกอีเมล'); return }
+    setResending(true); setError(''); setSuccess('')
+    try {
+      const { error: err } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback` },
+      })
+      if (err && !err.message.toLowerCase().includes('already')) {
+        setError(err.message)
+        return
+      }
+      setSuccess('ส่งอีเมลยืนยันใหม่แล้ว — กรุณาเช็คกล่องจดหมาย (รวมถึง spam)')
+      setErrorReason(null)
+    } catch {
+      setError('ส่งไม่สำเร็จ กรุณาลองใหม่')
+    } finally {
+      setResending(false)
+    }
   }
 
   async function handleRegister() {
@@ -179,30 +214,58 @@ function LoginForm() {
     if (password !== confirmPw)  { setError('รหัสผ่านไม่ตรงกัน'); return }
     setLoading(true); setError(''); setSuccess('')
     try {
-      const { data, error: err } = await supabase.auth.signUp({ email, password })
+      // Pass full_name through user_metadata so the DB trigger
+      // (handle_new_auth_user) can populate public.users on insert.
+      const { data, error: err } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName.trim() },
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback`,
+        },
+      })
       if (err) {
-        if (err.message.includes('already registered')) { setError('อีเมลนี้มีบัญชีอยู่แล้ว'); setMode('login') }
-        else setError(err.message)
+        // Avoid email enumeration: same generic message regardless of cause.
+        // (Supabase already prevents most enumeration in modern versions.)
+        if (err.message.toLowerCase().includes('already registered')) {
+          setError('อีเมลนี้มีบัญชีอยู่แล้ว — กรุณาเข้าสู่ระบบ')
+          setMode('login')
+        } else {
+          setError(err.message)
+        }
         return
       }
       if (!data.user) { setError('เกิดข้อผิดพลาด'); return }
-      await supabase.from('users').upsert({ id: data.user.id, full_name: fullName.trim(), email })
+
       saveCred(email, true)
-      if (data.session) router.push('/terms')
-      else { setSuccess('กรุณาเช็คอีเมลและกดยืนยันก่อน login ครับ'); setMode('login') }
+
+      if (data.session) {
+        // Auto-confirmed (email confirmation off) — go straight to terms.
+        await fetch('/api/users/ensure-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ full_name: fullName.trim() }),
+        }).catch(() => {})
+        router.push('/terms')
+      } else {
+        // Email confirmation required — show dedicated screen with clear next steps
+        setMode('verify-sent')
+      }
     } catch { setError('เกิดข้อผิดพลาด กรุณาลองใหม่') }
     finally   { setLoading(false) }
   }
 
   async function handleForgot() {
     if (!email) { setError('กรุณากรอกอีเมล'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('อีเมลไม่ถูกต้อง'); return }
     setLoading(true); setError(''); setSuccess('')
     try {
-      const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
+      // Always show success — Supabase already silently no-ops on missing emails.
+      // We don't surface the underlying error to avoid email enumeration.
+      await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback?type=recovery`,
       })
-      if (err) { setError(err.message); return }
-      setSuccess('ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว กรุณาเช็คอีเมล')
+      setSuccess('ถ้ามีบัญชีตามอีเมลนี้ ระบบจะส่งลิงก์รีเซ็ตให้ภายในไม่กี่นาที')
     } catch { setError('เกิดข้อผิดพลาด') }
     finally   { setLoading(false) }
   }
@@ -241,6 +304,55 @@ function LoginForm() {
 
           {/* Form sheet bottom */}
           <div className="lg-sheet">
+            {mode === 'verify-sent' ? (
+              <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+                <div style={{
+                  width: 64, height: 64, margin: '0 auto 16px',
+                  borderRadius: 20, background: 'linear-gradient(135deg,#d4af37,#f5d060)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 8px 24px rgba(212,175,55,0.3)',
+                }}>
+                  <Mail size={28} color="#0d0d0d" />
+                </div>
+                <h2 style={{ fontSize: 20, fontWeight: 800, color: '#111', margin: '0 0 8px' }}>
+                  ตรวจอีเมลของคุณ
+                </h2>
+                <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 6px', lineHeight: 1.6 }}>
+                  ส่งลิงก์ยืนยันไปที่
+                </p>
+                <p style={{ fontSize: 14, fontWeight: 700, color: '#111', margin: '0 0 18px', wordBreak: 'break-all' }}>
+                  {email}
+                </p>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 20px', lineHeight: 1.6 }}>
+                  คลิกลิงก์ในอีเมลเพื่อยืนยันบัญชี<br/>
+                  ไม่เห็นอีเมล? เช็ค spam หรือกดส่งใหม่
+                </p>
+                {success && (
+                  <div className="a-ok" style={{ marginBottom: 12 }}>
+                    <CheckCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>{success}</span>
+                  </div>
+                )}
+                {error && (
+                  <div className="a-err" style={{ marginBottom: 12 }}>
+                    <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>{error}</span>
+                  </div>
+                )}
+                <button
+                  className="btn-g"
+                  onClick={resendVerification}
+                  disabled={resending}
+                  style={{ marginBottom: 10 }}>
+                  {resending ? <><Spin /> กำลังส่ง...</> : <>↻ ส่งอีเมลยืนยันใหม่</>}
+                </button>
+                <button className="btn-plain" onClick={() => switchMode('login')}
+                  style={{ fontSize: 13, color: '#6b7280', padding: '8px 0' }}>
+                  ← กลับไปหน้าเข้าสู่ระบบ
+                </button>
+              </div>
+            ) : (
+            <>
             <p style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 3px' }}>
               {mode === 'forgot' ? 'รีเซ็ตรหัสผ่าน' : 'DREAME MEMBERSHIP'}
             </p>
@@ -266,9 +378,37 @@ function LoginForm() {
               </div>
             )}
             {error && (
-              <div className="a-err">
-                <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-                <span>{error}</span>
+              <div className="a-err" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span>{error}</span>
+                </div>
+                {mode === 'login' && (errorReason === 'unverified' || errorReason === 'invalid') && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={resendVerification}
+                      disabled={resending || !email}
+                      className="btn-plain"
+                      style={{
+                        flex: 1, minWidth: 140, padding: '8px 10px', fontSize: 11, fontWeight: 700,
+                        color: '#0d0d0d', background: '#fde68a', border: '1px solid #fbbf24',
+                        borderRadius: 8, opacity: !email ? 0.5 : 1,
+                      }}>
+                      {resending ? 'กำลังส่ง...' : '↻ ส่งอีเมลยืนยันใหม่'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchMode('forgot')}
+                      className="btn-plain"
+                      style={{
+                        flex: 1, minWidth: 110, padding: '8px 10px', fontSize: 11, fontWeight: 700,
+                        color: '#fff', background: '#0d0d0d', border: 'none', borderRadius: 8,
+                      }}>
+                      🔑 ลืมรหัสผ่าน?
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -399,6 +539,8 @@ function LoginForm() {
               )}
 
             </div>
+            </>
+            )}
           </div>
         </div>
       </div>

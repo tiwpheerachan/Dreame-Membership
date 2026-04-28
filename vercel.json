@@ -1,8 +1,6 @@
 {
   "crons": [
-    {
-      "path": "/api/cron/verify-pending",
-      "schedule": "0 * * * *"
-    }
+    { "path": "/api/cron/verify-pending", "schedule": "0 * * * *" },
+    { "path": "/api/cron/birthday",        "schedule": "0 1 * * *" }
   ]
 }

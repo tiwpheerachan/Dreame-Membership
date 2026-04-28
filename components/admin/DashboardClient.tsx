@@ -93,12 +93,47 @@ export default function DashboardClient({ data }: { data: DashboardData }) {
   // ─── Excel Export ─────────────────────────────────────────
   async function exportExcel(type: 'members' | 'purchases' | 'summary') {
     setExporting(type)
-    await new Promise(r => setTimeout(r, 100))
+
+    // Fetch export datasets on-demand (the dashboard payload no longer pre-loads them).
+    let allMembers = data.allMembers
+    let allPurchases = data.allPurchases
+    try {
+      if ((type === 'members' || type === 'summary') && allMembers.length === 0) {
+        const r = await fetch('/api/admin/export/members')
+        if (r.ok) {
+          const j = await r.json()
+          allMembers = j.members || []
+        }
+      }
+      if ((type === 'purchases' || type === 'summary') && allPurchases.length === 0) {
+        const r = await fetch('/api/admin/export/purchases')
+        if (r.ok) {
+          const j = await r.json()
+          allPurchases = (j.purchases || []).map((p: Record<string, unknown>) => {
+            const u = p.users as Record<string, unknown> | null
+            return {
+              order_sn: p.order_sn as string,
+              member_id: (u?.member_id as string) || '',
+              full_name: (u?.full_name as string) || '',
+              model_name: (p.model_name as string) || '',
+              channel: p.channel as string,
+              status: p.status as string,
+              total_amount: Number(p.total_amount),
+              points_awarded: Number(p.points_awarded) || 0,
+              serial_number: (p.serial_number as string) || '',
+              purchase_date: (p.purchase_date as string) || '',
+              warranty_end: (p.warranty_end as string) || '',
+              created_at: p.created_at as string,
+            }
+          })
+        }
+      }
+    } catch { /* fall through with empty arrays */ }
 
     const wb = XLSX.utils.book_new()
 
     if (type === 'members' || type === 'summary') {
-      const memberRows = data.allMembers.map(m => ({
+      const memberRows = allMembers.map(m => ({
         'Member ID':          m.member_id,
         'ชื่อ-นามสกุล':       m.full_name || '-',
         'อีเมล':               m.email || '-',
@@ -114,7 +149,7 @@ export default function DashboardClient({ data }: { data: DashboardData }) {
     }
 
     if (type === 'purchases' || type === 'summary') {
-      const purchaseRows = data.allPurchases.map(p => ({
+      const purchaseRows = allPurchases.map(p => ({
         'Order ID':           p.order_sn,
         'Member ID':          p.member_id,
         'ชื่อสมาชิก':         p.full_name || '-',

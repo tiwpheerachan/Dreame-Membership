@@ -1,71 +1,46 @@
 -- ============================================================
+-- ADMIN BOOTSTRAP — sample inserts for admin_staff table
 -- วิธีใช้: เปลี่ยน email ให้ตรงกับที่ Login เข้าระบบแล้ว
 -- ต้อง Login ผ่านหน้าเว็บก่อน แล้วค่อยรัน SQL นี้
 -- ============================================================
 
--- ----------------------------------------------------------------
--- ระดับที่ 1: SUPER_ADMIN
--- เข้าถึงได้ทุกอย่าง ทั้ง Online และ Onsite
--- ----------------------------------------------------------------
+-- ระดับที่ 1: SUPER_ADMIN (เข้าถึงได้ทุกอย่าง)
 INSERT INTO admin_staff (auth_user_id, name, email, role, channel_access)
 SELECT id, 'ชื่อ Super Admin', email, 'SUPER_ADMIN', ARRAY['ONLINE', 'ONSITE']
 FROM auth.users WHERE email = 'superadmin@email.com';
 
--- ----------------------------------------------------------------
--- ระดับที่ 2: ADMIN_ONLINE
--- จัดการคำสั่งซื้อ Online (Shopee, Lazada, Website, TikTok)
--- อนุมัติ/ปฏิเสธ, จัดการสมาชิก, สร้างคูปอง
--- ----------------------------------------------------------------
+-- ระดับที่ 2: ADMIN_ONLINE (Shopee, Lazada, Website, TikTok)
 INSERT INTO admin_staff (auth_user_id, name, email, role, channel_access)
 SELECT id, 'ชื่อ Admin Online', email, 'ADMIN_ONLINE', ARRAY['ONLINE']
 FROM auth.users WHERE email = 'adminonline@email.com';
 
--- ----------------------------------------------------------------
--- ระดับที่ 3: ADMIN_ONSITE
--- จัดการคำสั่งซื้อ Onsite (หน้าร้าน)
--- อนุมัติ/ปฏิเสธ, จัดการสมาชิก, สร้างคูปอง
--- ----------------------------------------------------------------
+-- ระดับที่ 3: ADMIN_ONSITE (หน้าร้าน)
 INSERT INTO admin_staff (auth_user_id, name, email, role, channel_access)
 SELECT id, 'ชื่อ Admin Onsite', email, 'ADMIN_ONSITE', ARRAY['ONSITE']
 FROM auth.users WHERE email = 'adminonsite@email.com';
 
--- ----------------------------------------------------------------
--- ระดับที่ 4: STAFF_ONLINE
--- ดูและจัดการ Pending Queue ของ Online เท่านั้น
--- ไม่สามารถจัดการสมาชิกหรือสร้างคูปองได้
--- ----------------------------------------------------------------
+-- ระดับที่ 4: STAFF_ONLINE (เฉพาะ Pending Queue Online)
 INSERT INTO admin_staff (auth_user_id, name, email, role, channel_access)
 SELECT id, 'ชื่อ Staff Online', email, 'STAFF_ONLINE', ARRAY['ONLINE']
 FROM auth.users WHERE email = 'staffonline@email.com';
 
--- ----------------------------------------------------------------
--- ระดับที่ 5: STAFF_ONSITE
--- ดูและจัดการ Pending Queue ของ Onsite เท่านั้น
--- ไม่สามารถจัดการสมาชิกหรือสร้างคูปองได้
--- ----------------------------------------------------------------
+-- ระดับที่ 5: STAFF_ONSITE (เฉพาะ Pending Queue Onsite)
 INSERT INTO admin_staff (auth_user_id, name, email, role, channel_access)
 SELECT id, 'ชื่อ Staff Onsite', email, 'STAFF_ONSITE', ARRAY['ONSITE']
 FROM auth.users WHERE email = 'staffonsite@email.com';
 
--- ----------------------------------------------------------------
--- Admin ที่ดูแลทั้ง Online + Onsite (ไม่ใช่ Super)
--- ----------------------------------------------------------------
+-- Admin ดูแลทั้ง Online + Onsite (ไม่ใช่ Super)
 INSERT INTO admin_staff (auth_user_id, name, email, role, channel_access)
 SELECT id, 'ชื่อ Admin ทั้งสองช่องทาง', email, 'ADMIN_ONLINE', ARRAY['ONLINE', 'ONSITE']
 FROM auth.users WHERE email = 'adminboth@email.com';
 
--- ================================================================
+-- ────────────────────────────────────────────────────────────
 -- ตรวจสอบ admin ทั้งหมด
--- ================================================================
-SELECT 
-  s.name,
-  s.email,
-  s.role,
-  s.channel_access,
-  s.is_active,
-  s.created_at
+-- ────────────────────────────────────────────────────────────
+SELECT
+  s.name, s.email, s.role, s.channel_access, s.is_active, s.created_at
 FROM admin_staff s
-ORDER BY 
+ORDER BY
   CASE s.role
     WHEN 'SUPER_ADMIN'   THEN 1
     WHEN 'ADMIN_ONLINE'  THEN 2
@@ -74,30 +49,8 @@ ORDER BY
     WHEN 'STAFF_ONSITE'  THEN 5
   END;
 
--- ================================================================
--- ปิดการใช้งาน Admin (ถ้าต้องการ)
--- ================================================================
+-- ปิดการใช้งาน Admin
 -- UPDATE admin_staff SET is_active = false WHERE email = 'someone@email.com';
 
--- ================================================================
--- ลบ Admin (ถ้าต้องการ)
--- ================================================================
+-- ลบ Admin
 -- DELETE FROM admin_staff WHERE email = 'someone@email.com';
-
-5. กด Deploy
-กด "Deploy site" รอประมาณ 2-3 นาที
-เว็บจะได้ชื่อแบบนี้: https://dreame-xxx.netlify.app
-
-6. แก้ Supabase ให้รับ Domain ใหม่
-ไปที่ Supabase → Authentication → URL Configuration
-Site URL:      https://dreame-xxx.netlify.app
-Redirect URLs: https://dreame-xxx.netlify.app/**
-กด Save แล้วทดสอบ login ได้เลยครับ ✅
-
-
-💡 ต่อไปนี้ ทุกครั้งที่ git push เว็บจะ deploy ใหม่อัตโนมัติเลย ไม่ต้องทำอะไรเพิ่ม
-
-NEXT_PUBLIC_SUPABASE_URL=https://wifbppzpnubrfybhvxes.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndpZmJwcHpwbnVicmZ5Ymh2eGVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTk0MjAsImV4cCI6MjA4ODAzNTQyMH0.ggBFFUtBt1uZYY4cZ12WPs7_8LiG_KWKPhzvnTF2nYA
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndpZmJwcHpwbnVicmZ5Ymh2eGVzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjQ1OTQyMCwiZXhwIjoyMDg4MDM1NDIwfQ.NdPApTgTrAnheIEw73jnf3YnhpCg_Hj7EF8hVHJVMWs
-NEXT_PUBLIC_APP_URL=http://localhost:3000

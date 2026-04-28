@@ -10,6 +10,9 @@ export default async function AdminDashboard() {
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
+  // ── 6-month window for "monthly trend" + "this-month" stats ──
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString()
+
   const [
     { count: totalMembers },
     { count: totalPurchases },
@@ -22,8 +25,6 @@ export default async function AdminDashboard() {
     { data: statusData },
     { data: pointsData },
     { data: revenueData },
-    { data: allMembers },
-    { data: allPurchases },
     { data: topMembersRaw },
     { data: monthlyPurchases },
     { data: monthlyMembers },
@@ -39,12 +40,17 @@ export default async function AdminDashboard() {
     supabase.from('purchase_registrations').select('status'),
     supabase.from('points_log').select('points_delta').eq('type', 'EARNED'),
     supabase.from('purchase_registrations').select('total_amount').in('status', ['ADMIN_APPROVED', 'BQ_VERIFIED']),
-    supabase.from('users').select('member_id, full_name, email, phone, tier, total_points, lifetime_points, created_at').order('created_at', { ascending: false }),
-    supabase.from('purchase_registrations').select(`order_sn, channel, status, total_amount, points_awarded, purchase_date, warranty_end, serial_number, model_name, created_at, users!inner(member_id, full_name)`).order('created_at', { ascending: false }),
     supabase.from('users').select(`member_id, full_name, tier, total_points, lifetime_points, purchase_registrations(id)`).order('lifetime_points', { ascending: false }).limit(10),
-    supabase.from('purchase_registrations').select('created_at, total_amount').order('created_at', { ascending: true }),
-    supabase.from('users').select('created_at').order('created_at', { ascending: true }),
+    // Trend queries: only last 6 months — at 10k+ users full table scan was a perf trap
+    supabase.from('purchase_registrations').select('created_at, total_amount').gte('created_at', sixMonthsAgo).order('created_at', { ascending: true }),
+    supabase.from('users').select('created_at').gte('created_at', sixMonthsAgo).order('created_at', { ascending: true }),
   ])
+
+  // Heavy "all members / all purchases" datasets are only needed for Excel export.
+  // Loading them on every dashboard hit is wasteful and OOMs at scale, so we
+  // fetch on-demand via the new /api/admin/export endpoints instead.
+  const allMembers: Record<string, unknown>[] = []
+  const allPurchases: Record<string, unknown>[] = []
 
   // Tier Breakdown
   const tierCount: Record<string, number> = { SILVER: 0, GOLD: 0, PLATINUM: 0 }

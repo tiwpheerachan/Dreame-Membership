@@ -60,7 +60,10 @@ export default function TermsPage() {
     async function check() {
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (!authUser) { router.push('/'); return }
-      const { data: user } = await supabase.from('users').select('terms_accepted_at').eq('id', authUser.id).single()
+      // Make sure the profile row exists before we try to read it. Belt-and-
+      // suspenders for accounts that predate the auth trigger.
+      await fetch('/api/users/ensure-profile', { method: 'POST' }).catch(() => {})
+      const { data: user } = await supabase.from('users').select('terms_accepted_at').eq('id', authUser.id).maybeSingle()
       if (user?.terms_accepted_at) { router.push('/home'); return }
       setChecking(false)
     }

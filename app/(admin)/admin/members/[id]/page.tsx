@@ -1,4 +1,5 @@
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { logAdminAction } from '@/lib/audit'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -8,6 +9,8 @@ import {
 } from 'lucide-react'
 import { formatDate, formatDateTime, channelLabel, warrantyDaysLeft } from '@/lib/utils'
 import AdjustPointsForm from '@/components/admin/AdjustPointsForm'
+import MemberTags from '@/components/admin/MemberTags'
+import MemberNotes from '@/components/admin/MemberNotes'
 import ApprovePurchaseButtons from '@/components/admin/ApprovePurchaseButtons'
 import AddPurchaseForm from '@/components/admin/AddPurchaseForm'
 import DeletePurchaseButton from '@/components/admin/DeletePurchaseButton'
@@ -105,6 +108,26 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
   ])
 
   if (!user) notFound()
+
+  // Log MEMBER_VIEWED (fire-and-forget, errors swallowed inside logAdminAction)
+  try {
+    const auth = createClient()
+    const { data: { user: authUser } } = await auth.auth.getUser()
+    if (authUser) {
+      const { data: staff } = await supabase
+        .from('admin_staff').select('id, name').eq('auth_user_id', authUser.id).eq('is_active', true).single()
+      if (staff) {
+        await logAdminAction({
+          staffId:    staff.id,
+          action:     'MEMBER_VIEWED',
+          targetType: 'user',
+          targetId:   user.id,
+          userId:     user.id,
+          detail:     { staff_name: staff.name, member_id: user.member_id },
+        })
+      }
+    }
+  } catch { /* don't break page render on audit failure */ }
 
   const staffMap: Record<string, string> = Object.fromEntries(
     ((staffList || []) as StaffMember[]).map(s => [s.id, s.name])
@@ -226,6 +249,27 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
                 </p>
                 <AdjustPointsForm userId={user.id} currentPoints={user.total_points} />
               </div>
+            </div>
+
+            {/* Tags + flags */}
+            <div className="admin-card" style={{ padding: 18 }}>
+              <p style={{ fontSize: 10, color: 'var(--ink-mute)', fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', margin: '0 0 12px' }}>
+                Tags & flags
+              </p>
+              <MemberTags
+                userId={user.id}
+                initialTags={(user.tags as string[]) || []}
+                initialVip={!!user.is_vip}
+                initialBlacklisted={!!user.is_blacklisted}
+              />
+            </div>
+
+            {/* Member notes */}
+            <div className="admin-card" style={{ padding: 18 }}>
+              <p style={{ fontSize: 10, color: 'var(--ink-mute)', fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', margin: '0 0 12px' }}>
+                Internal notes
+              </p>
+              <MemberNotes userId={user.id} />
             </div>
 
             {/* Points Log */}

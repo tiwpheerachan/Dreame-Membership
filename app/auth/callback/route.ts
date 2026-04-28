@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
-  if (error || !data.session) {
+  if (error || !data.session || !data.user) {
     return NextResponse.redirect(new URL('/login?error=expired', baseUrl))
   }
 
@@ -47,16 +47,25 @@ export async function GET(request: NextRequest) {
     return response
   }
 
-  // กรณีปกติ → ตรวจสอบ user profile
-  const { data: user } = await supabase
+  // กรณีปกติ → ตรวจสอบ user profile (DB trigger should have created it).
+  // We still defensively insert here for older accounts predating the trigger,
+  // and to avoid redirect loops if the trigger ever fails.
+  let { data: profile } = await supabase
     .from('users')
     .select('id, full_name, terms_accepted_at')
     .eq('id', data.user.id)
-    .single()
+    .maybeSingle()
 
-  let redirectUrl = '/home'
-  if (!user || !user.full_name) redirectUrl = '/login?new=1'
-  else if (!user.terms_accepted_at) redirectUrl = '/terms'
+  if (!profile) {
+    await supabase.from('users').insert({
+      id: data.user.id,
+      email: data.user.email ?? null,
+      full_name: data.user.user_metadata?.full_name ?? null,
+    })
+    profile = { id: data.user.id, full_name: data.user.user_metadata?.full_name ?? null, terms_accepted_at: null }
+  }
+
+  const redirectUrl = profile.terms_accepted_at ? '/home' : '/terms'
 
   const response = NextResponse.redirect(new URL(redirectUrl, baseUrl))
   for (const { name, value, options } of sessionCookies) {

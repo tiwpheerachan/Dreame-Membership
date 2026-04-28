@@ -1,0 +1,6 @@
+-- ⚠️ DEPRECATED — split into 0003a + 0003b เพราะ Postgres ห้ามใช้ค่า enum ใหม่
+-- ในธุรกรรมเดียวกับ ALTER TYPE
+--
+-- ใช้แทน:
+--   1) 0003a_tier_enums.sql   ← รันก่อน (commit ALTER TYPE)
+--   2) 0003b_tier_promo_data.sql  ← รันต่อ (UPDATE + functions + promotion fields)

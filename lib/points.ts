@@ -1,131 +1,118 @@
 // ============================================================
-// Points System Logic
+// Points System — thin wrappers around DB functions for atomicity.
+// Heavy lifting lives in PostgreSQL functions (see supabase/schema.sql):
+//   - award_points_for_purchase(p_purchase_reg_id UUID) RETURNS INTEGER
+//   - adjust_user_points(p_user_id UUID, p_delta INTEGER) RETURNS INTEGER
 // ============================================================
 import { createServiceClient } from '@/lib/supabase/server'
-import type { MemberTier } from '@/types'
+import type { UserTier } from '@/types'
 
-const TIER_MULTIPLIER: Record<MemberTier, number> = {
-  SILVER:   1.0,
-  GOLD:     1.5,
-  PLATINUM: 2.0,
+const TIER_MULTIPLIER: Record<UserTier, number> = {
+  PLUS:   1.0,
+  PRO:    1.25,
+  ULTRA:  1.5,
+  MASTER: 2.0,
 }
 
 const TIER_THRESHOLDS = {
-  PLATINUM: 2000,
-  GOLD:     500,
-  SILVER:   0,
+  MASTER: 3501,
+  ULTRA:  1501,
+  PRO:    501,
+  PLUS:   0,
 }
 
-export function calculatePoints(totalAmount: number, tier: MemberTier): number {
+// Map legacy enum values to new tiers (DB still accepts both)
+function normalizeTier(t: string): UserTier {
+  const upper = (t || '').toUpperCase()
+  if (upper === 'PLATINUM') return 'MASTER'
+  if (upper === 'GOLD')     return 'PRO'
+  if (upper === 'SILVER')   return 'PLUS'
+  if (['PLUS','PRO','ULTRA','MASTER'].includes(upper)) return upper as UserTier
+  return 'PLUS'
+}
+
+export function calculatePoints(totalAmount: number, tier: UserTier | string): number {
+  const t = normalizeTier(String(tier))
   const base = Math.floor(totalAmount / 100) // 100 THB = 1 point
-  const multiplier = TIER_MULTIPLIER[tier] ?? 1.0
+  const multiplier = TIER_MULTIPLIER[t] ?? 1.0
   return Math.floor(base * multiplier)
 }
 
-export function getTierFromLifetimePoints(lifetimePoints: number): MemberTier {
-  if (lifetimePoints >= TIER_THRESHOLDS.PLATINUM) return 'PLATINUM'
-  if (lifetimePoints >= TIER_THRESHOLDS.GOLD) return 'GOLD'
-  return 'SILVER'
+export function getTierFromLifetimePoints(lifetimePoints: number): UserTier {
+  if (lifetimePoints >= TIER_THRESHOLDS.MASTER) return 'MASTER'
+  if (lifetimePoints >= TIER_THRESHOLDS.ULTRA)  return 'ULTRA'
+  if (lifetimePoints >= TIER_THRESHOLDS.PRO)    return 'PRO'
+  return 'PLUS'
 }
 
-export function getNextTierInfo(tier: MemberTier, lifetimePoints: number) {
-  if (tier === 'PLATINUM') return { nextTier: null, pointsNeeded: 0, progress: 100 }
-  if (tier === 'GOLD') {
-    const needed = TIER_THRESHOLDS.PLATINUM - lifetimePoints
-    const progress = Math.min(100, Math.round((lifetimePoints - 500) / (2000 - 500) * 100))
-    return { nextTier: 'PLATINUM' as MemberTier, pointsNeeded: Math.max(0, needed), progress }
+export function getNextTierInfo(tier: UserTier | string, lifetimePoints: number) {
+  const t = normalizeTier(String(tier))
+  if (t === 'MASTER') return { nextTier: null, pointsNeeded: 0, progress: 100, fromPoints: 3500, toPoints: 3500 }
+  if (t === 'ULTRA') {
+    const from = TIER_THRESHOLDS.ULTRA
+    const to   = TIER_THRESHOLDS.MASTER
+    const need = Math.max(0, to - lifetimePoints)
+    const progress = Math.min(100, Math.round(((lifetimePoints - from) / (to - from)) * 100))
+    return { nextTier: 'MASTER' as UserTier, pointsNeeded: need, progress, fromPoints: from, toPoints: to }
   }
-  const needed = TIER_THRESHOLDS.GOLD - lifetimePoints
-  const progress = Math.min(100, Math.round(lifetimePoints / 500 * 100))
-  return { nextTier: 'GOLD' as MemberTier, pointsNeeded: Math.max(0, needed), progress }
+  if (t === 'PRO') {
+    const from = TIER_THRESHOLDS.PRO
+    const to   = TIER_THRESHOLDS.ULTRA
+    const need = Math.max(0, to - lifetimePoints)
+    const progress = Math.min(100, Math.round(((lifetimePoints - from) / (to - from)) * 100))
+    return { nextTier: 'ULTRA' as UserTier, pointsNeeded: need, progress, fromPoints: from, toPoints: to }
+  }
+  // PLUS
+  const from = TIER_THRESHOLDS.PLUS
+  const to   = TIER_THRESHOLDS.PRO
+  const need = Math.max(0, to - lifetimePoints)
+  const progress = Math.min(100, Math.round((lifetimePoints / to) * 100))
+  return { nextTier: 'PRO' as UserTier, pointsNeeded: need, progress, fromPoints: from, toPoints: to }
 }
 
+// Atomic, idempotent. Returns awarded points (0 if already awarded).
 export async function awardPoints(purchaseRegId: string): Promise<{ points: number; error?: string }> {
   const supabase = createServiceClient()
-
-  try {
-    // Get purchase registration
-    const { data: reg, error: regErr } = await supabase
-      .from('purchase_registrations')
-      .select('*, users!inner(tier, total_points, lifetime_points)')
-      .eq('id', purchaseRegId)
-      .single()
-
-    if (regErr || !reg) return { points: 0, error: 'Purchase not found' }
-    if (reg.points_awarded > 0) return { points: 0, error: 'Points already awarded' }
-
-    const user = reg.users as { tier: MemberTier; total_points: number; lifetime_points: number }
-    const points = calculatePoints(Number(reg.total_amount), user.tier)
-
-    if (points <= 0) return { points: 0 }
-
-    const newTotal = user.total_points + points
-    const newLifetime = user.lifetime_points + points
-    const newTier = getTierFromLifetimePoints(newLifetime)
-
-    // Update user points
-    await supabase.from('users').update({
-      total_points: newTotal,
-      lifetime_points: newLifetime,
-      tier: newTier,
-    }).eq('id', reg.user_id)
-
-    // Log points
-    await supabase.from('points_log').insert({
-      user_id: reg.user_id,
-      purchase_reg_id: purchaseRegId,
-      points_delta: points,
-      type: 'EARNED',
-      description: `ซื้อสินค้า ${reg.model_name || reg.order_sn} ฿${Number(reg.total_amount).toLocaleString()}`,
-      balance_after: newTotal,
-      expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    })
-
-    // Mark points as awarded
-    await supabase.from('purchase_registrations').update({ points_awarded: points }).eq('id', purchaseRegId)
-
-    return { points }
-  } catch (err) {
-    console.error('[Points] awardPoints error:', err)
-    return { points: 0, error: 'Internal error' }
+  const { data, error } = await supabase.rpc('award_points_for_purchase', {
+    p_purchase_reg_id: purchaseRegId,
+  })
+  if (error) {
+    console.error('[Points] awardPoints rpc error:', error)
+    return { points: 0, error: error.message }
   }
+  return { points: Number(data) || 0 }
 }
 
+// Atomic admin point adjustment. Returns updated total_points.
 export async function adjustPoints(
   userId: string,
   delta: number,
   description: string,
-  adminId: string
+  adminId: string,
 ): Promise<{ error?: string }> {
+  if (!Number.isFinite(delta) || delta === 0) return { error: 'invalid delta' }
   const supabase = createServiceClient()
-  try {
-    const { data: user } = await supabase
-      .from('users')
-      .select('total_points, lifetime_points')
-      .eq('id', userId)
-      .single()
 
-    if (!user) return { error: 'User not found' }
-
-    const newTotal    = Math.max(0, user.total_points    + delta)
-    const newLifetime = Math.max(0, user.lifetime_points + delta)
-
-    await supabase.from('users').update({
-      total_points:    newTotal,
-      lifetime_points: newLifetime,
-      tier:            getTierFromLifetimePoints(newLifetime),
-    }).eq('id', userId)
-
-    await supabase.from('points_log').insert({
-      user_id: userId,
-      points_delta: delta,
-      type: 'ADMIN_ADJUST',
-      description,
-      balance_after: newTotal,
-    })
-
-    return {}
-  } catch (err) {
-    return { error: 'Internal error' }
+  const { data: newTotal, error: rpcError } = await supabase.rpc('adjust_user_points', {
+    p_user_id: userId,
+    p_delta:   Math.trunc(delta),
+  })
+  if (rpcError) {
+    console.error('[Points] adjustPoints rpc error:', rpcError)
+    return { error: rpcError.message }
   }
+  if (newTotal === null) return { error: 'User not found' }
+
+  const { error: logError } = await supabase.from('points_log').insert({
+    user_id:       userId,
+    points_delta:  Math.trunc(delta),
+    type:          'ADMIN_ADJUST',
+    description,
+    balance_after: newTotal,
+    adjusted_by:   adminId,
+  })
+  if (logError) {
+    console.error('[Points] points_log insert error:', logError)
+  }
+  return {}
 }

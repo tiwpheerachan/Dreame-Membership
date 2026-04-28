@@ -7,12 +7,16 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { batchVerifyOrders } from '@/lib/bigquery'
-import { awardPoints } from '@/lib/points'
 
 export async function GET(req: Request) {
-  // Security check
-  const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Security check — bail loudly if the secret isn't configured at all
+  // (otherwise the comparison `Bearer undefined` would let attackers in).
+  const expected = process.env.CRON_SECRET
+  if (!expected) {
+    console.error('[CRON] CRON_SECRET is not set — refusing to run')
+    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+  }
+  if (req.headers.get('authorization') !== `Bearer ${expected}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -67,8 +71,10 @@ export async function GET(req: Request) {
           .eq('id', pending.purchase_reg_id as string)
 
         if (!error) {
-          // Award points
-          await awardPoints(pending.purchase_reg_id as string)
+          // Award points atomically via DB function
+          await supabase.rpc('award_points_for_purchase', {
+            p_purchase_reg_id: pending.purchase_reg_id as string,
+          })
           // Remove from pending queue
           await supabase.from('pending_verifications').delete().eq('id', pending.id as string)
           verified++
