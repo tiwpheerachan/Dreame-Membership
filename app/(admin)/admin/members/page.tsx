@@ -6,17 +6,19 @@ import { formatDate } from '@/lib/utils'
 interface SearchParams { q?: string; tier?: string; tag?: string; page?: string; vip?: string }
 
 const TIER_PILL: Record<string, string> = {
+  SILVER:   'admin-pill',
+  GOLD:     'admin-pill admin-pill-amber',
+  PLATINUM: 'admin-pill admin-pill-gold',
+  // Legacy fallbacks
   PLUS:     'admin-pill',
-  PRO:      'admin-pill admin-pill-ink',
+  PRO:      'admin-pill admin-pill-amber',
   ULTRA:    'admin-pill admin-pill-amber',
   MASTER:   'admin-pill admin-pill-gold',
-  SILVER:   'admin-pill',
-  GOLD:     'admin-pill admin-pill-ink',
-  PLATINUM: 'admin-pill admin-pill-gold',
 }
 const TIER_LABEL: Record<string, string> = {
-  PLUS: 'Plus', PRO: 'Pro', ULTRA: 'Ultra', MASTER: 'Master',
-  SILVER: 'Plus', GOLD: 'Pro', PLATINUM: 'Master',
+  SILVER: 'Silver', GOLD: 'Gold', PLATINUM: 'Platinum',
+  // Legacy fallbacks
+  PLUS: 'Silver', PRO: 'Gold', ULTRA: 'Platinum', MASTER: 'Platinum',
 }
 
 export default async function MembersPage({ searchParams }: { searchParams: SearchParams }) {
@@ -75,10 +77,9 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
         </div>
         <select name="tier" defaultValue={tier} className="admin-field" style={{ width: 140 }}>
           <option value="">ทุก Tier</option>
-          <option value="PLUS">Plus</option>
-          <option value="PRO">Pro</option>
-          <option value="ULTRA">Ultra</option>
-          <option value="MASTER">Master</option>
+          <option value="SILVER">Silver</option>
+          <option value="GOLD">Gold</option>
+          <option value="PLATINUM">Platinum</option>
         </select>
         {allTags.length > 0 && (
           <select name="tag" defaultValue={tag} className="admin-field" style={{ width: 160 }}>

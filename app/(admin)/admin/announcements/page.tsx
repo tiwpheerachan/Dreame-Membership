@@ -206,10 +206,9 @@ export default function AnnouncementsPage() {
                 <select className="admin-field" value={form.audience_tier}
                   onChange={e => setForm(s => ({ ...s, audience_tier: e.target.value }))}>
                   <option value="">เลือก tier</option>
-                  <option value="PLUS">Plus</option>
-                  <option value="PRO">Pro</option>
-                  <option value="ULTRA">Ultra</option>
-                  <option value="MASTER">Master</option>
+                  <option value="SILVER">Silver</option>
+                  <option value="GOLD">Gold</option>
+                  <option value="PLATINUM">Platinum</option>
                 </select>
               )}
               <div style={{ display: 'flex', gap: 8 }}>

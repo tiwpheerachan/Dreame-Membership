@@ -4,45 +4,41 @@ import type { User } from '@/types'
 
 interface Props { user: User }
 
+// `bg` is the fallback gradient if the image fails to load — tuned per tier
+// to match the dominant tone of each background image.
 const TIER = {
-  PLUS: {
-    label: 'Plus',
-    bg: 'linear-gradient(160deg, #BFBFBF 0%, #6B6B6B 100%)',
-    accent: '#fff',
-    sub: 'rgba(255,255,255,0.75)',
-    image: '/images/member-card/plus.jpg',
-  },
-  PRO: {
-    label: 'Pro',
-    bg: 'linear-gradient(160deg, #4A4A4A 0%, #0E0E0E 100%)',
-    accent: '#fff',
-    sub: 'rgba(255,255,255,0.65)',
-    image: '/images/member-card/pro.jpg',
-  },
-  ULTRA: {
-    label: 'Ultra',
-    bg: 'linear-gradient(160deg, #E89A6B 0%, #B85A2F 100%)',
+  SILVER: {
+    label: 'Silver',
+    bg: 'linear-gradient(135deg, #C9D9E8 0%, #B8C5DA 50%, #DCD0E0 100%)',
     accent: '#fff',
     sub: 'rgba(255,255,255,0.85)',
-    image: '/images/member-card/ultra.jpg',
+    image: '/images/member-card/silver.jpg',
   },
-  MASTER: {
-    label: 'Master',
-    bg: 'linear-gradient(160deg, #C99A4D 0%, #5C3F1A 100%)',
+  GOLD: {
+    label: 'Gold',
+    bg: 'linear-gradient(135deg, #F4C28A 0%, #E89A6B 50%, #C46B3A 100%)',
     accent: '#fff',
     sub: 'rgba(255,255,255,0.85)',
-    image: '/images/member-card/master.jpg',
+    image: '/images/member-card/gold.jpg',
   },
-  // Legacy
-  SILVER:   { label: 'Plus',   bg: 'linear-gradient(160deg, #BFBFBF, #6B6B6B)', accent: '#fff', sub: 'rgba(255,255,255,0.75)', image: '/images/member-card/plus.jpg' },
-  GOLD:     { label: 'Pro',    bg: 'linear-gradient(160deg, #4A4A4A, #0E0E0E)', accent: '#fff', sub: 'rgba(255,255,255,0.65)', image: '/images/member-card/pro.jpg' },
-  PLATINUM: { label: 'Master', bg: 'linear-gradient(160deg, #C99A4D, #5C3F1A)', accent: '#fff', sub: 'rgba(255,255,255,0.85)', image: '/images/member-card/master.jpg' },
+  PLATINUM: {
+    label: 'Platinum',
+    bg: 'linear-gradient(135deg, #5EEAD4 0%, #2DD4BF 50%, #14B8A6 100%)',
+    accent: '#fff',
+    sub: 'rgba(255,255,255,0.85)',
+    image: '/images/member-card/platinum.jpg',
+  },
+  // Legacy values (PLUS/PRO/ULTRA/MASTER) — map to new tiers for safety
+  PLUS:   { label: 'Silver',   bg: 'linear-gradient(135deg, #C9D9E8, #B8C5DA 50%, #DCD0E0)', accent: '#fff', sub: 'rgba(255,255,255,0.85)', image: '/images/member-card/silver.jpg' },
+  PRO:    { label: 'Gold',     bg: 'linear-gradient(135deg, #F4C28A, #E89A6B 50%, #C46B3A)', accent: '#fff', sub: 'rgba(255,255,255,0.85)', image: '/images/member-card/gold.jpg' },
+  ULTRA:  { label: 'Platinum', bg: 'linear-gradient(135deg, #5EEAD4, #2DD4BF 50%, #14B8A6)', accent: '#fff', sub: 'rgba(255,255,255,0.85)', image: '/images/member-card/platinum.jpg' },
+  MASTER: { label: 'Platinum', bg: 'linear-gradient(135deg, #5EEAD4, #2DD4BF 50%, #14B8A6)', accent: '#fff', sub: 'rgba(255,255,255,0.85)', image: '/images/member-card/platinum.jpg' },
 }
 
 export default function MemberCard({ user }: Props) {
   const cardRef = useRef<HTMLDivElement>(null)
-  const tierKey = String(user.tier || 'PLUS').toUpperCase() as keyof typeof TIER
-  const t = TIER[tierKey] ?? TIER.PLUS
+  const tierKey = String(user.tier || 'SILVER').toUpperCase() as keyof typeof TIER
+  const t = TIER[tierKey] ?? TIER.SILVER
   const [bgOk, setBgOk] = useState(true)
 
   function onMove(e: React.MouseEvent<HTMLDivElement>) {
@@ -80,13 +76,18 @@ export default function MemberCard({ user }: Props) {
           position: 'relative', overflow: 'hidden',
           aspectRatio: '85.6 / 53.98',
           width: '100%', maxWidth: 380, margin: '0 auto',
-          borderRadius: 'var(--r-xl)',
+          borderRadius: 18,
           background: t.bg,
-          boxShadow:
-            '0 32px 80px rgba(0,0,0,0.45), 0 12px 32px rgba(0,0,0,0.35), ' +
-            '0 0 0 1px rgba(212,185,120,0.18), inset 0 1px 0 rgba(255,255,255,0.12)',
+          // Layered shadow + edge highlights for a glassy 3D card feel
+          boxShadow: [
+            '0 24px 48px rgba(0,0,0,0.32)',         // primary drop shadow
+            '0 8px 16px rgba(0,0,0,0.18)',          // tighter contact shadow
+            '0 1px 0 rgba(255,255,255,0.30) inset', // top inner highlight
+            '0 -1px 0 rgba(0,0,0,0.18) inset',      // bottom inner shade
+            '0 0 0 1px rgba(255,255,255,0.10)',     // crisp outer rim
+          ].join(', '),
           padding: '24px 26px 22px',
-          transition: 'transform 200ms ease',
+          transition: 'transform 200ms ease, box-shadow 200ms ease',
           willChange: 'transform',
           color: t.accent,
         }}
@@ -106,18 +107,26 @@ export default function MemberCard({ user }: Props) {
           />
         )}
 
-        {/* ── Dark overlay so text reads on busy images ── */}
+        {/* ── Soft contrast overlay so text reads, but image still shines through ── */}
         {bgOk && (
           <div aria-hidden style={{
             position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
-            background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.40) 100%)',
+            background:
+              'linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.28) 100%)',
           }} />
         )}
+
+        {/* ── Top gloss highlight (3D plastic/glass effect) ── */}
+        <div aria-hidden style={{
+          position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none',
+          background:
+            'linear-gradient(160deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.08) 18%, transparent 42%)',
+        }} />
 
         {/* ── Spotlight gloss following cursor ── */}
         <div aria-hidden style={{
           position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none',
-          background: 'radial-gradient(circle at var(--mx,50%) var(--my,50%), rgba(255,255,255,0.22) 0%, transparent 28%)',
+          background: 'radial-gradient(circle at var(--mx,50%) var(--my,50%), rgba(255,255,255,0.28) 0%, transparent 32%)',
           mixBlendMode: 'overlay',
         }} />
 

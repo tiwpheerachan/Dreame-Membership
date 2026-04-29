@@ -1,73 +1,76 @@
 // ============================================================
 // Points System — thin wrappers around DB functions for atomicity.
-// Heavy lifting lives in PostgreSQL functions (see supabase/schema.sql):
+// Heavy lifting lives in PostgreSQL functions (see latest migration):
 //   - award_points_for_purchase(p_purchase_reg_id UUID) RETURNS INTEGER
 //   - adjust_user_points(p_user_id UUID, p_delta INTEGER) RETURNS INTEGER
+//
+// Tier system (Migration 0005):
+//   SILVER   :   0 –  79 points  · 1.0x · 200 THB/pt web · 500 THB/pt platform
+//   GOLD     :  80 – 399 points  · 1.0x
+//   PLATINUM : 400+      points  · 1.2x  (VIP)
 // ============================================================
 import { createServiceClient } from '@/lib/supabase/server'
-import type { UserTier } from '@/types'
+import type { UserTier, SaleChannel } from '@/types'
+import {
+  TIER_THRESHOLDS,
+  TIER_MULTIPLIER,
+  EARN_DIVISOR_BY_CHANNEL,
+} from '@/types'
 
-const TIER_MULTIPLIER: Record<UserTier, number> = {
-  PLUS:   1.0,
-  PRO:    1.25,
-  ULTRA:  1.5,
-  MASTER: 2.0,
-}
-
-const TIER_THRESHOLDS = {
-  MASTER: 3501,
-  ULTRA:  1501,
-  PRO:    501,
-  PLUS:   0,
-}
-
-// Map legacy enum values to new tiers (DB still accepts both)
-function normalizeTier(t: string): UserTier {
+// Map any historical tier name to the current 3-tier system
+export function normalizeTier(t: string): UserTier {
   const upper = (t || '').toUpperCase()
-  if (upper === 'PLATINUM') return 'MASTER'
-  if (upper === 'GOLD')     return 'PRO'
-  if (upper === 'SILVER')   return 'PLUS'
-  if (['PLUS','PRO','ULTRA','MASTER'].includes(upper)) return upper as UserTier
-  return 'PLUS'
+  if (upper === 'SILVER' || upper === 'PLUS')   return 'SILVER'
+  if (upper === 'GOLD'   || upper === 'PRO')    return 'GOLD'
+  if (upper === 'PLATINUM' || upper === 'ULTRA' || upper === 'MASTER') return 'PLATINUM'
+  return 'SILVER'
 }
 
-export function calculatePoints(totalAmount: number, tier: UserTier | string): number {
+// ----------------------------------------------------------------
+// Earn formula (must mirror award_points_for_purchase in 0005 SQL)
+// ----------------------------------------------------------------
+export function calculatePoints(
+  totalAmount: number,
+  tier: UserTier | string,
+  channel: SaleChannel | string = 'OTHER',
+): number {
   const t = normalizeTier(String(tier))
-  const base = Math.floor(totalAmount / 100) // 100 THB = 1 point
+  const c = String(channel).toUpperCase() as SaleChannel
+  const divisor = EARN_DIVISOR_BY_CHANNEL[c] ?? 500
+  const base = Math.floor(totalAmount / divisor)
   const multiplier = TIER_MULTIPLIER[t] ?? 1.0
   return Math.floor(base * multiplier)
 }
 
 export function getTierFromLifetimePoints(lifetimePoints: number): UserTier {
-  if (lifetimePoints >= TIER_THRESHOLDS.MASTER) return 'MASTER'
-  if (lifetimePoints >= TIER_THRESHOLDS.ULTRA)  return 'ULTRA'
-  if (lifetimePoints >= TIER_THRESHOLDS.PRO)    return 'PRO'
-  return 'PLUS'
+  if (lifetimePoints >= TIER_THRESHOLDS.PLATINUM) return 'PLATINUM'
+  if (lifetimePoints >= TIER_THRESHOLDS.GOLD)     return 'GOLD'
+  return 'SILVER'
 }
 
 export function getNextTierInfo(tier: UserTier | string, lifetimePoints: number) {
   const t = normalizeTier(String(tier))
-  if (t === 'MASTER') return { nextTier: null, pointsNeeded: 0, progress: 100, fromPoints: 3500, toPoints: 3500 }
-  if (t === 'ULTRA') {
-    const from = TIER_THRESHOLDS.ULTRA
-    const to   = TIER_THRESHOLDS.MASTER
+  if (t === 'PLATINUM') {
+    return {
+      nextTier: null,
+      pointsNeeded: 0, progress: 100,
+      fromPoints: TIER_THRESHOLDS.PLATINUM,
+      toPoints:   TIER_THRESHOLDS.PLATINUM,
+    }
+  }
+  if (t === 'GOLD') {
+    const from = TIER_THRESHOLDS.GOLD
+    const to   = TIER_THRESHOLDS.PLATINUM
     const need = Math.max(0, to - lifetimePoints)
     const progress = Math.min(100, Math.round(((lifetimePoints - from) / (to - from)) * 100))
-    return { nextTier: 'MASTER' as UserTier, pointsNeeded: need, progress, fromPoints: from, toPoints: to }
+    return { nextTier: 'PLATINUM' as UserTier, pointsNeeded: need, progress, fromPoints: from, toPoints: to }
   }
-  if (t === 'PRO') {
-    const from = TIER_THRESHOLDS.PRO
-    const to   = TIER_THRESHOLDS.ULTRA
-    const need = Math.max(0, to - lifetimePoints)
-    const progress = Math.min(100, Math.round(((lifetimePoints - from) / (to - from)) * 100))
-    return { nextTier: 'ULTRA' as UserTier, pointsNeeded: need, progress, fromPoints: from, toPoints: to }
-  }
-  // PLUS
-  const from = TIER_THRESHOLDS.PLUS
-  const to   = TIER_THRESHOLDS.PRO
+  // SILVER
+  const from = TIER_THRESHOLDS.SILVER
+  const to   = TIER_THRESHOLDS.GOLD
   const need = Math.max(0, to - lifetimePoints)
   const progress = Math.min(100, Math.round((lifetimePoints / to) * 100))
-  return { nextTier: 'PRO' as UserTier, pointsNeeded: need, progress, fromPoints: from, toPoints: to }
+  return { nextTier: 'GOLD' as UserTier, pointsNeeded: need, progress, fromPoints: from, toPoints: to }
 }
 
 // Atomic, idempotent. Returns awarded points (0 if already awarded).

@@ -22,6 +22,7 @@ dist/
 .env.production.local
 
 # ── Credentials & Secrets ─────────────────
+secrets/
 bq-credentials.json
 *.json.key
 *-credentials.json

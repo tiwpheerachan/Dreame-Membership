@@ -6,24 +6,39 @@ import type { BQOrderData } from '@/types'
 
 let bqClient: BigQuery | null = null
 
+const PLACEHOLDER_PATHS = new Set([
+  '/path/to/service-account.json',
+  './service-account.json',
+])
+
 function getBQClient(): BigQuery {
-  if (!bqClient) {
-    const credentialsJson = process.env.BQ_CREDENTIALS_JSON
-    if (credentialsJson) {
-      // รองรับทั้ง raw JSON และ base64
-      let parsed: string = credentialsJson
-      try {
-        // ลอง parse ตรงๆ ก่อน
-        JSON.parse(credentialsJson)
-      } catch {
-        // ถ้า parse ไม่ได้ แสดงว่าเป็น base64
-        parsed = Buffer.from(credentialsJson, 'base64').toString('utf-8')
-      }
-      const credentials = JSON.parse(parsed)
-      bqClient = new BigQuery({ projectId: process.env.BQ_PROJECT_ID, credentials })
-    } else {
-      bqClient = new BigQuery({ projectId: process.env.BQ_PROJECT_ID })
+  if (bqClient) return bqClient
+
+  const credentialsJson = process.env.BQ_CREDENTIALS_JSON
+  const adcPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
+
+  // Detect the .env.example placeholder being copied verbatim — without this
+  // check the gcloud client tries to open `/path/to/service-account.json`,
+  // throws ENOENT mid-query, and the caller sees a generic "not found".
+  if (!credentialsJson && adcPath && PLACEHOLDER_PATHS.has(adcPath)) {
+    throw new Error(
+      `BigQuery is misconfigured: GOOGLE_APPLICATION_CREDENTIALS is the placeholder "${adcPath}". ` +
+      `Set BQ_CREDENTIALS_JSON to the service-account JSON (raw or base64), ` +
+      `or point GOOGLE_APPLICATION_CREDENTIALS to a real key file.`,
+    )
+  }
+
+  if (credentialsJson) {
+    let parsed: string = credentialsJson
+    try {
+      JSON.parse(credentialsJson)
+    } catch {
+      parsed = Buffer.from(credentialsJson, 'base64').toString('utf-8')
     }
+    const credentials = JSON.parse(parsed)
+    bqClient = new BigQuery({ projectId: process.env.BQ_PROJECT_ID, credentials })
+  } else {
+    bqClient = new BigQuery({ projectId: process.env.BQ_PROJECT_ID })
   }
   return bqClient
 }
@@ -32,13 +47,24 @@ const PROJECT = process.env.BQ_PROJECT_ID ?? ''
 const DATASET = process.env.BQ_DATASET ?? 'Dashboard'
 
 // ============================================================
-// Verify single order by order_sn
-// Strategy:
-//   1) Try v_dreame_orders (pre-aggregated view, may not exist on all setups)
-//   2) Fallback to v_dreame_order_items aggregated on the fly
+// Verbose verify — distinguishes between "no row in BQ" and "BQ failed".
+// Used by admin endpoints so we can show the real error instead of
+// silently returning "not found" on auth/config issues.
 // ============================================================
-export async function verifyOrderInBQ(order_sn: string): Promise<BQOrderData | null> {
-  const bq = getBQClient()
+export type VerifyResult =
+  | { status: 'found'; data: BQOrderData }
+  | { status: 'not_found' }
+  | { status: 'error'; error: string; attempted: { view: string; error: string }[] }
+
+export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyResult> {
+  let bq: BigQuery
+  try {
+    bq = getBQClient()
+  } catch (e) {
+    return { status: 'error', error: (e as Error).message, attempted: [] }
+  }
+
+  const attempted: { view: string; error: string }[] = []
 
   // ── Attempt 1: v_dreame_orders ──
   try {
@@ -55,10 +81,9 @@ export async function verifyOrderInBQ(order_sn: string): Promise<BQOrderData | n
       `,
       params: { order_sn },
     })
-    if (rows && rows.length > 0) return mapRow(rows[0])
+    if (rows && rows.length > 0) return { status: 'found', data: mapRow(rows[0]) }
   } catch (e) {
-    // table not found / permission / view doesn't exist — try fallback
-    console.warn('[BQ] v_dreame_orders unavailable, falling back to v_dreame_order_items', (e as Error).message)
+    attempted.push({ view: 'v_dreame_orders', error: (e as Error).message })
   }
 
   // ── Attempt 2: aggregate from v_dreame_order_items ──
@@ -82,11 +107,29 @@ export async function verifyOrderInBQ(order_sn: string): Promise<BQOrderData | n
       `,
       params: { order_sn },
     })
-    if (rows && rows.length > 0) return mapRow(rows[0])
+    if (rows && rows.length > 0) return { status: 'found', data: mapRow(rows[0]) }
   } catch (e) {
-    console.error('[BQ] verifyOrderInBQ fallback error:', e)
+    attempted.push({ view: 'v_dreame_order_items', error: (e as Error).message })
   }
 
+  // If both attempts errored, surface that — otherwise it's a real "not found"
+  if (attempted.length === 2) {
+    return { status: 'error', error: attempted[1].error, attempted }
+  }
+  return { status: 'not_found' }
+}
+
+// ============================================================
+// Verify single order by order_sn (back-compat helper for user-facing code).
+// Returns null on either "not found" or "error" — callers that need to
+// distinguish should use verifyOrderInBQVerbose instead.
+// ============================================================
+export async function verifyOrderInBQ(order_sn: string): Promise<BQOrderData | null> {
+  const result = await verifyOrderInBQVerbose(order_sn)
+  if (result.status === 'found') return result.data
+  if (result.status === 'error') {
+    console.error('[BQ] verifyOrderInBQ failed:', result.error, result.attempted)
+  }
   return null
 }
 
@@ -117,7 +160,13 @@ function mapRow(row: Record<string, unknown>): BQOrderData {
 // ============================================================
 export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData[]> {
   if (orderSns.length === 0) return []
-  const bq = getBQClient()
+  let bq: BigQuery
+  try {
+    bq = getBQClient()
+  } catch (e) {
+    console.error('[BQ] batchVerifyOrders client init failed:', (e as Error).message)
+    return []
+  }
 
   // ── Attempt 1: v_dreame_orders ──
   try {
@@ -166,7 +215,7 @@ export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData
 }
 
 // ============================================================
-// Search orders by user info (optional - for admin lookup)
+// Search orders by keyword (admin lookup)
 // ============================================================
 export async function searchOrdersByKeyword(keyword: string, limit = 20): Promise<BQOrderData[]> {
   try {

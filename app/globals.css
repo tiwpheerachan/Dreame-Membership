@@ -33,15 +33,22 @@
   --gold-glow:   #F5EBD0;
   --gold-line:   rgba(160,120,43,0.22);
 
-  /* ── Tier colors (matching Dreame website) ── */
-  --tier-plus-from:   #BFBFBF;
-  --tier-plus-to:     #6B6B6B;
-  --tier-pro-from:    #4A4A4A;
-  --tier-pro-to:      #1A1A1A;
-  --tier-ultra-from:  #E89A6B;
-  --tier-ultra-to:    #B85A2F;
-  --tier-master-from: #C99A4D;
-  --tier-master-to:   #5C3F1A;
+  /* ── Tier colors (Silver / Gold / Platinum) ── */
+  --tier-silver-from:   #C9D9E8;
+  --tier-silver-to:     #8DA9BC;
+  --tier-gold-from:     #F4C28A;
+  --tier-gold-to:       #C46B3A;
+  --tier-platinum-from: #5EEAD4;
+  --tier-platinum-to:   #14B8A6;
+  /* Legacy aliases — kept so any stray .tier-plus class doesn't break */
+  --tier-plus-from:   #C9D9E8;
+  --tier-plus-to:     #8DA9BC;
+  --tier-pro-from:    #F4C28A;
+  --tier-pro-to:      #C46B3A;
+  --tier-ultra-from:  #5EEAD4;
+  --tier-ultra-to:    #14B8A6;
+  --tier-master-from: #5EEAD4;
+  --tier-master-to:   #14B8A6;
 
   /* ── Status ── */
   --green:      #2E7A3D;
@@ -214,10 +221,14 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; line-he
   pointer-events: none; z-index: 1;
 }
 
-.tier-plus   { background: linear-gradient(160deg, var(--tier-plus-from), var(--tier-plus-to)); }
-.tier-pro    { background: linear-gradient(160deg, var(--tier-pro-from), var(--tier-pro-to)); }
-.tier-ultra  { background: linear-gradient(160deg, var(--tier-ultra-from), var(--tier-ultra-to)); }
-.tier-master { background: linear-gradient(160deg, var(--tier-master-from), var(--tier-master-to)); }
+.tier-silver   { background: linear-gradient(160deg, var(--tier-silver-from), var(--tier-silver-to)); }
+.tier-gold     { background: linear-gradient(160deg, var(--tier-gold-from), var(--tier-gold-to)); }
+.tier-platinum { background: linear-gradient(160deg, var(--tier-platinum-from), var(--tier-platinum-to)); }
+/* Legacy class aliases */
+.tier-plus   { background: linear-gradient(160deg, var(--tier-silver-from), var(--tier-silver-to)); }
+.tier-pro    { background: linear-gradient(160deg, var(--tier-gold-from), var(--tier-gold-to)); }
+.tier-ultra  { background: linear-gradient(160deg, var(--tier-platinum-from), var(--tier-platinum-to)); }
+.tier-master { background: linear-gradient(160deg, var(--tier-platinum-from), var(--tier-platinum-to)); }
 
 /* ── Animations ── */
 @keyframes fade-up {
@@ -300,6 +311,123 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; line-he
 @keyframes number-shine {
   0%   { background-position: -200% center; }
   100% { background-position: 200% center; }
+}
+
+/* Diagonal shooting star — travels across the hero with a fading trail */
+@keyframes shooting-star {
+  0%   { transform: translate3d(0, 0, 0) rotate(35deg); opacity: 0; }
+  6%   { opacity: 1; }
+  60%  { opacity: 1; }
+  100% { transform: translate3d(520px, 360px, 0) rotate(35deg); opacity: 0; }
+}
+.shooting-star {
+  position: absolute;
+  width: 90px; height: 1.5px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(255,255,255,0.0) 10%,
+    rgba(255,255,255,0.55) 50%,
+    rgba(255,255,255,1) 100%);
+  border-radius: 1px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px rgba(255,255,255,0.6));
+  animation: shooting-star 6s linear infinite;
+}
+.shooting-star::after {
+  content: '';
+  position: absolute; right: -3px; top: -3px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 14px 3px rgba(255,255,255,0.85), 0 0 32px 6px rgba(255,255,255,0.35);
+}
+
+/* Soft "twinkle" for static sparkle dots on light backgrounds */
+@keyframes twinkle {
+  0%,100% { opacity: 0.25; transform: scale(0.85); }
+  50%     { opacity: 1;    transform: scale(1.15); }
+}
+.twinkle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: twinkle 3s ease-in-out infinite;
+}
+
+/* Slow-drifting particle: rises while gently swaying side-to-side */
+@keyframes drift-up {
+  0%   { transform: translate3d(0, 0, 0) scale(0.7); opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { transform: translate3d(8px, -60px, 0) scale(1); opacity: 0.9; }
+  90%  { opacity: 0.8; }
+  100% { transform: translate3d(-6px, -130px, 0) scale(0.6); opacity: 0; }
+}
+.drift {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: drift-up 7s ease-in-out infinite;
+}
+
+/* Pulsing ring that radiates outward — used as ambient halos */
+@keyframes pulse-ring {
+  0%   { transform: scale(0.6); opacity: 0.55; }
+  80%  { opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+.pulse-ring {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: pulse-ring 4.5s ease-out infinite;
+}
+
+/* Cross-shaped sparkle — two light rays that pulse in size */
+@keyframes spark-flash {
+  0%,100% { transform: scale(0.4) rotate(0deg);   opacity: 0; }
+  40%     { transform: scale(1)   rotate(45deg);  opacity: 1; }
+  60%     { transform: scale(1.1) rotate(70deg);  opacity: 0.85; }
+}
+.spark-cross {
+  position: absolute;
+  pointer-events: none;
+  animation: spark-flash 3.2s ease-in-out infinite;
+}
+.spark-cross::before, .spark-cross::after {
+  content: '';
+  position: absolute; left: 50%; top: 50%;
+  width: 26px; height: 1.6px;
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+.spark-cross::after { transform: translate(-50%, -50%) rotate(90deg); }
+
+/* Slow background "aurora" blobs that drift behind the card */
+@keyframes aurora {
+  0%,100% { transform: translate3d(0, 0, 0) scale(1); }
+  33%     { transform: translate3d(-18px, 12px, 0) scale(1.08); }
+  66%     { transform: translate3d(20px, -10px, 0) scale(0.94); }
+}
+.aurora {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(40px);
+  pointer-events: none;
+  animation: aurora 12s ease-in-out infinite;
+}
+
+/* Faint tech grid overlay used on the hero behind the card */
+.tech-grid {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.40) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.40) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 80%);
+  opacity: 0.35;
+  pointer-events: none;
 }
 
 /* shimmer sweep across a card */

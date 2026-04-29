@@ -5,6 +5,8 @@ export type AuditAction =
   | 'PURCHASE_REJECTED'
   | 'PURCHASE_ADDED'
   | 'PURCHASE_DELETED'
+  | 'PURCHASE_BQ_RECHECKED'
+  | 'BQ_LOOKUP'
   | 'POINTS_ADJUSTED'
   | 'COUPON_CREATED'
   | 'MEMBER_VIEWED'
@@ -13,7 +15,7 @@ interface LogParams {
   staffId:     string
   action:      AuditAction
   targetType:  'purchase' | 'user' | 'points' | 'coupon'
-  targetId:    string
+  targetId?:   string  // UUID; omit for actions that target a non-UUID identifier (e.g. an order_sn)
   userId?:     string
   detail?:     Record<string, unknown>
 }
@@ -25,7 +27,7 @@ export async function logAdminAction(params: LogParams) {
       staff_id:    params.staffId,
       action_type: params.action,
       target_type: params.targetType,
-      target_id:   params.targetId,
+      target_id:   params.targetId || null,
       user_id:     params.userId || null,
       detail:      params.detail || null,
     })

@@ -179,27 +179,83 @@ export default function RegisterPage() {
                 </button>
               </div>
 
-              {verifyStatus === 'verified' && verifiedData && (
-                <div style={{
-                  marginTop: 12, padding: 14,
-                  background: 'var(--green-soft)',
-                  border: '1px solid rgba(64,107,63,0.18)',
-                  borderRadius: 'var(--r-md)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                    <CheckCircle size={14} color="var(--green)" />
-                    <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--green)', margin: 0 }}>
-                      ตรวจสอบสำเร็จ
-                    </p>
+              {verifyStatus === 'verified' && verifiedData && (() => {
+                const items = (verifiedData.items as Array<Record<string, unknown>>) || []
+                const orderDate = verifiedData.order_date as string | undefined
+                const totalQty = items.reduce((s, it) => s + Number(it.quantity || 0), 0)
+                return (
+                  <div style={{
+                    marginTop: 12, padding: 14,
+                    background: 'var(--green-soft)',
+                    border: '1px solid rgba(64,107,63,0.18)',
+                    borderRadius: 'var(--r-md)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                      <CheckCircle size={14} color="var(--green)" />
+                      <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--green)', margin: 0 }}>
+                        ตรวจสอบสำเร็จ
+                      </p>
+                    </div>
+
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '1fr 1fr',
+                      gap: '6px 14px', fontSize: 12, color: 'var(--ink-soft)',
+                      paddingBottom: items.length > 0 ? 10 : 0,
+                      marginBottom: items.length > 0 ? 10 : 0,
+                      borderBottom: items.length > 0 ? '1px solid rgba(64,107,63,0.18)' : 'none',
+                    }}>
+                      <div>Platform: <strong>{verifiedData.platform as string}</strong></div>
+                      {orderDate && (
+                        <div>วันที่ซื้อ: <strong>{orderDate}</strong></div>
+                      )}
+                      <div>ยอดรวม: <strong>฿{Number(verifiedData.total_amount).toLocaleString()}</strong></div>
+                      {totalQty > 0 && (
+                        <div>จำนวน: <strong>{totalQty} ชิ้น</strong></div>
+                      )}
+                    </div>
+
+                    {items.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <p style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>
+                          รายการสินค้า ({items.length})
+                        </p>
+                        {items.map((it, i) => {
+                          const qty = Number(it.quantity || 0)
+                          const price = Number(it.price || 0)
+                          const itemName = (it.item_name as string) || ''
+                          const modelName = (it.model_name as string) || ''
+                          const sku = (it.item_sku as string) || (it.model_sku as string) || ''
+                          const showModel = modelName && itemName && modelName !== itemName
+                          return (
+                            <div key={i} style={{
+                              padding: '8px 10px',
+                              background: 'rgba(255,255,255,0.6)',
+                              borderRadius: 'var(--r-sm)',
+                              fontSize: 11.5, color: 'var(--ink)',
+                            }}>
+                              <p style={{ margin: '0 0 2px', fontWeight: 600, lineHeight: 1.35 }}>
+                                {itemName || modelName || '—'}
+                              </p>
+                              {showModel && (
+                                <p style={{ margin: '0 0 2px', fontSize: 10.5, color: 'var(--ink-mute)' }}>
+                                  รุ่น: {modelName}
+                                </p>
+                              )}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+                                <span>{sku}</span>
+                                <span>
+                                  ฿{price.toLocaleString()} × {qty} ={' '}
+                                  <strong style={{ color: 'var(--ink)' }}>฿{(price * qty).toLocaleString()}</strong>
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '0 0 4px' }}>
-                    Platform: <strong>{verifiedData.platform as string}</strong>
-                  </p>
-                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: 0 }}>
-                    ยอดรวม: <strong>฿{Number(verifiedData.total_amount).toLocaleString()}</strong>
-                  </p>
-                </div>
-              )}
+                )
+              })()}
               {verifyStatus === 'pending' && (
                 <div style={{
                   marginTop: 12, padding: 14, display: 'flex', gap: 10,

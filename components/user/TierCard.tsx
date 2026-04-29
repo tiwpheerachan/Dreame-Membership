@@ -8,14 +8,13 @@ interface Props {
 }
 
 const TIERS: Record<UserTier, { label: string; range: string; image: string; cls: string }> = {
-  PLUS:   { label: 'Plus',   range: '0 – 500 Points',     image: '/images/tiers/plus.png',   cls: 'tier-plus' },
-  PRO:    { label: 'Pro',    range: '501 – 1,500 Points', image: '/images/tiers/pro.png',    cls: 'tier-pro' },
-  ULTRA:  { label: 'Ultra',  range: '1,501 – 3,500 Points', image: '/images/tiers/ultra.png', cls: 'tier-ultra' },
-  MASTER: { label: 'Master', range: '3,500+ Points',      image: '/images/tiers/master.png', cls: 'tier-master' },
+  SILVER:   { label: 'Silver',   range: '0 – 79 Points',    image: '/images/tiers/silver.png',   cls: 'tier-silver' },
+  GOLD:     { label: 'Gold',     range: '80 – 399 Points',  image: '/images/tiers/gold.png',     cls: 'tier-gold' },
+  PLATINUM: { label: 'Platinum', range: '400+ Points',      image: '/images/tiers/platinum.png', cls: 'tier-platinum' },
 }
 
 export default function TierCard({ tier, isCurrent }: Props) {
-  const t = TIERS[tier] ?? TIERS.PLUS
+  const t = TIERS[tier] ?? TIERS.SILVER
   return (
     <div className={`tier-card ${t.cls}`} style={{
       boxShadow: isCurrent ? '0 0 0 3px var(--gold), var(--shadow-2)' : 'var(--shadow-1)',

@@ -84,14 +84,17 @@ export async function POST(req: Request) {
 
     if (regError) throw regError
 
-    // Add to pending queue if not verified, else award points atomically
-    if (!bqData) {
+    // Award points atomically if BQ-verified at registration time.
+    // Only enqueue for cron retry when the channel is ONLINE — STORE/ONSITE
+    // orders will never appear in BigQuery and must be approved by an admin,
+    // so adding them to pending_verifications wastes BQ quota and retry slots.
+    if (bqData) {
+      await service.rpc('award_points_for_purchase', { p_purchase_reg_id: reg.id })
+    } else if (channel_type === 'ONLINE') {
       await service.from('pending_verifications').insert({
         purchase_reg_id: reg.id,
         order_sn,
       })
-    } else {
-      await service.rpc('award_points_for_purchase', { p_purchase_reg_id: reg.id })
     }
 
     // Only update profile address if user *typed* one in the form AND

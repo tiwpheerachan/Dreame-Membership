@@ -2,11 +2,11 @@
 // DREAME MEMBERSHIP — Type Definitions (single source of truth)
 // ============================================================
 
-export type UserTier       = 'PLUS' | 'PRO' | 'ULTRA' | 'MASTER'
+export type UserTier       = 'SILVER' | 'GOLD' | 'PLATINUM'
 // Backward-compat alias — prefer UserTier in new code
 export type MemberTier     = UserTier
 // Legacy enum values still present in DB but no longer used in new code
-export type LegacyUserTier = 'SILVER' | 'GOLD' | 'PLATINUM'
+export type LegacyUserTier = 'PLUS' | 'PRO' | 'ULTRA' | 'MASTER'
 export type ChannelType    = 'ONLINE' | 'ONSITE'
 export type SaleChannel    = 'STORE' | 'SHOPEE' | 'LAZADA' | 'WEBSITE' | 'TIKTOK' | 'OTHER'
 export type PurchaseStatus = 'PENDING' | 'BQ_VERIFIED' | 'ADMIN_APPROVED' | 'REJECTED'
@@ -161,39 +161,48 @@ export interface VerifyOrderResponse {
 }
 
 // ── Constants ──
+// Lifetime-points lower bound for each tier
 export const TIER_THRESHOLDS: Record<UserTier, number> = {
-  PLUS:   0,
-  PRO:    501,
-  ULTRA:  1501,
-  MASTER: 3501,
+  SILVER:    0,
+  GOLD:     80,
+  PLATINUM: 400,
 }
 
+// Points multiplier (Platinum is the only tier with a VIP boost)
 export const TIER_MULTIPLIER: Record<UserTier, number> = {
-  PLUS:   1.0,
-  PRO:    1.25,
-  ULTRA:  1.5,
-  MASTER: 2.0,
+  SILVER:   1.0,
+  GOLD:     1.0,
+  PLATINUM: 1.2,
 }
 
 export const TIER_COLORS: Record<UserTier, string> = {
-  PLUS:   '#9CA3AF',  // silver
-  PRO:    '#1F1F1F',  // black
-  ULTRA:  '#E07A3C',  // orange
-  MASTER: '#A0782B',  // gold
+  SILVER:   '#C9D9E8',  // pearl/silver
+  GOLD:     '#E89A6B',  // warm orange-gold
+  PLATINUM: '#5EEAD4',  // mint/teal
 }
 
 export const TIER_LABEL: Record<UserTier, string> = {
-  PLUS:   'Plus',
-  PRO:    'Pro',
-  ULTRA:  'Ultra',
-  MASTER: 'Master',
+  SILVER:   'Silver',
+  GOLD:     'Gold',
+  PLATINUM: 'Platinum',
 }
 
 export const TIER_RANGE: Record<UserTier, string> = {
-  PLUS:   '0 – 500 points',
-  PRO:    '501 – 1,500 points',
-  ULTRA:  '1,501 – 3,500 points',
-  MASTER: '3,500+ points',
+  SILVER:   '0 – 79 points',
+  GOLD:     '80 – 399 points',
+  PLATINUM: '400+ points',
+}
+
+// Earn divisor: how many THB equal 1 point, depending on the sales channel.
+// Web/store rewards are 2.5× more generous than platform purchases to encourage
+// the strategic shift from marketplace to first-party channels.
+export const EARN_DIVISOR_BY_CHANNEL: Record<SaleChannel, number> = {
+  WEBSITE: 200,
+  STORE:   200,
+  SHOPEE:  500,
+  LAZADA:  500,
+  TIKTOK:  500,
+  OTHER:   500,
 }
 
 export const CHANNEL_LABELS: Record<SaleChannel, string> = {

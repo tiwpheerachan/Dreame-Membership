@@ -31,7 +31,7 @@ export default async function PointsPage() {
   ])
   if (!user) redirect('/terms')
 
-  const userTier = (user.tier || 'PLUS') as UserTier
+  const userTier = (user.tier || 'SILVER') as UserTier
   const tierInfo = getNextTierInfo(userTier, user.lifetime_points)
   const tierLabel = userTier.charAt(0) + userTier.slice(1).toLowerCase()
 

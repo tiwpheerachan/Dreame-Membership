@@ -74,10 +74,9 @@ export default function CampaignsPage() {
                 <label style={{ fontSize: 11, color: 'var(--ink-mute)', display: 'block', marginBottom: 4, fontWeight: 600 }}>Tier</label>
                 <select className="admin-field" value={form.tier} onChange={e => setForm(s => ({...s, tier: e.target.value}))}>
                   <option value="">ทั้งหมด</option>
-                  <option value="PLUS">Plus</option>
-                  <option value="PRO">Pro</option>
-                  <option value="ULTRA">Ultra</option>
-                  <option value="MASTER">Master</option>
+                  <option value="SILVER">Silver</option>
+                  <option value="GOLD">Gold</option>
+                  <option value="PLATINUM">Platinum</option>
                 </select>
               </div>
               <div>

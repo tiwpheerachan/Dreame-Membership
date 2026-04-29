@@ -23,11 +23,15 @@ export async function GET(req: Request) {
   const supabase = createServiceClient()
 
   try {
-    // Get all pending online orders (created within last 7 days, not yet BQ verified)
+    // Only retry ONLINE orders. STORE/ONSITE rows can never appear in BQ and
+    // must be admin-approved instead. The register endpoint already gates
+    // inserts by channel_type, but the inner join here also protects against
+    // legacy rows from before that gate existed.
     const { data: pendingQueue } = await supabase
       .from('pending_verifications')
-      .select('id, purchase_reg_id, order_sn, retry_count')
-      .lt('retry_count', 48)  // max 48 retries = 2 days
+      .select('id, purchase_reg_id, order_sn, retry_count, purchase_registrations!inner(channel_type)')
+      .eq('purchase_registrations.channel_type', 'ONLINE')
+      .lt('retry_count', 48)  // 48 × 1h cron = 2 days; BQ refresh is 6h so ~8 real chances
       .order('created_at', { ascending: true })
       .limit(200)
 
@@ -35,7 +39,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ message: 'No pending orders', processed: 0 })
     }
 
-    const orderSns = pendingQueue.map((p: Record<string, string>) => p.order_sn)
+    type PendingRow = {
+      id: string
+      purchase_reg_id: string
+      order_sn: string
+      retry_count: number
+    }
+    const queue = pendingQueue as unknown as PendingRow[]
+    const orderSns = queue.map(p => p.order_sn)
     console.log(`[CRON] Checking ${orderSns.length} pending orders...`)
 
     // Batch query BigQuery
@@ -44,8 +55,8 @@ export async function GET(req: Request) {
 
     let verified = 0, failed = 0
 
-    for (const pending of pendingQueue as Record<string, unknown>[]) {
-      const bqData = foundMap.get(pending.order_sn as string)
+    for (const pending of queue) {
+      const bqData = foundMap.get(pending.order_sn)
 
       if (bqData) {
         // Found in BQ → update registration
@@ -68,23 +79,23 @@ export async function GET(req: Request) {
             warranty_start: purchaseDate.toISOString().split('T')[0],
             warranty_end: warrantyEnd.toISOString().split('T')[0],
           })
-          .eq('id', pending.purchase_reg_id as string)
+          .eq('id', pending.purchase_reg_id)
 
         if (!error) {
           // Award points atomically via DB function
           await supabase.rpc('award_points_for_purchase', {
-            p_purchase_reg_id: pending.purchase_reg_id as string,
+            p_purchase_reg_id: pending.purchase_reg_id,
           })
           // Remove from pending queue
-          await supabase.from('pending_verifications').delete().eq('id', pending.id as string)
+          await supabase.from('pending_verifications').delete().eq('id', pending.id)
           verified++
         }
       } else {
         // Not found yet → increment retry count
         await supabase
           .from('pending_verifications')
-          .update({ retry_count: Number(pending.retry_count) + 1, last_retry_at: new Date().toISOString() })
-          .eq('id', pending.id as string)
+          .update({ retry_count: pending.retry_count + 1, last_retry_at: new Date().toISOString() })
+          .eq('id', pending.id)
         failed++
       }
     }

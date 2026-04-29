@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     } else {
       return NextResponse.json({
         status: 'PENDING',
-        message: 'ยังไม่พบข้อมูลใน BigQuery ระบบจะตรวจสอบอัตโนมัติทุก 1 ชั่วโมง',
+        message: 'ยังไม่พบข้อมูลใน BigQuery (ระบบอัปเดตทุก 6 ชั่วโมง) ลงทะเบียนต่อได้เลย ระบบจะตรวจสอบให้อัตโนมัติ',
       })
     }
   } catch (error) {
