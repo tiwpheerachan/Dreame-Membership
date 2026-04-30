@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Tag } from 'lucide-react'
 import type { Promotion } from '@/types'
@@ -10,12 +10,18 @@ export default async function PromotionsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: promos } = await supabase
+  // Bypass RLS for the promotion fetch — public marketing content,
+  // server-side render only. Avoids deployment issues when RLS policies
+  // aren't applied on the production DB.
+  const service = createServiceClient()
+  const { data: promos, error: promosErr } = await service
     .from('promotions')
     .select('*')
     .eq('is_active', true)
     .order('sort_order', { ascending: false })
     .order('created_at', { ascending: false })
+
+  if (promosErr) console.error('[promotions] query failed:', promosErr)
 
   const heroPromos   = (promos || []).filter((p: Promotion) => p.layout === 'hero')
   const cardPromos   = (promos || []).filter((p: Promotion) => p.layout === 'card')

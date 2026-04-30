@@ -90,6 +90,12 @@ export default function MemberCard({ user }: Props) {
           transition: 'transform 200ms ease, box-shadow 200ms ease',
           willChange: 'transform',
           color: t.accent,
+          // iOS Safari fix: ensure the rounded corners clip the inner <img>
+          // even when an ancestor (.card-mount) has a transform applied.
+          // Without this, WebKit can render the image past the radius
+          // because the GPU compositing layer skips the corner mask.
+          WebkitMaskImage: '-webkit-radial-gradient(white, black)',
+          isolation: 'isolate',
         }}
       >
         {/* ── Background image (optional, falls back to gradient) ── */}

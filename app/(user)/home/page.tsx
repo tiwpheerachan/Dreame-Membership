@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -29,17 +29,21 @@ export default async function HomePage() {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
-  const [{ data: user }, { data: purchases }, { data: promos }] = await Promise.all([
+  // Promotions: use the service client so RLS configuration on production
+  // (or its absence) doesn't accidentally hide active marketing content.
+  // The data is public-facing anyway, just filtered by is_active.
+  const service = createServiceClient()
+
+  const [{ data: user }, { data: purchases }, { data: promos, error: promosErr }] = await Promise.all([
     supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
     supabase.from('purchase_registrations').select('*').eq('user_id', authUser.id)
       .order('created_at', { ascending: false }).limit(3),
-    // Fetch all active promos; filter by show_on_home in JS so the query
-    // still works even if the column hasn't been added to the DB yet.
-    supabase.from('promotions').select('*')
+    service.from('promotions').select('*')
       .eq('is_active', true)
       .order('sort_order', { ascending: false })
       .order('created_at', { ascending: false }).limit(20),
   ])
+  if (promosErr) console.error('[home] promotions query failed:', promosErr)
   if (!user) redirect('/terms')
 
   // Normalize any tier value (legacy PLUS/PRO/ULTRA/MASTER) to the current

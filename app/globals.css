@@ -314,6 +314,14 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; line-he
     card-wake 0.95s cubic-bezier(0.34, 1.5, 0.64, 1) both,
     card-sway 4.4s ease-in-out 1.0s infinite;
   transform-origin: 50% 60%;
+  /* iOS Safari fix: when a parent has transform applied, descendants with
+     border-radius + overflow:hidden + an <img> child can leak past the
+     rounded corners (the GPU compositing path skips the radius mask).
+     Forcing a stacking context via isolation makes WebKit honour the
+     clipping properly. */
+  isolation: isolate;
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
 }
 
 /* Element fade-in + lift used by stat tiles below the hero */
