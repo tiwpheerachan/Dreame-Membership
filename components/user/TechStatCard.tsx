@@ -1,75 +1,39 @@
 // ============================================================
-// Pill-shaped stat card — supports either a dashed solid border
-// or a gradient solid border (rendered via outer-wrap trick so
-// it works with rounded corners).
+// Pill-shaped stat card with a solid pastel background. No border.
+// Compact padding so the strip stays slim ("ไม่อวบ").
 // ============================================================
 
 interface Props {
   label: string         // ex. "POINTS"
   subLabel: string      // ex. "available"
   value: string         // formatted value
-  // Border style: 'dashed' uses a regular CSS dashed border;
-  // 'gradient' uses an outer wrapper coloured by a CSS gradient.
-  variant: 'dashed' | 'gradient'
-  borderColor: string   // dashed → solid hex; gradient → full CSS gradient string
-  labelColor: string
-  valueColor: string
-  subColor?: string
+  bgColor: string       // solid pastel background hex
 }
 
-export default function TechStatCard({
-  label, subLabel, value,
-  variant, borderColor, labelColor, valueColor, subColor,
-}: Props) {
-  const inner = (
+export default function TechStatCard({ label, subLabel, value, bgColor }: Props) {
+  return (
     <div style={{
-      background: '#fff',
+      background: bgColor,
       borderRadius: 999,
-      padding: '14px 16px 13px',
+      padding: '7px 14px 6px',
       textAlign: 'center',
-      minHeight: 92,
       display: 'flex', flexDirection: 'column', justifyContent: 'center',
-      gap: 2,
     }}>
       <p style={{
-        fontSize: 9.5, fontWeight: 700, letterSpacing: '0.20em', textTransform: 'uppercase',
-        color: labelColor, margin: 0,
+        fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase',
+        color: 'rgba(60, 67, 80, 0.75)', margin: 0,
       }}>{label}</p>
       <p className="display tnum" style={{
-        fontSize: 26, lineHeight: 1.05, fontWeight: 800,
-        color: valueColor, margin: 0,
+        fontSize: 19, lineHeight: 1.1, fontWeight: 800,
+        color: '#1F2937', margin: '1px 0',
         letterSpacing: '-0.01em',
       }}>
         {value}
       </p>
       <p style={{
-        fontSize: 11, color: subColor || '#A0A0A0',
+        fontSize: 9.5, color: 'rgba(60, 67, 80, 0.55)',
         margin: 0, fontWeight: 500,
       }}>{subLabel}</p>
-    </div>
-  )
-
-  if (variant === 'dashed') {
-    return (
-      <div style={{
-        background: '#fff',
-        border: `2px dashed ${borderColor}`,
-        borderRadius: 999,
-        padding: 0,
-      }}>
-        {inner}
-      </div>
-    )
-  }
-
-  // gradient border
-  return (
-    <div style={{
-      background: borderColor,
-      borderRadius: 999,
-      padding: 2,
-    }}>
-      {inner}
     </div>
   )
 }

@@ -2,6 +2,10 @@ import { createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { ChevronRight, BarChart3 } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+
 const SEGMENTS = [
   { key: 'champions', label: 'Champions', desc: 'ซื้อล่าสุด · บ่อย · ยอดสูง', cls: 'admin-pill-gold',  rec: [1,2], freq: [1,2], mon: [1,2] },
   { key: 'loyal',     label: 'Loyal Customers', desc: 'ซื้อบ่อย ยอดดี', cls: 'admin-pill-blue', rec: [1,2,3], freq: [1,2,3], mon: [1,2,3] },

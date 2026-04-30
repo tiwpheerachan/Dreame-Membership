@@ -1,8 +1,16 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { logAdminAction } from '@/lib/audit'
 
 const VALID_STATUSES = new Set(['ADMIN_APPROVED', 'REJECTED', 'PENDING', 'BQ_VERIFIED'])
+// Fields admin is allowed to edit on a registered purchase. The status flow
+// (PATCH with `status`) keeps its existing behaviour; passing `mode: 'edit'`
+// applies these field updates without touching status / approval fields.
+const EDITABLE_FIELDS = [
+  'model_name', 'serial_number', 'invoice_no', 'sku', 'channel', 'channel_type',
+  'total_amount', 'purchase_date', 'warranty_end', 'admin_note',
+] as const
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const supabase = createClient()
@@ -14,7 +22,45 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     .select('id, name, role').eq('auth_user_id', user.id).eq('is_active', true).single()
   if (!staff) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { status, admin_note } = await req.json()
+  const body = await req.json()
+
+  // ── Edit mode: update arbitrary editable fields, no status change ──
+  if (body.mode === 'edit') {
+    const updates: Record<string, unknown> = {}
+    for (const key of EDITABLE_FIELDS) {
+      if (key in body) {
+        const v = body[key]
+        // Allow null to clear; coerce numerics so the table accepts them
+        if (key === 'total_amount') updates[key] = v === null || v === '' ? 0 : Number(v)
+        else updates[key] = v === '' ? null : v
+      }
+    }
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'no editable fields provided' }, { status: 400 })
+    }
+
+    const { data: reg, error } = await serviceSupabase
+      .from('purchase_registrations')
+      .update(updates)
+      .eq('id', params.id).select().single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+    await logAdminAction({
+      staffId: staff.id,
+      action: 'PURCHASE_EDITED',
+      targetType: 'purchase', targetId: params.id, userId: reg?.user_id,
+      detail: { staff_name: staff.name, order_sn: reg?.order_sn, fields: Object.keys(updates), updates },
+    })
+
+    revalidatePath('/admin/pending')
+    revalidatePath('/admin/purchases')
+    if (reg?.user_id) revalidatePath(`/admin/members/${reg.user_id}`)
+
+    return NextResponse.json({ success: true, purchase: reg, staff_name: staff.name })
+  }
+
+  // ── Status mode (default): approve / reject / etc ──
+  const { status, admin_note } = body
   if (!status || !VALID_STATUSES.has(status)) {
     return NextResponse.json({ error: 'invalid status' }, { status: 400 })
   }
@@ -35,6 +81,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     targetType: 'purchase', targetId: params.id, userId: reg?.user_id,
     detail: { staff_name: staff.name, status, admin_note: admin_note || null, order_sn: reg?.order_sn, model_name: reg?.model_name },
   })
+
+  revalidatePath('/admin/pending')
+  revalidatePath('/admin/purchases')
+  if (reg?.user_id) revalidatePath(`/admin/members/${reg.user_id}`)
 
   return NextResponse.json({ success: true, purchase: reg, staff_name: staff.name })
 }
@@ -97,6 +147,10 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     targetId: params.id, userId: reg.user_id,
     detail: { staff_name: staff.name, order_sn: reg.order_sn, model_name: reg.model_name, points_reverted: pointsToRevert },
   })
+
+  revalidatePath('/admin/pending')
+  revalidatePath('/admin/purchases')
+  if (reg.user_id) revalidatePath(`/admin/members/${reg.user_id}`)
 
   return NextResponse.json({ success: true, points_reverted: pointsToRevert, staff_name: staff.name })
 }

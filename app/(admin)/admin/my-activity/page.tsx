@@ -1,5 +1,9 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import Link from 'next/link'
 import { formatDateTime } from '@/lib/utils'
 import { ArrowLeft, Package, Star, CheckCircle, XCircle, PlusCircle, Eye } from 'lucide-react'
@@ -31,6 +35,7 @@ const ACTION_CONFIG: Record<string, {
   PURCHASE_APPROVED: { label: 'อนุมัติการลงทะเบียน', icon: CheckCircle, bg: 'bg-green-900/20', text: 'text-green-400', border: 'border-green-800/30', emoji: '✅' },
   PURCHASE_REJECTED: { label: 'ปฏิเสธการลงทะเบียน', icon: XCircle,    bg: 'bg-red-900/20',   text: 'text-red-400',   border: 'border-red-800/30',   emoji: '❌' },
   PURCHASE_ADDED:    { label: 'เพิ่มประวัติการซื้อ',  icon: PlusCircle, bg: 'bg-blue-900/20',  text: 'text-blue-400',  border: 'border-blue-800/30',  emoji: '➕' },
+  PURCHASE_EDITED:   { label: 'แก้ไขประวัติการซื้อ',  icon: Eye,        bg: 'bg-amber-900/20', text: 'text-amber-400', border: 'border-amber-800/30', emoji: '✏️' },
   PURCHASE_DELETED:  { label: 'ลบประวัติการซื้อ',     icon: XCircle,    bg: 'bg-red-900/20',   text: 'text-red-400',   border: 'border-red-800/30',   emoji: '🗑' },
   POINTS_ADJUSTED:   { label: 'ปรับแต้ม',             icon: Star,       bg: 'bg-amber-900/20', text: 'text-amber-400', border: 'border-amber-800/30', emoji: '⭐' },
   MEMBER_VIEWED:     { label: 'ดูข้อมูลสมาชิก',       icon: Eye,        bg: 'bg-gray-800',     text: 'text-gray-400',  border: 'border-gray-700',     emoji: '👁' },

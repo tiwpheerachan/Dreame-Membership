@@ -2,7 +2,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024  // 10MB — images / receipts
+const MAX_BANNER_SIZE = 50 * 1024 * 1024 // 50MB — brand banner videos
 
 const ALLOWED_IMAGE_TYPES = new Set([
   'image/jpeg',
@@ -13,22 +14,43 @@ const ALLOWED_IMAGE_TYPES = new Set([
   'image/heif',
 ])
 
+const ALLOWED_VIDEO_TYPES = new Set([
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+])
+
 const ALLOWED_RECEIPT_TYPES = new Set([
   ...ALLOWED_IMAGE_TYPES,
   'application/pdf',
 ])
 
-export type UploadKind = 'avatar' | 'receipt'
+const ALLOWED_BANNER_TYPES = new Set([
+  ...ALLOWED_IMAGE_TYPES,
+  ...ALLOWED_VIDEO_TYPES,
+])
+
+export type UploadKind = 'avatar' | 'receipt' | 'banner'
 
 export interface UploadResult {
   url?: string
   error?: string
+  isVideo?: boolean
 }
 
 export function validateUpload(file: File, kind: UploadKind): string | null {
   if (!file || file.size === 0) return 'ไม่พบไฟล์'
-  if (file.size > MAX_FILE_SIZE) return 'ไฟล์ใหญ่เกิน 10MB'
-  const allowed = kind === 'avatar' ? ALLOWED_IMAGE_TYPES : ALLOWED_RECEIPT_TYPES
+
+  const maxSize = kind === 'banner' ? MAX_BANNER_SIZE : MAX_FILE_SIZE
+  if (file.size > maxSize) {
+    return `ไฟล์ใหญ่เกิน ${Math.round(maxSize / 1024 / 1024)}MB`
+  }
+
+  const allowed =
+    kind === 'banner' ? ALLOWED_BANNER_TYPES :
+    kind === 'receipt' ? ALLOWED_RECEIPT_TYPES :
+    ALLOWED_IMAGE_TYPES
+
   if (!allowed.has(file.type.toLowerCase())) {
     return 'ประเภทไฟล์ไม่รองรับ'
   }
@@ -36,18 +58,28 @@ export function validateUpload(file: File, kind: UploadKind): string | null {
 }
 
 const SAFE_EXT: Record<string, string> = {
+  // images
   'image/jpeg': 'jpg',
   'image/jpg':  'jpg',
   'image/png':  'png',
   'image/webp': 'webp',
   'image/heic': 'heic',
   'image/heif': 'heif',
+  // videos
+  'video/mp4':       'mp4',
+  'video/webm':      'webm',
+  'video/quicktime': 'mov',
+  // documents
   'application/pdf': 'pdf',
 }
 
 // Pick extension from MIME (not filename) so attackers can't smuggle .html/.svg etc.
 function safeExtension(file: File): string {
   return SAFE_EXT[file.type.toLowerCase()] ?? 'bin'
+}
+
+export function isVideoFile(file: File): boolean {
+  return ALLOWED_VIDEO_TYPES.has(file.type.toLowerCase())
 }
 
 export async function uploadToSupabase(
@@ -74,5 +106,5 @@ export async function uploadToSupabase(
   }
 
   const { data: { publicUrl } } = client.storage.from(bucket).getPublicUrl(path)
-  return { url: publicUrl }
+  return { url: publicUrl, isVideo: isVideoFile(file) }
 }

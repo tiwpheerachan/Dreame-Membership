@@ -6,13 +6,15 @@ import { formatDateTime } from '@/lib/utils'
 interface SearchParams { q?: string; staff?: string; action?: string; from?: string; to?: string; page?: string }
 
 const ACTION_LABEL: Record<string, string> = {
-  PURCHASE_APPROVED: 'อนุมัติ',
-  PURCHASE_REJECTED: 'ปฏิเสธ',
-  PURCHASE_ADDED:    'เพิ่มประวัติ',
-  PURCHASE_DELETED:  'ลบประวัติ',
-  POINTS_ADJUSTED:   'ปรับแต้ม',
-  COUPON_CREATED:    'สร้างคูปอง',
-  MEMBER_VIEWED:     'ดูสมาชิก',
+  PURCHASE_APPROVED:     'อนุมัติ',
+  PURCHASE_REJECTED:     'ปฏิเสธ',
+  PURCHASE_ADDED:        'เพิ่มประวัติ',
+  PURCHASE_EDITED:       'แก้ไขประวัติ',
+  PURCHASE_DELETED:      'ลบประวัติ',
+  PURCHASE_BQ_RECHECKED: 'ดึง BQ',
+  POINTS_ADJUSTED:       'ปรับแต้ม',
+  COUPON_CREATED:        'สร้างคูปอง',
+  MEMBER_VIEWED:         'ดูสมาชิก',
 }
 
 export default async function AuditPage({ searchParams }: { searchParams: SearchParams }) {

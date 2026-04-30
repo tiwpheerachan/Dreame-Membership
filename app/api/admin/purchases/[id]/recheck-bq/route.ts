@@ -6,6 +6,7 @@
 // ============================================================
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { verifyOrderInBQ } from '@/lib/bigquery'
 import { logAdminAction } from '@/lib/audit'
 
@@ -109,9 +110,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     },
   })
 
-  return NextResponse.json({
-    status: 'VERIFIED',
-    order: bqData,
-    staff_name: staff.name,
-  })
+  revalidatePath('/admin/pending')
+  revalidatePath('/admin/purchases')
+  if (reg.user_id) revalidatePath(`/admin/members/${reg.user_id}`)
+
+  return NextResponse.json({ status: 'VERIFIED', order: bqData, staff_name: staff.name })
 }

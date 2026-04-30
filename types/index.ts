@@ -50,6 +50,7 @@ export interface PurchaseRegistration {
   receipt_image_url: string | null
   bq_verified: boolean
   bq_verified_at: string | null
+  bq_raw_data: BQOrderData | null
   status: PurchaseStatus
   admin_note: string | null
   approved_by: string | null
@@ -109,13 +110,20 @@ export interface Promotion {
   title: string
   description: string | null
   image_url: string | null
+  // For 'banner' layout (and any layout that wants a video), video_url
+  // takes priority over image_url at render time.
+  video_url?: string | null
   link_url: string | null
   original_price: number | null
   discounted_price: number | null
   discount_label: string | null
   badge_text: string | null
   sort_order: number
-  layout: 'hero' | 'card' | 'feed'
+  // 'banner' is a top auto-scrolling brand carousel, full-width 3:1 aspect.
+  layout: 'hero' | 'card' | 'feed' | 'banner'
+  // Banner-only: pick which marquee row to appear in on home page (1 or 2).
+  // Ignored for non-banner layouts and for the promotions page.
+  banner_row?: 1 | 2 | null
   is_active: boolean
   show_on_home: boolean
   starts_at: string | null

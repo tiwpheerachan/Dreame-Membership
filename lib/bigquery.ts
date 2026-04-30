@@ -66,7 +66,7 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
 
   const attempted: { view: string; error: string }[] = []
 
-  // ── Attempt 1: v_dreame_orders ──
+  // ── Attempt 1: v_dreame_orders_new ──
   try {
     const [rows] = await bq.query({
       query: `
@@ -75,7 +75,7 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
           CAST(order_create_time AS STRING) AS order_create_time,
           CAST(order_date AS STRING) AS order_date,
           total_amount, items
-        FROM \`${PROJECT}.${DATASET}.v_dreame_orders\`
+        FROM \`${PROJECT}.${DATASET}.v_dreame_orders_new\`
         WHERE order_sn = @order_sn
         LIMIT 1
       `,
@@ -83,10 +83,10 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
     })
     if (rows && rows.length > 0) return { status: 'found', data: mapRow(rows[0]) }
   } catch (e) {
-    attempted.push({ view: 'v_dreame_orders', error: (e as Error).message })
+    attempted.push({ view: 'v_dreame_orders_new', error: (e as Error).message })
   }
 
-  // ── Attempt 2: aggregate from v_dreame_order_items ──
+  // ── Attempt 2: aggregate from v_dreame_order_items_new ──
   try {
     const [rows] = await bq.query({
       query: `
@@ -100,7 +100,7 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
             item_id, model_id, item_name, item_sku,
             model_name, model_sku, quantity, price
           )) AS items
-        FROM \`${PROJECT}.${DATASET}.v_dreame_order_items\`
+        FROM \`${PROJECT}.${DATASET}.v_dreame_order_items_new\`
         WHERE order_sn = @order_sn
         GROUP BY order_sn
         LIMIT 1
@@ -109,7 +109,7 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
     })
     if (rows && rows.length > 0) return { status: 'found', data: mapRow(rows[0]) }
   } catch (e) {
-    attempted.push({ view: 'v_dreame_order_items', error: (e as Error).message })
+    attempted.push({ view: 'v_dreame_order_items_new', error: (e as Error).message })
   }
 
   // If both attempts errored, surface that — otherwise it's a real "not found"
@@ -156,7 +156,7 @@ function mapRow(row: Record<string, unknown>): BQOrderData {
 
 // ============================================================
 // Batch verify pending orders (for cron job)
-// Same strategy: try v_dreame_orders, fallback to v_dreame_order_items.
+// Same strategy: try v_dreame_orders_new, fallback to v_dreame_order_items_new.
 // ============================================================
 export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData[]> {
   if (orderSns.length === 0) return []
@@ -168,7 +168,7 @@ export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData
     return []
   }
 
-  // ── Attempt 1: v_dreame_orders ──
+  // ── Attempt 1: v_dreame_orders_new ──
   try {
     const [rows] = await bq.query({
       query: `
@@ -177,7 +177,7 @@ export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData
           CAST(order_create_time AS STRING) AS order_create_time,
           CAST(order_date AS STRING) AS order_date,
           total_amount, items
-        FROM \`${PROJECT}.${DATASET}.v_dreame_orders\`
+        FROM \`${PROJECT}.${DATASET}.v_dreame_orders_new\`
         WHERE order_sn IN UNNEST(@sns)
       `,
       params: { sns: orderSns },
@@ -201,7 +201,7 @@ export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData
             item_id, model_id, item_name, item_sku,
             model_name, model_sku, quantity, price
           )) AS items
-        FROM \`${PROJECT}.${DATASET}.v_dreame_order_items\`
+        FROM \`${PROJECT}.${DATASET}.v_dreame_order_items_new\`
         WHERE order_sn IN UNNEST(@sns)
         GROUP BY order_sn
       `,
@@ -228,7 +228,7 @@ export async function searchOrdersByKeyword(keyword: string, limit = 20): Promis
         CAST(order_date AS STRING) AS order_date,
         total_amount,
         items
-      FROM \`${PROJECT}.${DATASET}.v_dreame_orders\`
+      FROM \`${PROJECT}.${DATASET}.v_dreame_orders_new\`
       WHERE LOWER(order_sn) LIKE @keyword
       LIMIT @limit
     `

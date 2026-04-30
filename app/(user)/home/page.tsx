@@ -9,6 +9,7 @@ import type { User, PurchaseRegistration, Promotion, UserTier } from '@/types'
 import dynamic from 'next/dynamic'
 const MemberCard = dynamic(() => import('@/components/user/MemberCard'), { ssr: false })
 import { PromoHero, PromoSmall, PromoFeed } from '@/components/user/PromoCard'
+import BannerMarquee from '@/components/user/BannerMarquee'
 import TechStatCard from '@/components/user/TechStatCard'
 import { formatDate } from '@/lib/utils'
 import { getNextTierInfo } from '@/lib/points'
@@ -65,9 +66,13 @@ export default async function HomePage() {
   const homePromos = (promos || []).filter((p: Promotion) =>
     p.show_on_home === undefined || p.show_on_home === null || p.show_on_home === true
   )
-  const heroPromo  = homePromos.find((p: Promotion) => p.layout === 'hero')
-  const cardPromos = homePromos.filter((p: Promotion) => p.layout === 'card')
-  const feedPromos = homePromos.filter((p: Promotion) => p.layout === 'feed')
+  const heroPromo    = homePromos.find((p: Promotion) => p.layout === 'hero')
+  const cardPromos   = homePromos.filter((p: Promotion) => p.layout === 'card')
+  const feedPromos   = homePromos.filter((p: Promotion) => p.layout === 'feed')
+  const bannerPromos = homePromos.filter((p: Promotion) => p.layout === 'banner')
+  // Split into 2 marquee rows. Default unset/null/1 to row 1.
+  const bannerRow1 = bannerPromos.filter(p => (p.banner_row ?? 1) === 1)
+  const bannerRow2 = bannerPromos.filter(p => p.banner_row === 2)
 
   // capitalised tier label for "Your Tier" badge
   const tierLabel = userTier.charAt(0) + userTier.slice(1).toLowerCase()
@@ -309,42 +314,30 @@ export default async function HomePage() {
           borderRadius: 'var(--r-pill)', margin: '0 auto 10px',
         }} />
 
-      {/* ─── Stats strip — 3 pill cards, each with unique border style ─── */}
+      {/* ─── Stats strip — 3 pill cards with solid pastel backgrounds ─── */}
       <section style={{ padding: '8px 16px 10px' }}>
         <div style={{
           display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8,
         }}>
-          {/* POINTS — tan dashed */}
+          {/* POINTS — soft sky blue */}
           <TechStatCard
             label="POINTS" subLabel="available"
             value={user.total_points.toLocaleString()}
-            variant="dashed"
-            borderColor="#B88E5A"
-            labelColor="#9C7448"
-            valueColor="#0E0E0E"
-            subColor="#A0A0A0"
+            bgColor="#C2DBF5"
           />
 
-          {/* LIFETIME — yellow → orange gradient border */}
+          {/* LIFETIME — warm light gray */}
           <TechStatCard
             label="LIFETIME" subLabel="all-time"
             value={user.lifetime_points.toLocaleString()}
-            variant="gradient"
-            borderColor="linear-gradient(180deg, #FFC832 0%, #FF8A3D 100%)"
-            labelColor="#F08C2F"
-            valueColor="#0E0E0E"
-            subColor="#F0A85F"
+            bgColor="#D8D4CD"
           />
 
-          {/* TIER — yellow → blue gradient border, blue value */}
+          {/* TIER — warm yellow */}
           <TechStatCard
             label="TIER" subLabel="level"
             value={tierLabel}
-            variant="gradient"
-            borderColor="linear-gradient(135deg, #FFC832 0%, #5DADE2 100%)"
-            labelColor="#F0B82F"
-            valueColor="#5DADE2"
-            subColor="#A8C9E5"
+            bgColor="#FFDB71"
           />
         </div>
       </section>
@@ -366,7 +359,9 @@ export default async function HomePage() {
                 marginBottom: 11, gap: 12,
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                  <span style={{ fontSize: 26, lineHeight: 1, flexShrink: 0 }} aria-hidden>🏆</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/images/trophy.png" alt=""
+                    style={{ width: 38, height: 38, objectFit: 'contain', flexShrink: 0 }} />
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 17, fontWeight: 800 }}>
                     <span style={{ color: '#0E0E0E' }}>{tierLabel}</span>
                     <span style={{ color: '#0E0E0E', fontSize: 16 }}>→</span>
@@ -458,6 +453,18 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* ─── BRAND BANNERS — 2 horizontally-scrolling marquee rows ─── */}
+      {(bannerRow1.length > 0 || bannerRow2.length > 0) && (
+        <section style={{ padding: '14px 0 4px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {bannerRow1.length > 0 && (
+            <BannerMarquee banners={bannerRow1} itemWidth={300} aspect="16/10" speed={32} />
+          )}
+          {bannerRow2.length > 0 && (
+            <BannerMarquee banners={bannerRow2} itemWidth={300} aspect="16/10" speed={36} />
+          )}
+        </section>
+      )}
 
       {/* ─── HERO PROMOTION ─── */}
       {heroPromo && (

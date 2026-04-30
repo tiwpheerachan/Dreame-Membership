@@ -30,9 +30,10 @@ type StaffMember = { id: string; name: string; role: string }
 
 function StatusBadge({ status }: { status: string }) {
   const cfg: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
-    ADMIN_APPROVED: { label: 'ยืนยันแล้ว', cls: 'badge-approved', icon: <CheckCircle size={12} /> },
-    PENDING:        { label: 'รอตรวจสอบ',  cls: 'badge-pending',  icon: <AlertCircle size={12} /> },
-    REJECTED:       { label: 'ปฏิเสธ',     cls: 'badge-rejected', icon: <XCircle size={12} /> },
+    ADMIN_APPROVED: { label: 'อนุมัติแล้ว', cls: 'badge-approved', icon: <CheckCircle size={12} /> },
+    BQ_VERIFIED:    { label: 'ยืนยันแล้ว',  cls: 'badge-approved', icon: <CheckCircle size={12} /> },
+    PENDING:        { label: 'รอตรวจสอบ',   cls: 'badge-pending',  icon: <AlertCircle size={12} /> },
+    REJECTED:       { label: 'ปฏิเสธ',      cls: 'badge-rejected', icon: <XCircle size={12} /> },
   }
   const c = cfg[status] || cfg.PENDING
   return (
@@ -142,7 +143,7 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
   const initials = (user.full_name||'?').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
   const purchaseList = (purchases || []) as Purchase[]
   const pointsList = (pointsLog || []) as PointsLog[]
-  const approved = purchaseList.filter(p => p.status === 'ADMIN_APPROVED').length
+  const approved = purchaseList.filter(p => p.status === 'ADMIN_APPROVED' || p.status === 'BQ_VERIFIED').length
   const pending  = purchaseList.filter(p => p.status === 'PENDING').length
 
   const tierProgress = user.tier === 'SILVER' ? { label: 'Gold', max: 500 }
@@ -160,8 +161,12 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
               <ArrowLeft size={16} />
             </Link>
             <div style={{ display:'flex', alignItems:'center', gap:12, flex:1, minWidth:0 }}>
-              <div style={{ width:38, height:38, borderRadius:12, background:tier.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, color:'#fff', flexShrink:0, boxShadow:'0 2px 8px rgba(0,0,0,0.12)' }}>
-                {initials}
+              <div style={{ width:38, height:38, borderRadius:12, background:tier.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, color:'#fff', flexShrink:0, boxShadow:'0 2px 8px rgba(0,0,0,0.12)', overflow:'hidden' }}>
+                {user.profile_image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.profile_image_url} alt={user.full_name || 'avatar'}
+                    style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                ) : initials}
               </div>
               <div style={{ minWidth:0 }}>
                 <h1 style={{ fontSize:17, fontWeight:700, color:'#111827', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user.full_name || 'สมาชิก'}</h1>
@@ -193,8 +198,12 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
             {/* Member Info */}
             <div className="card" style={{ padding:'24px' }}>
               <div style={{ textAlign:'center', marginBottom:20, paddingBottom:20, borderBottom:'1px solid #f3f4f6' }}>
-                <div style={{ width:72, height:72, borderRadius:20, background:tier.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, fontWeight:800, color:'#fff', margin:'0 auto 12px', boxShadow:'0 8px 24px rgba(0,0,0,0.15)' }}>
-                  {initials}
+                <div style={{ width:72, height:72, borderRadius:20, background:tier.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, fontWeight:800, color:'#fff', margin:'0 auto 12px', boxShadow:'0 8px 24px rgba(0,0,0,0.15)', overflow:'hidden' }}>
+                  {user.profile_image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={user.profile_image_url} alt={user.full_name || 'avatar'}
+                      style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  ) : initials}
                 </div>
                 <h2 style={{ fontSize:18, fontWeight:700, color:'#111827', margin:'0 0 3px' }}>{user.full_name || 'สมาชิก'}</h2>
                 <p style={{ fontSize:12, color:'#9ca3af', fontFamily:'monospace', margin:0 }}>{user.member_id}</p>

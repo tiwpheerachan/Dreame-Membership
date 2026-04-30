@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { uploadToSupabase } from '@/lib/upload'
 import type { BQOrderData } from '@/types'
 
@@ -19,8 +20,8 @@ export async function POST(req: Request) {
     const bqDataStr     = formData.get('bq_data') as string | null
     const receiptFile   = formData.get('receipt') as File | null
 
-    if (!order_sn || !serial_number) {
-      return NextResponse.json({ error: 'order_sn and serial_number are required' }, { status: 400 })
+    if (!order_sn) {
+      return NextResponse.json({ error: 'order_sn is required' }, { status: 400 })
     }
 
     // Check duplicate
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
         channel_type,
         sku: firstItem?.item_sku || null,
         model_name: firstItem?.item_name || null,
-        serial_number,
+        serial_number: serial_number || null,
         purchase_date: bqData?.order_date || null,
         total_amount: bqData?.total_amount || 0,
         receipt_image_url,
@@ -107,9 +108,19 @@ export async function POST(req: Request) {
       }
     }
 
+    // Invalidate admin pages so newly-registered purchases show up
+    // immediately without waiting for the polling interval.
+    revalidatePath('/admin/pending')
+    revalidatePath('/admin/purchases')
+    revalidatePath(`/admin/members/${user.id}`)
+
     return NextResponse.json({ success: true, registration_id: reg.id, status: reg.status })
   } catch (error) {
+    // Surface the underlying message so the UI can show something actionable.
+    // Generic "Internal server error" hides Postgres constraint hits, RLS
+    // blocks, malformed BQ payloads, etc. — which makes triage impossible.
     console.error('[API] register error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Internal server error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

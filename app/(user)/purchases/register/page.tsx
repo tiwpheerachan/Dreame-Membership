@@ -25,7 +25,6 @@ export default function RegisterPage() {
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>('idle')
   const [verifiedData, setVerifiedData] = useState<Record<string, unknown> | null>(null)
   const [channel, setChannel] = useState('SHOPEE')
-  const [serial, setSerial] = useState('')
   const [receipt, setReceipt] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -64,7 +63,6 @@ export default function RegisterPage() {
       fd.append('order_sn', orderSn)
       fd.append('channel', channel)
       fd.append('channel_type', selectedChannel?.type || 'ONLINE')
-      fd.append('serial_number', serial || '—')
       if (verifiedData) fd.append('bq_data', JSON.stringify(verifiedData))
       if (receipt) fd.append('receipt', receipt)
       const res = await fetch('/api/purchases/register', { method: 'POST', body: fd })
@@ -288,16 +286,7 @@ export default function RegisterPage() {
               )}
             </div>
 
-            <div className="surface" style={{ padding: 18 }}>
-              <p className="kicker" style={{ margin: '0 0 12px' }}>Serial Number</p>
-              <input className="field" type="text" placeholder="เช่น SN12345678"
-                value={serial} onChange={e => setSerial(e.target.value)} />
-              <p className="serif-i" style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '8px 0 0' }}>
-                หาได้บนกล่องหรือใต้ตัวเครื่อง
-              </p>
-            </div>
-
-            {(verifyStatus === 'verified' || verifyStatus === 'pending') && serial && (
+            {(verifyStatus === 'verified' || verifyStatus === 'pending') && (
               <button className="btn btn-ink tap-down" onClick={() => setStep('upload')}>
                 ถัดไป →
               </button>

@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { logAdminAction } from '@/lib/audit'
 import { uploadToSupabase } from '@/lib/upload'
 
@@ -79,6 +80,10 @@ export async function POST(req: Request) {
       total_amount: Number(total_amount || 0),
     },
   })
+
+  revalidatePath('/admin/pending')
+  revalidatePath('/admin/purchases')
+  revalidatePath(`/admin/members/${user_id}`)
 
   return NextResponse.json({ success: true, registration: reg, staff_name: staff.name })
 }

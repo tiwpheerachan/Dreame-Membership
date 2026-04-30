@@ -15,9 +15,10 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const userId = searchParams.get('user')
 
+  // Disambiguate users embed (approved_by + user_id both FK to users(id))
   let query = serviceSupabase
     .from('purchase_registrations')
-    .select('*, users!inner(full_name, phone, member_id)')
+    .select('*, users!purchase_registrations_user_id_fkey(full_name, phone, member_id)')
     .eq('status', 'PENDING')
 
   if (userId) query = query.eq('user_id', userId)

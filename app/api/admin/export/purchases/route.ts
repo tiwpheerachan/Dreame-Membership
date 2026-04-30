@@ -25,7 +25,7 @@ export async function GET() {
       .select(`
         order_sn, channel, status, total_amount, points_awarded,
         purchase_date, warranty_end, serial_number, model_name, created_at,
-        users!inner(member_id, full_name)
+        users!purchase_registrations_user_id_fkey(member_id, full_name)
       `)
       .order('created_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1)
