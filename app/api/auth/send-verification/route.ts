@@ -22,27 +22,36 @@ export async function POST(req: Request) {
   }
 
   const service = createServiceClient()
+  // Build the callback URL from the *request* host so dev links point at
+  // localhost and prod links point at the deployed domain. Falling back to
+  // env vars only if no host header is present (rare, e.g. internal calls).
+  const proto = req.headers.get('x-forwarded-proto')
+    || (req.url.startsWith('https://') ? 'https' : 'http')
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host')
+  const baseUrl = host
+    ? `${proto}://${host}`
+    : (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '')
 
-  // generateLink({type:'signup'}) requires a password parameter for new users,
-  // but for existing-but-unconfirmed users it just regenerates the link.
-  // We try `magiclink` first (works for any existing user, confirms on click)
-  // and fall back to `signup` if needed.
-  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || ''}/auth/callback`
-
+  // magiclink works for any existing user regardless of confirmation status.
+  // When an unconfirmed user clicks the link, Supabase both signs them in
+  // AND flips email_confirmed_at — so it doubles as a verification email.
+  // (We don't have the user's password here, so 'signup' type isn't an option.)
   const { data, error } = await service.auth.admin.generateLink({
     type: 'magiclink',
     email,
-    options: { redirectTo },
   })
 
-  if (error || !data?.properties?.action_link) {
+  if (error || !data?.properties?.hashed_token) {
     console.error('[send-verification] generateLink:', error)
     // Don't leak whether the email exists.
     return NextResponse.json({ success: true })
   }
 
+  const verType = (data.properties as { verification_type?: string }).verification_type || 'magiclink'
+  const link = `${baseUrl}/auth/callback?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=${encodeURIComponent(verType)}`
+
   try {
-    const tpl = verificationEmail(data.properties.action_link)
+    const tpl = verificationEmail(link)
     await sendEmail({ to: email, ...tpl })
   } catch (e) {
     console.error('[send-verification] Resend:', e)

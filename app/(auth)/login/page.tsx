@@ -245,56 +245,40 @@ function LoginForm() {
     if (password !== confirmPw)  { setError('รหัสผ่านไม่ตรงกัน'); return }
     setLoading(true); setError(''); setSuccess('')
     try {
-      // Pass full_name through user_metadata so the DB trigger
-      // (handle_new_auth_user) can populate public.users on insert.
-      const { data, error: err } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName.trim() },
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback`,
-        },
+      // Custom signup endpoint creates the user via admin API with
+      // email_confirm:false and sends the verification email via Resend
+      // — no Supabase auto-mailer involved, no duplicate emails.
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, full_name: fullName.trim() }),
       })
-      if (err) {
-        // Avoid email enumeration: same generic message regardless of cause.
-        // (Supabase already prevents most enumeration in modern versions.)
-        if (err.message.toLowerCase().includes('already registered')) {
-          setError('อีเมลนี้มีบัญชีอยู่แล้ว — กรุณาเข้าสู่ระบบ')
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        if (data.code === 'already_registered') {
+          setError(data.error || 'อีเมลนี้มีบัญชีอยู่แล้ว — กรุณาเข้าสู่ระบบ')
           setMode('login')
         } else {
-          setError(err.message)
+          setError(data.error || 'สมัครไม่สำเร็จ')
         }
         return
       }
-      if (!data.user) { setError('เกิดข้อผิดพลาด'); return }
 
       saveCred(email, true)
+      try { localStorage.setItem(KEY_PENDING_VERIFY, email) } catch { /* ignore */ }
+      setPendingVerify(email)
+      setMode('verify-sent')
 
-      if (data.session) {
-        // Auto-confirmed (email confirmation off in Supabase) — go straight to terms.
-        try { localStorage.removeItem(KEY_PENDING_VERIFY) } catch { /* ignore */ }
-        await fetch('/api/users/ensure-profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ full_name: fullName.trim() }),
-        }).catch(() => {})
-        router.push('/terms')
-      } else {
-        // Email confirmation required. Send the verification mail via our
-        // own Resend-backed endpoint (Supabase's free-tier mail is unreliable
-        // and our deliverability is better via Resend). Fire-and-forget — the
-        // user can also tap "ส่งอีเมลยืนยันใหม่" from the verify-sent screen.
-        fetch('/api/auth/send-verification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
-        }).catch(() => { /* ignore — UI still shows the resend CTA */ })
-
-        try { localStorage.setItem(KEY_PENDING_VERIFY, email) } catch { /* ignore */ }
-        setPendingVerify(email)
-        setMode('verify-sent')
+      if (!data.email_sent) {
+        // Account was created but the verification email failed to send.
+        // Surface that hint inline so the user knows to tap "Resend".
+        setError(data.error || 'สร้างบัญชีสำเร็จ แต่ส่งอีเมลยืนยันไม่สำเร็จ')
       }
-    } catch { setError('เกิดข้อผิดพลาด กรุณาลองใหม่') }
+    } catch (e) {
+      console.error('[register]', e)
+      setError('เกิดข้อผิดพลาด กรุณาลองใหม่')
+    }
     finally   { setLoading(false) }
   }
 

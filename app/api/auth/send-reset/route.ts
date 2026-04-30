@@ -22,22 +22,33 @@ export async function POST(req: Request) {
   }
 
   const service = createServiceClient()
-  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || ''}/auth/callback?type=recovery`
+  // Same host-derivation as send-verification — see comments there.
+  const proto = req.headers.get('x-forwarded-proto')
+    || (req.url.startsWith('https://') ? 'https' : 'http')
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host')
+  const baseUrl = host
+    ? `${proto}://${host}`
+    : (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '')
 
   const { data, error } = await service.auth.admin.generateLink({
     type: 'recovery',
     email,
-    options: { redirectTo },
   })
 
-  if (error || !data?.properties?.action_link) {
+  if (error || !data?.properties?.hashed_token) {
     // User probably doesn't exist — keep the response generic.
     console.error('[send-reset] generateLink:', error)
     return NextResponse.json({ success: true })
   }
 
+  // Build our own callback URL with the hashed_token; we'll verify it
+  // server-side in /auth/callback via verifyOtp instead of going through
+  // Supabase's hosted verify endpoint.
+  const verType = (data.properties as { verification_type?: string }).verification_type || 'recovery'
+  const link = `${baseUrl}/auth/callback?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=${encodeURIComponent(verType)}`
+
   try {
-    const tpl = resetPasswordEmail(data.properties.action_link)
+    const tpl = resetPasswordEmail(link)
     await sendEmail({ to: email, ...tpl })
   } catch (e) {
     console.error('[send-reset] Resend:', e)
