@@ -10,10 +10,13 @@ import {
 type Mode = 'login' | 'register' | 'forgot' | 'verify-sent'
 const KEY_EMAIL = 'dreame_email'
 const KEY_REMEMBER = 'dreame_remember'
+// Track which email a user *just* signed up with so we can show a
+// "verify your email first" banner instead of a generic login error
+// when they navigate back to the login screen.
+const KEY_PENDING_VERIFY = 'dreame_pending_verify'
 
-// ── เปลี่ยนรูปพื้นหลัง: วางไฟล์ที่ public/images/login-bg.jpg ──
-const BG_IMAGE = '/images/login-bg.jpg'
-const LOGO_URL = '/dreame-logo.png'
+// ── เปลี่ยนรูปพื้นหลัง: วางไฟล์ที่ public/images/login-bg.png ──
+const BG_IMAGE = '/images/login-bg.png'
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap');
@@ -24,19 +27,28 @@ const CSS = `
     position:fixed; inset:0; overflow:hidden;
     display:flex; justify-content:center; align-items:stretch;
     font-family:'Prompt',system-ui,sans-serif;
-    background:#0d0d0d;
+    /* Cream backdrop matches the new key visual (light beige), so the
+       sides outside the 430px frame don't look like a black void. */
+    background:#ECE0CC;
   }
   .lg-bg {
     position:absolute; top:0; left:50%; transform:translateX(-50%);
     width:100%; max-width:430px; height:100%; z-index:0;
   }
-  .lg-bg img { width:100%; height:100%; object-fit:cover; object-position:center top; }
+  /* contain (not cover) so the full key visual fits without being cropped at
+     the sides — the wordmark "DREAME MEMBERSHIP" stays intact. The cream
+     backdrop (.lg-root) fills any leftover space below the image so the
+     transition into the form sheet still looks seamless. */
+  .lg-bg img { width:100%; height:100%; object-fit:contain; object-position:center top; }
   .lg-overlay {
+    /* Soft white-ish fade at the bottom only, so the cream image blends
+       into the white form sheet without a hard line. No dark tint. */
     position:absolute; inset:0;
     background:linear-gradient(to bottom,
-      rgba(0,0,0,0.05) 0%,
-      rgba(0,0,0,0.35) 45%,
-      rgba(0,0,0,0.9) 100%);
+      rgba(255,255,255,0) 0%,
+      rgba(255,255,255,0) 55%,
+      rgba(255,255,255,0.20) 80%,
+      rgba(255,255,255,0.55) 100%);
   }
   .lg-inner {
     position:relative; z-index:1;
@@ -45,7 +57,7 @@ const CSS = `
   }
   .lg-logo-area {
     flex:1; min-height:0;
-    display:flex; align-items:center; justify-content:center;
+    display:flex; align-items:flex-start; justify-content:center;
     padding:64px 24px 20px;
   }
   .lg-sheet {
@@ -129,6 +141,9 @@ function LoginForm() {
   const [success, setSuccess]   = useState('')
   const [mounted, setMounted]   = useState(false)
   const [resending, setResending] = useState(false)
+  // Email of a recently-registered account that still needs verification.
+  // Lets us swap the generic login error for an actionable "check your email" banner.
+  const [pendingVerify, setPendingVerify] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -136,9 +151,18 @@ function LoginForm() {
       const e = localStorage.getItem(KEY_EMAIL)
       const r = localStorage.getItem(KEY_REMEMBER)
       if (r === '1' && e) { setEmail(e); setRememberMe(true) }
+      const pv = localStorage.getItem(KEY_PENDING_VERIFY)
+      if (pv) {
+        setPendingVerify(pv)
+        // Pre-fill that email if nothing else was remembered
+        if (!localStorage.getItem(KEY_EMAIL)) setEmail(pv)
+      }
     } catch { /* ignore */ }
     if (searchParams.get('error') === 'expired') setError('ลิงก์หมดอายุ กรุณาลองใหม่')
   }, [searchParams])
+
+  // Clear pending-verify banner if user changes email to something different
+  const showPendingBanner = mode === 'login' && pendingVerify && email.trim().toLowerCase() === pendingVerify.toLowerCase()
 
   function saveCred(val: string, remember: boolean) {
     try {
@@ -174,6 +198,9 @@ function LoginForm() {
         return
       }
       saveCred(email, rememberMe)
+      // Successful login implies the email is confirmed — drop the pending banner.
+      try { localStorage.removeItem(KEY_PENDING_VERIFY) } catch { /* ignore */ }
+      setPendingVerify(null)
       await fetch('/api/users/ensure-profile', { method: 'POST' }).catch(() => {})
       const { data: user } = await supabase
         .from('users').select('terms_accepted_at').eq('id', data.user!.id).maybeSingle()
@@ -189,18 +216,22 @@ function LoginForm() {
     if (!email) { setError('กรุณากรอกอีเมล'); return }
     setResending(true); setError(''); setSuccess('')
     try {
-      const { error: err } = await supabase.auth.resend({
-        type: 'signup',
-        email,
-        options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback` },
+      // Send via our own Resend-backed endpoint instead of supabase.auth.resend
+      // (which silently rate-limits on the free tier and lands in spam).
+      const res = await fetch('/api/auth/send-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       })
-      if (err && !err.message.toLowerCase().includes('already')) {
-        setError(err.message)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'ส่งไม่สำเร็จ — โปรดลองใหม่')
         return
       }
-      setSuccess('ส่งอีเมลยืนยันใหม่แล้ว — กรุณาเช็คกล่องจดหมาย (รวมถึง spam)')
+      setSuccess('ส่งอีเมลยืนยันใหม่แล้ว — กรุณาเช็คกล่องจดหมาย รวมถึงโฟลเดอร์ Spam/Junk/โปรโมชั่น')
       setErrorReason(null)
-    } catch {
+    } catch (e) {
+      console.error('[resend]', e)
       setError('ส่งไม่สำเร็จ กรุณาลองใหม่')
     } finally {
       setResending(false)
@@ -240,7 +271,8 @@ function LoginForm() {
       saveCred(email, true)
 
       if (data.session) {
-        // Auto-confirmed (email confirmation off) — go straight to terms.
+        // Auto-confirmed (email confirmation off in Supabase) — go straight to terms.
+        try { localStorage.removeItem(KEY_PENDING_VERIFY) } catch { /* ignore */ }
         await fetch('/api/users/ensure-profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -248,7 +280,18 @@ function LoginForm() {
         }).catch(() => {})
         router.push('/terms')
       } else {
-        // Email confirmation required — show dedicated screen with clear next steps
+        // Email confirmation required. Send the verification mail via our
+        // own Resend-backed endpoint (Supabase's free-tier mail is unreliable
+        // and our deliverability is better via Resend). Fire-and-forget — the
+        // user can also tap "ส่งอีเมลยืนยันใหม่" from the verify-sent screen.
+        fetch('/api/auth/send-verification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        }).catch(() => { /* ignore — UI still shows the resend CTA */ })
+
+        try { localStorage.setItem(KEY_PENDING_VERIFY, email) } catch { /* ignore */ }
+        setPendingVerify(email)
         setMode('verify-sent')
       }
     } catch { setError('เกิดข้อผิดพลาด กรุณาลองใหม่') }
@@ -260,13 +303,23 @@ function LoginForm() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('อีเมลไม่ถูกต้อง'); return }
     setLoading(true); setError(''); setSuccess('')
     try {
-      // Always show success — Supabase already silently no-ops on missing emails.
-      // We don't surface the underlying error to avoid email enumeration.
-      await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback?type=recovery`,
+      // Goes through our Resend-backed endpoint, not supabase.auth.resetPasswordForEmail.
+      const res = await fetch('/api/auth/send-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       })
-      setSuccess('ถ้ามีบัญชีตามอีเมลนี้ ระบบจะส่งลิงก์รีเซ็ตให้ภายในไม่กี่นาที')
-    } catch { setError('เกิดข้อผิดพลาด') }
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'เกิดข้อผิดพลาด — โปรดลองใหม่')
+        return
+      }
+      // Generic message regardless of whether the email exists (avoids enumeration).
+      setSuccess('ถ้ามีบัญชีตามอีเมลนี้ ระบบจะส่งลิงก์รีเซ็ตให้ภายในไม่กี่นาที — หากไม่ได้รับโปรดเช็คโฟลเดอร์ Spam')
+    } catch (e) {
+      console.error('[forgot]', e)
+      setError('เกิดข้อผิดพลาด')
+    }
     finally   { setLoading(false) }
   }
 
@@ -293,14 +346,10 @@ function LoginForm() {
         {/* Layer 2 — UI */}
         <div className="lg-inner">
 
-          {/* Logo top */}
-          <div className="lg-logo-area" style={{ opacity: mounted ? 1 : 0, transition: 'opacity 0.5s' }}>
-            <img
-              src={LOGO_URL}
-              alt="Dreame"
-              style={{ height: 48, objectFit: 'contain', filter: 'brightness(0) invert(1)', maxWidth: 240 }}
-            />
-          </div>
+          {/* Spacer that lets the brand visual breathe above the form sheet.
+              The image already carries the DREAME MEMBERSHIP wordmark, so
+              we no longer overlay a separate logo here. */}
+          <div className="lg-logo-area" style={{ opacity: mounted ? 1 : 0, transition: 'opacity 0.5s' }} />
 
           {/* Form sheet bottom */}
           <div className="lg-sheet">
@@ -323,10 +372,24 @@ function LoginForm() {
                 <p style={{ fontSize: 14, fontWeight: 700, color: '#111', margin: '0 0 18px', wordBreak: 'break-all' }}>
                   {email}
                 </p>
-                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 20px', lineHeight: 1.6 }}>
+                <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 14px', lineHeight: 1.65 }}>
                   คลิกลิงก์ในอีเมลเพื่อยืนยันบัญชี<br/>
-                  ไม่เห็นอีเมล? เช็ค spam หรือกดส่งใหม่
+                  อีเมลอาจใช้เวลา 2-5 นาทีในการมาถึง
                 </p>
+                <div style={{
+                  padding: '10px 14px', borderRadius: 12,
+                  background: '#fffaf0', border: '1px solid #fde68a',
+                  margin: '0 0 18px', textAlign: 'left',
+                }}>
+                  <p style={{ margin: 0, fontSize: 11.5, fontWeight: 700, color: '#7c5410' }}>
+                    💡 ไม่เห็นอีเมล?
+                  </p>
+                  <p style={{ margin: '4px 0 0', fontSize: 11, color: '#8c5e16', lineHeight: 1.6 }}>
+                    1. เช็คโฟลเดอร์ <strong>Spam / Junk / โปรโมชั่น</strong><br/>
+                    2. ตรวจว่าพิมพ์อีเมลถูกต้อง<br/>
+                    3. กด &ldquo;ส่งอีเมลยืนยันใหม่&rdquo; ด้านล่าง
+                  </p>
+                </div>
                 {success && (
                   <div className="a-ok" style={{ marginBottom: 12 }}>
                     <CheckCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -371,6 +434,41 @@ function LoginForm() {
               </div>
             )}
 
+            {/* Pending-verify banner — shown when user just registered and
+                navigated back to login. Replaces the generic invalid-cred
+                error with an actionable resend-verification CTA. */}
+            {showPendingBanner && !error && !success && (
+              <div style={{
+                padding: '12px 14px', borderRadius: 12,
+                background: '#fffaf0', border: '1px solid #fde68a',
+                marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <Mail size={15} color="#b8860b" style={{ flexShrink: 0, marginTop: 1 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: '#7c5410' }}>
+                      ยืนยันอีเมลก่อนเข้าสู่ระบบ
+                    </p>
+                    <p style={{ margin: '3px 0 0', fontSize: 11.5, color: '#8c5e16', lineHeight: 1.55 }}>
+                      เราส่งลิงก์ยืนยันไปที่ <strong>{pendingVerify}</strong> แล้ว — คลิกลิงก์เพื่อใช้งานบัญชี<br/>
+                      ไม่ได้รับอีเมล? เช็ค <strong>โฟลเดอร์ Spam/Junk</strong> หรือกดส่งใหม่
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={resendVerification}
+                  disabled={resending}
+                  className="btn-plain"
+                  style={{
+                    padding: '8px 12px', fontSize: 11.5, fontWeight: 700,
+                    color: '#0d0d0d', background: '#fde68a', border: '1px solid #fbbf24',
+                    borderRadius: 8,
+                  }}>
+                  {resending ? 'กำลังส่ง...' : '↻ ส่งอีเมลยืนยันใหม่'}
+                </button>
+              </div>
+            )}
             {success && (
               <div className="a-ok">
                 <CheckCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
