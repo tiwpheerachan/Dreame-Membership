@@ -1,20 +1,22 @@
 -- ============================================================
 -- DREAME MEMBERSHIP — Database Schema (single source of truth)
 -- Run this in Supabase SQL Editor on a fresh project.
--- For existing DB use supabase/migrations/0002_consolidate.sql
+-- For existing DBs, run the corresponding migrations under
+-- supabase/migrations/ in numerical order.
 -- ============================================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================
 -- ENUMS
 -- ============================================================
-CREATE TYPE user_tier            AS ENUM ('SILVER', 'GOLD', 'PLATINUM');
-CREATE TYPE channel_type         AS ENUM ('ONLINE', 'ONSITE');
-CREATE TYPE sale_channel         AS ENUM ('STORE', 'SHOPEE', 'LAZADA', 'WEBSITE', 'TIKTOK', 'OTHER');
-CREATE TYPE purchase_status      AS ENUM ('PENDING', 'BQ_VERIFIED', 'ADMIN_APPROVED', 'REJECTED');
-CREATE TYPE points_type          AS ENUM ('EARNED', 'REDEEMED', 'EXPIRED', 'ADMIN_ADJUST');
-CREATE TYPE coupon_discount_type AS ENUM ('PERCENT', 'FIXED');
-CREATE TYPE admin_role           AS ENUM ('SUPER_ADMIN', 'ADMIN_ONLINE', 'ADMIN_ONSITE', 'STAFF_ONSITE', 'STAFF_ONLINE');
+CREATE TYPE user_tier              AS ENUM ('SILVER', 'GOLD', 'PLATINUM');
+CREATE TYPE channel_type           AS ENUM ('ONLINE', 'ONSITE');
+CREATE TYPE sale_channel           AS ENUM ('STORE', 'SHOPEE', 'LAZADA', 'WEBSITE', 'TIKTOK', 'OTHER');
+CREATE TYPE purchase_status        AS ENUM ('PENDING', 'BQ_VERIFIED', 'ADMIN_APPROVED', 'REJECTED');
+CREATE TYPE points_type            AS ENUM ('EARNED', 'REDEEMED', 'EXPIRED', 'ADMIN_ADJUST');
+CREATE TYPE coupon_discount_type   AS ENUM ('PERCENT', 'FIXED');
+CREATE TYPE admin_role             AS ENUM ('SUPER_ADMIN', 'ADMIN_ONLINE', 'ADMIN_ONSITE', 'STAFF_ONSITE', 'STAFF_ONLINE');
+CREATE TYPE announcement_audience  AS ENUM ('ALL', 'TIER', 'SEGMENT');
 
 -- ============================================================
 -- USERS
@@ -33,9 +35,26 @@ CREATE TABLE public.users (
   tier               user_tier NOT NULL DEFAULT 'SILVER',
   is_active          BOOLEAN NOT NULL DEFAULT true,
   terms_accepted_at  TIMESTAMPTZ,
+
+  -- CRM tags / flags (admin-managed)
+  tags               TEXT[]  NOT NULL DEFAULT ARRAY[]::TEXT[],
+  is_vip             BOOLEAN NOT NULL DEFAULT false,
+  is_blacklisted     BOOLEAN NOT NULL DEFAULT false,
+  notify_email       BOOLEAN NOT NULL DEFAULT true,
+  notify_sms         BOOLEAN NOT NULL DEFAULT true,
+
   created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_users_tags ON public.users USING GIN (tags);
+CREATE INDEX idx_users_vip  ON public.users(is_vip) WHERE is_vip = true;
+CREATE INDEX idx_users_dob  ON public.users(date_of_birth) WHERE date_of_birth IS NOT NULL;
+CREATE INDEX idx_users_created_at ON public.users(created_at DESC);
+CREATE INDEX idx_users_tier       ON public.users(tier);
+CREATE INDEX idx_users_phone      ON public.users(phone) WHERE phone IS NOT NULL;
+CREATE INDEX idx_users_email      ON public.users(email) WHERE email IS NOT NULL;
+CREATE INDEX idx_users_member_id  ON public.users(member_id);
 
 CREATE SEQUENCE IF NOT EXISTS member_id_seq START 100000;
 
@@ -99,8 +118,8 @@ CREATE TABLE public.purchase_registrations (
   points_awarded     INTEGER NOT NULL DEFAULT 0,
   points_awarded_at  TIMESTAMPTZ,
 
-  -- Warranty
-  warranty_months    INTEGER DEFAULT 12,
+  -- Warranty (2-year default per Dreame Thailand policy)
+  warranty_months    INTEGER DEFAULT 24,
   warranty_start     DATE,
   warranty_end       DATE,
 
@@ -115,6 +134,7 @@ CREATE INDEX idx_purchase_user_id      ON public.purchase_registrations(user_id)
 CREATE INDEX idx_purchase_status       ON public.purchase_registrations(status);
 CREATE INDEX idx_purchase_channel_type ON public.purchase_registrations(channel_type);
 CREATE INDEX idx_purchase_bq_pending   ON public.purchase_registrations(bq_verified) WHERE bq_verified = false;
+CREATE INDEX idx_purchases_created     ON public.purchase_registrations(created_at DESC);
 
 CREATE TRIGGER trg_purchase_upd
   BEFORE UPDATE ON public.purchase_registrations
@@ -136,8 +156,9 @@ CREATE TABLE public.points_log (
   created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_points_log_user_id ON public.points_log(user_id);
-CREATE INDEX idx_points_log_expires ON public.points_log(expires_at) WHERE type = 'EARNED';
+CREATE INDEX idx_points_log_user_id  ON public.points_log(user_id);
+CREATE INDEX idx_points_log_expires  ON public.points_log(expires_at) WHERE type = 'EARNED';
+CREATE INDEX idx_points_log_created  ON public.points_log(created_at DESC);
 
 -- ============================================================
 -- COUPONS
@@ -157,6 +178,7 @@ CREATE TABLE public.coupons (
   max_uses        INTEGER,
   used_count      INTEGER NOT NULL DEFAULT 0,
   used_at         TIMESTAMPTZ,
+  theme           VARCHAR(50),  -- visual theme key (black/gold/rose/...)
   created_by      UUID,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -177,20 +199,44 @@ CREATE TABLE public.pending_verifications (
 );
 
 -- ============================================================
--- PROMOTIONS
+-- PROMOTIONS / BANNERS
+-- Layout values: hero | card | feed | banner
+--   - banner = top auto-scrolling marquee (supports image OR video)
+--   - banner_row picks which row on the home page (1 or 2)
 -- ============================================================
 CREATE TABLE public.promotions (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  title        VARCHAR(300) NOT NULL,
-  description  TEXT,
-  image_url    TEXT,
-  link_url     TEXT,
-  is_active    BOOLEAN NOT NULL DEFAULT true,
-  starts_at    TIMESTAMPTZ,
-  ends_at      TIMESTAMPTZ,
-  target_tier  user_tier[],
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title             VARCHAR(300) NOT NULL,
+  description       TEXT,
+  image_url         TEXT,
+  video_url         TEXT,
+  link_url          TEXT,
+  is_active         BOOLEAN NOT NULL DEFAULT true,
+  show_on_home      BOOLEAN NOT NULL DEFAULT true,
+  starts_at         TIMESTAMPTZ,
+  ends_at           TIMESTAMPTZ,
+  target_tier       user_tier[],
+
+  -- Pricing display
+  original_price    NUMERIC(12, 2),
+  discounted_price  NUMERIC(12, 2),
+  discount_label    VARCHAR(120),
+  badge_text        VARCHAR(60),
+
+  -- Layout & ordering
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  layout            VARCHAR(20) NOT NULL DEFAULT 'card',
+  banner_row        SMALLINT DEFAULT 1,  -- 1 or 2 (banner layout only)
+
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+COMMENT ON COLUMN public.promotions.layout     IS 'hero | card | feed | banner';
+COMMENT ON COLUMN public.promotions.banner_row IS 'Home-page marquee row (1 or 2). Ignored for non-banner layouts.';
+
+CREATE INDEX idx_promotions_active_sort
+  ON public.promotions(is_active, sort_order DESC, created_at DESC)
+  WHERE is_active = true;
 
 -- ============================================================
 -- ADMIN STAFF
@@ -212,7 +258,7 @@ CREATE TRIGGER trg_staff_upd
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ============================================================
--- ADMIN AUDIT LOG (referenced by lib/audit.ts)
+-- ADMIN AUDIT LOG
 -- ============================================================
 CREATE TABLE public.admin_audit_log (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -232,12 +278,49 @@ CREATE INDEX idx_audit_action    ON public.admin_audit_log(action_type);
 CREATE INDEX idx_audit_created   ON public.admin_audit_log(created_at DESC);
 
 -- ============================================================
+-- MEMBER NOTES (CRM timeline)
+-- ============================================================
+CREATE TABLE public.member_notes (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id     UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  staff_id    UUID REFERENCES public.admin_staff(id) ON DELETE SET NULL,
+  body        TEXT NOT NULL,
+  pinned      BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_member_notes_user ON public.member_notes(user_id, created_at DESC);
+
+-- ============================================================
+-- ANNOUNCEMENTS
+-- ============================================================
+CREATE TABLE public.announcements (
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title          VARCHAR(200) NOT NULL,
+  body           TEXT,
+  image_url      TEXT,
+  link_url       TEXT,
+  badge_text     VARCHAR(60),
+  audience       announcement_audience NOT NULL DEFAULT 'ALL',
+  audience_tier  user_tier,           -- only used when audience = 'TIER'
+  is_active      BOOLEAN NOT NULL DEFAULT true,
+  starts_at      TIMESTAMPTZ,
+  ends_at        TIMESTAMPTZ,
+  created_by     UUID REFERENCES public.admin_staff(id),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_announcements_active ON public.announcements(is_active, created_at DESC);
+
+-- ============================================================
 -- ROW LEVEL SECURITY
 -- ============================================================
 ALTER TABLE public.users                  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.purchase_registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.points_log             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coupons                ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.promotions             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.announcements          ENABLE ROW LEVEL SECURITY;
 
 -- USERS: SELECT only via RLS. UPDATE/DELETE must go through service-role API
 -- (server allowlists fields so the user cannot tamper with tier / points).
@@ -261,6 +344,13 @@ CREATE POLICY "points_self_select" ON public.points_log
 -- COUPONS: read own + global (NULL user_id)
 CREATE POLICY "coupons_self_select" ON public.coupons
   FOR SELECT USING (auth.uid() = user_id OR user_id IS NULL);
+
+-- PROMOTIONS / ANNOUNCEMENTS: public read of active rows
+CREATE POLICY "promotions_public_read" ON public.promotions
+  FOR SELECT USING (is_active = true);
+
+CREATE POLICY "announcements_public_read" ON public.announcements
+  FOR SELECT USING (is_active = true);
 
 -- ============================================================
 -- AUTO-CREATE PROFILE WHEN auth.users IS CREATED
@@ -287,16 +377,19 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_auth_user();
 
 -- ============================================================
--- TIER UPDATE FUNCTION (helper)
+-- TIER UPDATE FUNCTION
+-- Thresholds (lifetime points): SILVER 0-79, GOLD 80-399, PLATINUM 400+
 -- ============================================================
+DROP FUNCTION IF EXISTS update_user_tier(UUID);
+
 CREATE OR REPLACE FUNCTION update_user_tier(p_user_id UUID)
 RETURNS VOID AS $$
 DECLARE lp INTEGER; new_tier user_tier;
 BEGIN
   SELECT lifetime_points INTO lp FROM public.users WHERE id = p_user_id;
-  IF lp >= 2000 THEN new_tier := 'PLATINUM';
-  ELSIF lp >= 500 THEN new_tier := 'GOLD';
-  ELSE new_tier := 'SILVER';
+  IF    lp >= 400 THEN new_tier := 'PLATINUM';
+  ELSIF lp >=  80 THEN new_tier := 'GOLD';
+  ELSE                 new_tier := 'SILVER';
   END IF;
   UPDATE public.users SET tier = new_tier WHERE id = p_user_id;
 END;
@@ -304,17 +397,20 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================
 -- AWARD POINTS (transactional, idempotent, row-level locked)
--- Call from API:  await supabase.rpc('award_points_for_purchase', { p_purchase_reg_id })
+-- Earn rate is channel-dependent:
+--   WEBSITE / STORE     : 200 THB = 1 point
+--   SHOPEE/LAZADA/TIKTOK: 500 THB = 1 point
+-- Tier multiplier (Platinum-only VIP boost):
+--   SILVER 1.0×  GOLD 1.0×  PLATINUM 1.2×
 -- ============================================================
--- DROP first so we can change return type if an older version exists
 DROP FUNCTION IF EXISTS award_points_for_purchase(UUID);
-DROP FUNCTION IF EXISTS adjust_user_points(UUID, INTEGER);
 
 CREATE OR REPLACE FUNCTION award_points_for_purchase(p_purchase_reg_id UUID)
 RETURNS INTEGER AS $$
 DECLARE
   v_reg          public.purchase_registrations%ROWTYPE;
   v_user         public.users%ROWTYPE;
+  v_divisor      INTEGER;
   v_base_points  INTEGER;
   v_multiplier   NUMERIC;
   v_final_points INTEGER;
@@ -326,11 +422,20 @@ BEGIN
   SELECT * INTO v_user FROM public.users
     WHERE id = v_reg.user_id FOR UPDATE;
 
-  v_base_points := FLOOR(COALESCE(v_reg.total_amount, 0) / 100);
-  v_multiplier  := CASE v_user.tier
+  v_divisor := CASE UPPER(COALESCE(v_reg.channel::TEXT, 'OTHER'))
+    WHEN 'WEBSITE' THEN 200
+    WHEN 'STORE'   THEN 200
+    WHEN 'SHOPEE'  THEN 500
+    WHEN 'LAZADA'  THEN 500
+    WHEN 'TIKTOK'  THEN 500
+    ELSE 500
+  END;
+  v_base_points := FLOOR(COALESCE(v_reg.total_amount, 0) / v_divisor);
+
+  v_multiplier := CASE v_user.tier
     WHEN 'SILVER'   THEN 1.0
-    WHEN 'GOLD'     THEN 1.5
-    WHEN 'PLATINUM' THEN 2.0
+    WHEN 'GOLD'     THEN 1.0
+    WHEN 'PLATINUM' THEN 1.2
     ELSE 1.0
   END;
   v_final_points := FLOOR(v_base_points * v_multiplier);
@@ -349,8 +454,8 @@ BEGIN
     SET total_points    = total_points    + v_final_points,
         lifetime_points = lifetime_points + v_final_points,
         tier = CASE
-          WHEN lifetime_points + v_final_points >= 2000 THEN 'PLATINUM'::user_tier
-          WHEN lifetime_points + v_final_points >= 500  THEN 'GOLD'::user_tier
+          WHEN lifetime_points + v_final_points >= 400 THEN 'PLATINUM'::user_tier
+          WHEN lifetime_points + v_final_points >=  80 THEN 'GOLD'::user_tier
           ELSE 'SILVER'::user_tier
         END
     WHERE id = v_reg.user_id;
@@ -366,6 +471,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================
 -- ADJUST USER POINTS (admin manual adjust, transactional)
 -- ============================================================
+DROP FUNCTION IF EXISTS adjust_user_points(UUID, INTEGER);
+
 CREATE OR REPLACE FUNCTION adjust_user_points(p_user_id UUID, p_delta INTEGER)
 RETURNS INTEGER AS $$
 DECLARE
@@ -383,8 +490,8 @@ BEGIN
     SET total_points    = v_new_total,
         lifetime_points = v_new_lifetime,
         tier = CASE
-          WHEN v_new_lifetime >= 2000 THEN 'PLATINUM'::user_tier
-          WHEN v_new_lifetime >= 500  THEN 'GOLD'::user_tier
+          WHEN v_new_lifetime >= 400 THEN 'PLATINUM'::user_tier
+          WHEN v_new_lifetime >=  80 THEN 'GOLD'::user_tier
           ELSE 'SILVER'::user_tier
         END
     WHERE id = p_user_id;
@@ -392,3 +499,90 @@ BEGIN
   RETURN v_new_total;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
+-- HELPER VIEWS (read-only, used by admin dashboards / cron)
+-- ============================================================
+
+-- Users whose birthday is today (used by /api/cron/birthday)
+CREATE OR REPLACE VIEW public.v_birthdays_today AS
+  SELECT id, member_id, full_name, email, phone, tier, date_of_birth
+  FROM public.users
+  WHERE date_of_birth IS NOT NULL
+    AND is_active = true
+    AND EXTRACT(MONTH FROM date_of_birth) = EXTRACT(MONTH FROM CURRENT_DATE)
+    AND EXTRACT(DAY   FROM date_of_birth) = EXTRACT(DAY   FROM CURRENT_DATE);
+
+-- Earned points expiring within the next 90 days
+CREATE OR REPLACE VIEW public.v_points_expiring AS
+  SELECT
+    pl.user_id,
+    u.member_id,
+    u.full_name,
+    u.email,
+    pl.points_delta AS points_remaining,
+    pl.expires_at,
+    (pl.expires_at - CURRENT_DATE)::INTEGER AS days_left
+  FROM public.points_log pl
+  JOIN public.users u ON u.id = pl.user_id
+  WHERE pl.type = 'EARNED'
+    AND pl.expires_at IS NOT NULL
+    AND pl.expires_at >= CURRENT_DATE
+    AND pl.expires_at <= CURRENT_DATE + INTERVAL '90 days'
+  ORDER BY pl.expires_at ASC;
+
+-- Per-coupon redemption stats (used by /admin/coupons)
+CREATE OR REPLACE VIEW public.v_coupon_stats AS
+  SELECT
+    c.id, c.code, c.title, c.discount_type, c.discount_value,
+    c.valid_from, c.valid_until,
+    c.created_by, c.created_at,
+    COUNT(*)                                            AS recipient_count,
+    COUNT(*) FILTER (WHERE c.used_at IS NOT NULL)       AS used_count,
+    COUNT(*) FILTER (WHERE c.used_at IS NULL AND c.valid_until < CURRENT_DATE) AS expired_count,
+    ROUND(
+      COUNT(*) FILTER (WHERE c.used_at IS NOT NULL)::NUMERIC
+      / NULLIF(COUNT(*), 0) * 100, 1
+    ) AS redemption_rate
+  FROM public.coupons c
+  GROUP BY c.id, c.code, c.title, c.discount_type, c.discount_value,
+           c.valid_from, c.valid_until, c.created_by, c.created_at;
+
+-- RFM-style member segmentation (Recency / Frequency / Monetary)
+CREATE OR REPLACE VIEW public.v_member_rfm AS
+  WITH stats AS (
+    SELECT
+      u.id, u.member_id, u.full_name, u.email, u.tier, u.lifetime_points,
+      MAX(pr.purchase_date)                                                                AS last_purchase,
+      COUNT(pr.id) FILTER (WHERE pr.status IN ('ADMIN_APPROVED','BQ_VERIFIED'))             AS frequency,
+      COALESCE(SUM(pr.total_amount) FILTER (WHERE pr.status IN ('ADMIN_APPROVED','BQ_VERIFIED')), 0) AS monetary
+    FROM public.users u
+    LEFT JOIN public.purchase_registrations pr ON pr.user_id = u.id
+    WHERE u.is_active = true
+    GROUP BY u.id
+  )
+  SELECT
+    *,
+    CASE
+      WHEN last_purchase IS NULL                THEN 999
+      WHEN CURRENT_DATE - last_purchase <= 30   THEN 1
+      WHEN CURRENT_DATE - last_purchase <= 90   THEN 2
+      WHEN CURRENT_DATE - last_purchase <= 180  THEN 3
+      WHEN CURRENT_DATE - last_purchase <= 365  THEN 4
+      ELSE 5
+    END AS recency_score,
+    CASE
+      WHEN frequency >= 10  THEN 1
+      WHEN frequency >=  5  THEN 2
+      WHEN frequency >=  3  THEN 3
+      WHEN frequency >=  1  THEN 4
+      ELSE 5
+    END AS frequency_score,
+    CASE
+      WHEN monetary >= 50000  THEN 1
+      WHEN monetary >= 20000  THEN 2
+      WHEN monetary >= 10000  THEN 3
+      WHEN monetary >=  1000  THEN 4
+      ELSE 5
+    END AS monetary_score
+  FROM stats;

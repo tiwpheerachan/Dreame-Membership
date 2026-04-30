@@ -5,8 +5,13 @@ import { NextResponse } from 'next/server'
 // supabase.auth.updateUser({ email }) so Supabase sends the confirmation
 // email and keeps auth.users.email in sync. Use a dedicated endpoint
 // (or call from the client) for that.
-const ALLOWED_FIELDS = ['full_name', 'phone', 'address', 'date_of_birth'] as const
+const ALLOWED_FIELDS = [
+  'full_name', 'phone', 'address', 'date_of_birth',
+  // Notification preferences — toggled from the /notifications page
+  'notify_email', 'notify_sms',
+] as const
 type AllowedField = typeof ALLOWED_FIELDS[number]
+const BOOLEAN_FIELDS: ReadonlySet<AllowedField> = new Set(['notify_email', 'notify_sms'])
 
 export async function GET() {
   const supabase = createClient()
@@ -29,8 +34,12 @@ export async function PATCH(req: Request) {
   for (const k of ALLOWED_FIELDS) {
     if (k in body) {
       const v = body[k]
-      // Trim strings, coerce empty → null
-      updates[k] = typeof v === 'string' ? (v.trim() || null) : v
+      if (BOOLEAN_FIELDS.has(k)) {
+        updates[k] = !!v  // coerce to true/false
+      } else {
+        // Trim strings, coerce empty → null
+        updates[k] = typeof v === 'string' ? (v.trim() || null) : v
+      }
     }
   }
   if (Object.keys(updates).length === 0) {

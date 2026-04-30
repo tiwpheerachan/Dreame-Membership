@@ -570,7 +570,7 @@ function PromoForm({
       {/* Media upload — image OR video */}
       <div className="admin-card" style={{ padding: 14 }}>
         <p style={{ fontSize: 10, color: 'var(--ink-mute)', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', margin: '0 0 10px' }}>
-          รูปภาพ {value.layout === 'banner' && <span style={{ color: 'var(--gold-deep)' }}>หรือวิดีโอ</span>}
+          รูปภาพ <span style={{ color: 'var(--gold-deep)' }}>หรือวิดีโอ</span>
         </p>
         {previewUrl ? (
           <div style={{ position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden', background: '#000' }}>
@@ -612,18 +612,16 @@ function PromoForm({
             }}>
             <ImageIcon size={22} strokeWidth={1.5} />
             <span style={{ fontSize: 12, fontWeight: 600 }}>
-              คลิกเพื่อเลือก{value.layout === 'banner' ? 'รูปหรือวิดีโอ' : 'รูป'}
+              คลิกเพื่อเลือกรูปหรือวิดีโอ
             </span>
             <span style={{ fontSize: 10.5, color: 'var(--ink-faint)' }}>
-              {value.layout === 'banner'
-                ? 'รูป: JPG / PNG / WEBP · วิดีโอ: MP4 / WEBM (≤ 50MB)'
-                : 'JPG / PNG / WEBP'}
+              รูป: JPG / PNG / WEBP · วิดีโอ: MP4 / WEBM (≤ 50MB)
             </span>
           </button>
         )}
         <input
           ref={fileRef} type="file"
-          accept={value.layout === 'banner' ? 'image/*,video/*' : 'image/*'}
+          accept="image/*,video/*"
           style={{ display: 'none' }} onChange={pickFile}
         />
       </div>

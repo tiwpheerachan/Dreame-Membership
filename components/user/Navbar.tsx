@@ -1,11 +1,12 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Package, Ticket, UserRound, Megaphone } from 'lucide-react'
+import { Home, Package, Ticket, UserRound, Megaphone, Coins } from 'lucide-react'
 
 const NAV = [
   { href: '/home',       icon: Home,       label: 'หน้าหลัก' },
   { href: '/promotions', icon: Megaphone,  label: 'โปร' },
+  { href: '/points',     icon: Coins,      label: 'แต้ม' },
   { href: '/purchases',  icon: Package,    label: 'สินค้า' },
   { href: '/coupons',    icon: Ticket,     label: 'คูปอง' },
   { href: '/profile',    icon: UserRound,  label: 'โปรไฟล์' },
@@ -48,9 +49,9 @@ export default function Navbar() {
                 className="tap-down"
                 style={{
                   position: 'relative',
-                  flex: 1,
+                  flex: 1, minWidth: 0,
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                  padding: '10px 4px',
+                  padding: '10px 2px',
                   borderRadius: 'var(--r-pill)',
                   textDecoration: 'none',
                   // Gold gradient when active; silvery transparent when not
@@ -65,11 +66,12 @@ export default function Navbar() {
                   transition: 'all 0.32s cubic-bezier(0.34,1.1,0.64,1)',
                 }}
               >
-                <Icon size={18} strokeWidth={active ? 2.4 : 1.7} />
+                <Icon size={17} strokeWidth={active ? 2.4 : 1.7} />
                 <span style={{
-                  fontSize: 9.5,
+                  fontSize: 9,
                   fontWeight: active ? 800 : 600,
-                  letterSpacing: active ? '0.04em' : '0.02em',
+                  letterSpacing: active ? '0.02em' : '0.01em',
+                  whiteSpace: 'nowrap',
                   // Subtle text-shadow on active to mimic engraved metal lettering
                   textShadow: active ? '0 1px 0 rgba(255,250,235,0.6)' : 'none',
                 }}>

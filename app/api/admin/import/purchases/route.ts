@@ -88,9 +88,9 @@ export async function POST(req: Request) {
       continue
     }
 
-    // Compute warranty
+    // Compute warranty — default 24 months (2 years) unless CSV overrides it
     const purchaseDate = row.purchase_date ? new Date(row.purchase_date) : new Date()
-    const warrantyMonths = Number(row.warranty_months) || 12
+    const warrantyMonths = Number(row.warranty_months) || 24
     const warrantyEnd = new Date(purchaseDate)
     warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
 

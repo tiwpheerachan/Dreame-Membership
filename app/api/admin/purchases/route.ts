@@ -41,7 +41,7 @@ export async function POST(req: Request) {
 
   const purchaseDate = purchase_date ? new Date(purchase_date) : new Date()
   const warrantyEnd = new Date(purchaseDate)
-  warrantyEnd.setMonth(warrantyEnd.getMonth() + 12)
+  warrantyEnd.setMonth(warrantyEnd.getMonth() + 24)  // 2-year warranty
 
   const { data: reg, error } = await service
     .from('purchase_registrations')
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       purchase_date: purchaseDate.toISOString().split('T')[0],
       total_amount: Number(total_amount || 0),
       receipt_image_url,
-      warranty_months: 12,
+      warranty_months: 24,
       warranty_start: purchaseDate.toISOString().split('T')[0],
       warranty_end: warrantyEnd.toISOString().split('T')[0],
       bq_verified: channel_type === 'ONLINE',

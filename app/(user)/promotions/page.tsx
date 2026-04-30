@@ -64,8 +64,8 @@ export default async function PromotionsPage() {
         <div style={{ padding: '0 0 32px', display: 'flex', flexDirection: 'column', gap: 28 }}>
           {/* Brand banners — single horizontally-scrolling row, ignores banner_row */}
           {bannerPromos.length > 0 && (
-            <section style={{ padding: '0' }}>
-              <BannerMarquee banners={bannerPromos} itemWidth={300} aspect="16/10" speed={32} />
+            <section style={{ padding: '0 16px' }}>
+              <BannerMarquee banners={bannerPromos} aspect="12/5" speed={50} />
             </section>
           )}
 
@@ -134,7 +134,11 @@ function GridCard({ promo }: { promo: Promotion }) {
         aspectRatio: '1/1',
       }}
     >
-      {promo.image_url ? (
+      {promo.video_url ? (
+        <video src={promo.video_url}
+          autoPlay muted loop playsInline preload="metadata"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', background: '#000' }} />
+      ) : promo.image_url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={promo.image_url} alt={promo.title} style={{
           width: '100%', height: '100%', objectFit: 'cover', display: 'block',

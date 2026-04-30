@@ -257,20 +257,21 @@ export default async function HomePage() {
             </h1>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button aria-label="Notifications" className="tap" style={{
+            <Link href="/notifications" aria-label="Notifications" className="tap" style={{
               width: 42, height: 42, borderRadius: '50%',
               background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.7)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: hero.ink, cursor: 'pointer', position: 'relative',
               backdropFilter: 'blur(8px)',
               boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              textDecoration: 'none',
             }}>
               <Bell size={16} strokeWidth={1.7} />
               <span className="pulse-dot" style={{
                 position: 'absolute', top: 10, right: 10,
                 width: 6, height: 6, borderRadius: '50%', background: hero.starColor,
               }} />
-            </button>
+            </Link>
             <Link href="/profile" className="tap" style={{ display: 'block' }}>
               {user.profile_image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -290,9 +291,11 @@ export default async function HomePage() {
           </div>
         </header>
 
-        {/* Member card with 3D + sparkles */}
+        {/* Member card with 3D + sparkles + wake/sway animation */}
         <div style={{ position: 'relative', zIndex: 2 }}>
-          <MemberCard user={user as User} />
+          <div className="card-mount">
+            <MemberCard user={user as User} />
+          </div>
         </div>
       </div>
 
@@ -456,12 +459,12 @@ export default async function HomePage() {
 
       {/* ─── BRAND BANNERS — 2 horizontally-scrolling marquee rows ─── */}
       {(bannerRow1.length > 0 || bannerRow2.length > 0) && (
-        <section style={{ padding: '14px 0 4px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <section style={{ padding: '14px 16px 4px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {bannerRow1.length > 0 && (
-            <BannerMarquee banners={bannerRow1} itemWidth={300} aspect="16/10" speed={32} />
+            <BannerMarquee banners={bannerRow1} aspect="12/5" speed={50} />
           )}
           {bannerRow2.length > 0 && (
-            <BannerMarquee banners={bannerRow2} itemWidth={300} aspect="16/10" speed={36} />
+            <BannerMarquee banners={bannerRow2} aspect="12/5" speed={55} />
           )}
         </section>
       )}

@@ -283,6 +283,77 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; line-he
   color: #fff;
 }
 
+/* Wardrobe purchase card hover lift. The base styles live inline in the
+   page; this only adds the interactive feedback so we don't have to
+   convert the page to a client component just for hover state. */
+.purchase-card:hover {
+  box-shadow: 0 8px 24px rgba(20,18,15,0.08), 0 1px 4px rgba(20,18,15,0.04);
+  transform: translateY(-1px);
+}
+
+/* ── Card entrance: a luxe "wake up" wobble that resolves into a gentle
+   continuous sway. Used on the member card on /points so it feels like a
+   premium asset settling onto the page. ── */
+@keyframes card-wake {
+  0%   { opacity: 0; transform: perspective(800px) translateY(28px) rotateZ(-4deg) scale(0.94); filter: blur(2px); }
+  40%  { opacity: 1; transform: perspective(800px) translateY(-6px) rotateZ(2.8deg)  scale(1.02); filter: blur(0); }
+  62%  { transform: perspective(800px) translateY(2px)  rotateZ(-1.6deg) scale(0.99); }
+  82%  { transform: perspective(800px) translateY(-1px) rotateZ(0.8deg)  scale(1.005); }
+  100% { transform: perspective(800px) translateY(0)    rotateZ(0)       scale(1); }
+}
+
+@keyframes card-sway {
+  0%, 100% { transform: rotateZ(0) translateY(0); }
+  50%      { transform: rotateZ(0.6deg) translateY(-3px); }
+}
+
+.card-mount {
+  /* Wake on mount, then idle-sway forever after. Mirror the timing in JS
+     if you ever swap to a single combined animation. */
+  animation:
+    card-wake 0.95s cubic-bezier(0.34, 1.5, 0.64, 1) both,
+    card-sway 4.4s ease-in-out 1.0s infinite;
+  transform-origin: 50% 60%;
+}
+
+/* Element fade-in + lift used by stat tiles below the hero */
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.pop-in   { animation: pop-in 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) both; }
+.pop-in-d1 { animation: pop-in 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) 0.10s both; }
+.pop-in-d2 { animation: pop-in 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) 0.20s both; }
+.pop-in-d3 { animation: pop-in 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) 0.30s both; }
+.pop-in-d4 { animation: pop-in 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) 0.40s both; }
+.pop-in-d5 { animation: pop-in 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) 0.50s both; }
+
+/* Big balance numeral — slow shimmer sweep across the gold gradient */
+@keyframes balance-shimmer {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+.balance-display {
+  background: linear-gradient(120deg,
+    #FAF3DC 0%,
+    #EADBB1 25%,
+    #C9A063 50%,
+    #EADBB1 75%,
+    #FAF3DC 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: balance-shimmer 5s linear infinite;
+}
+
+/* Tier ladder dot pulse — emphasises which tier is current */
+@keyframes tier-dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(160,120,43,0.55); }
+  50%      { box-shadow: 0 0 0 8px rgba(160,120,43,0); }
+}
+.tier-dot-active { animation: tier-dot-pulse 2.2s ease-out infinite; }
+
 /* Continuous horizontal marquee — for brand banner rows.
    Track is doubled in JS so the keyframe can simply translate by -50%
    to land on an identical state, looping seamlessly. */

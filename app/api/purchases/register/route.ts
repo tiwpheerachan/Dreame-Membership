@@ -50,10 +50,10 @@ export async function POST(req: Request) {
       receipt_image_url = url ?? null
     }
 
-    // Calculate warranty end date
+    // Calculate warranty end date — 2-year warranty from delivery/order date
     const purchaseDate = bqData?.order_date ? new Date(bqData.order_date) : new Date()
     const warrantyEnd = new Date(purchaseDate)
-    warrantyEnd.setMonth(warrantyEnd.getMonth() + 12)
+    warrantyEnd.setMonth(warrantyEnd.getMonth() + 24)
 
     // First item from BQ
     const firstItem = bqData?.items?.[0]
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
         purchase_date: bqData?.order_date || null,
         total_amount: bqData?.total_amount || 0,
         receipt_image_url,
-        warranty_months: 12,
+        warranty_months: 24,
         warranty_start: purchaseDate.toISOString().split('T')[0],
         warranty_end: warrantyEnd.toISOString().split('T')[0],
         bq_verified: bqData !== null,

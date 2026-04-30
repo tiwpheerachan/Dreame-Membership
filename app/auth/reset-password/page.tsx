@@ -4,8 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react'
 
-const BG_IMAGE = '/images/login-bg.jpg'
-const LOGO_URL = '/dreame-logo.png'
+const BG_IMAGE = '/images/reset-bg.png'
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap');
@@ -16,16 +15,25 @@ const CSS = `
   .rp-root {
     position:fixed; inset:0; overflow:hidden;
     display:flex; justify-content:center; align-items:stretch;
-    font-family:'Prompt',system-ui,sans-serif; background:#0d0d0d;
+    font-family:'Prompt',system-ui,sans-serif;
+    /* Cream backdrop matches the new key visual so the sides outside
+       the 430px frame don't look like a black void on wider screens. */
+    background:#ECE0CC;
   }
   .rp-bg {
     position:absolute; top:0; left:50%; transform:translateX(-50%);
     width:100%; max-width:430px; height:100%; z-index:0;
   }
-  .rp-bg img { width:100%; height:100%; object-fit:cover; object-position:center top; }
+  /* contain (not cover) keeps the artwork & wordmark uncropped */
+  .rp-bg img { width:100%; height:100%; object-fit:contain; object-position:center top; }
   .rp-overlay {
+    /* Soft white fade at the bottom so cream image blends into the form sheet */
     position:absolute; inset:0;
-    background:linear-gradient(to bottom,rgba(0,0,0,0.05) 0%,rgba(0,0,0,0.35) 45%,rgba(0,0,0,0.9) 100%);
+    background:linear-gradient(to bottom,
+      rgba(255,255,255,0) 0%,
+      rgba(255,255,255,0) 55%,
+      rgba(255,255,255,0.20) 80%,
+      rgba(255,255,255,0.55) 100%);
   }
   .rp-inner { position:relative; z-index:1; width:100%; max-width:430px; display:flex; flex-direction:column; height:100%; }
   .rp-logo-area { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:64px 24px 20px; }
@@ -116,9 +124,8 @@ function ResetPasswordForm() {
           <div className="rp-overlay" />
         </div>
         <div className="rp-inner">
-          <div className="rp-logo-area" style={{ opacity: mounted ? 1 : 0, transition:'opacity 0.6s' }}>
-            <img src={LOGO_URL} alt="Dreame" style={{ height:36, objectFit:'contain', filter:'brightness(0) invert(1)', maxWidth:200 }} draggable={false} />
-          </div>
+          {/* Spacer — the new key visual already carries the DREAME wordmark, no logo overlay needed */}
+          <div className="rp-logo-area" style={{ opacity: mounted ? 1 : 0, transition:'opacity 0.6s' }} />
           <div className="rp-sheet">
             <h1 className="rp-title">ตั้งรหัสผ่านใหม่</h1>
             <p className="rp-sub">กรอกรหัสผ่านใหม่ของคุณด้านล่าง</p>

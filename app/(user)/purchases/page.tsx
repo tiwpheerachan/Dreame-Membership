@@ -110,36 +110,75 @@ export default async function PurchasesPage() {
           const showProjected = earnedPts === 0 && projected > 0
           const isPending = p.status === 'PENDING'
 
+          // Warranty progress: % of original warranty period still remaining.
+          // Falls back to a 365-day default if warranty_start is missing.
+          let warrantyTotal = 365
+          if (p.warranty_start && p.warranty_end) {
+            const ms = new Date(p.warranty_end).getTime() - new Date(p.warranty_start).getTime()
+            const days = Math.round(ms / 86400000)
+            if (days > 0) warrantyTotal = days
+          }
+          const warrantyPct = wOk ? Math.min(100, Math.max(2, (daysLeft / warrantyTotal) * 100)) : 0
+          const isExpiringSoon = wOk && daysLeft <= 30
+          const accentTone =
+            isExpiringSoon ? { from: '#F0D7A4', to: '#8C5A14' } :
+            wOk            ? { from: '#EADBB1', to: '#A0782B' } :
+                             { from: '#E1E3E8', to: '#9CA3AF' }
+
           return (
             <Link key={p.id} href={`/purchases/${p.id}`}
-              className="tap-down" style={{
+              className="tap-down purchase-card" style={{
                 position: 'relative',
                 overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'block',
                 background: '#fff',
                 border: '1px solid var(--hair)',
                 borderRadius: 'var(--r-lg)',
                 boxShadow: '0 2px 12px rgba(20,18,15,0.04), 0 1px 2px rgba(20,18,15,0.03)',
+                transition: 'box-shadow 0.18s ease, transform 0.18s ease',
               }}>
-              <div style={{ padding: 18 }}>
-                {/* Top: title + status */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+              {/* Top accent line — gold for active warranty, neutral otherwise.
+                  Subtly signals premium status & differentiates expiring items. */}
+              <div aria-hidden style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+                background: `linear-gradient(90deg, transparent 0%, ${accentTone.from} 25%, ${accentTone.to} 50%, ${accentTone.from} 75%, transparent 100%)`,
+                opacity: wOk ? 1 : 0.5,
+              }} />
+
+              <div style={{ padding: '18px 18px 16px' }}>
+                {/* Header — channel avatar + title + status */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+                  <div aria-hidden style={{
+                    flexShrink: 0,
+                    width: 46, height: 46, borderRadius: 13,
+                    background: 'linear-gradient(160deg, #FAFAF8 0%, #F0EFEB 100%)',
+                    border: '1px solid var(--hair)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85), 0 1px 2px rgba(20,18,15,0.04)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'var(--ink-soft)',
+                  }}>
+                    <ch.Icon size={20} strokeWidth={1.7} />
+                  </div>
+
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <h3 className="display" style={{
-                      margin: '0 0 4px', fontSize: 18, fontWeight: 800, lineHeight: 1.25, letterSpacing: '-0.01em',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      margin: '0 0 5px', fontSize: 16.5, fontWeight: 800, lineHeight: 1.3, letterSpacing: '-0.005em',
+                      overflow: 'hidden', display: '-webkit-box',
+                      WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
                     }}>
                       {p.model_name || p.order_sn}
                     </h3>
                     <p style={{
                       fontSize: 10.5, color: 'var(--ink-faint)', margin: 0,
                       fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {p.order_sn}
                     </p>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginTop: 2 }}>
                     <StatusPill status={p.status} />
-                    <ChevronRight size={16} color="var(--ink-faint)" />
+                    <ChevronRight size={15} color="var(--ink-faint)" />
                   </div>
                 </div>
 
@@ -183,49 +222,75 @@ export default async function PurchasesPage() {
                   ) : null}
                 </div>
 
-                {/* Warranty */}
+                {/* Warranty section with progress bar */}
                 {p.warranty_end && (
-                  <>
-                    <div style={{ height: 1, background: 'var(--hair)', margin: '14px 0' }} />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{
-                        width: 30, height: 30, borderRadius: 9,
-                        background: wOk ? '#E8F6EC' : '#F1F2F4',
-                        border: `1px solid ${wOk ? '#B8DFC2' : '#E1E3E8'}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
+                  <div style={{
+                    marginTop: 14,
+                    padding: '11px 13px 12px',
+                    background: wOk
+                      ? (isExpiringSoon ? '#FFF8EC' : '#F4FAF6')
+                      : '#F8F8F7',
+                    border: `1px solid ${wOk ? (isExpiringSoon ? '#F0D7A4' : '#D7EBDD') : 'var(--hair)'}`,
+                    borderRadius: 'var(--r-md)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: wOk ? 8 : 0 }}>
+                      <ShieldCheck
+                        size={14}
+                        color={wOk ? (isExpiringSoon ? '#8C5A14' : '#1F6B33') : 'var(--ink-faint)'}
+                        strokeWidth={2.2}
+                      />
+                      <p style={{
+                        fontSize: 12, fontWeight: 700, margin: 0,
+                        color: wOk ? (isExpiringSoon ? '#8C5A14' : '#1F6B33') : 'var(--ink-mute)',
                       }}>
-                        <ShieldCheck
-                          size={15}
-                          color={wOk ? '#1F6B33' : 'var(--ink-faint)'}
-                          strokeWidth={2}
-                        />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{
-                          fontSize: 12, fontWeight: 700, margin: '0 0 2px',
-                          color: wOk ? '#1F6B33' : 'var(--ink-faint)',
-                        }}>
-                          {wOk ? 'ประกันยังมีผล' : 'ประกันหมดอายุ'}
-                        </p>
-                        <p className="serif-i" style={{ fontSize: 11, color: 'var(--ink-mute)', margin: 0 }}>
-                          ถึง {formatDate(p.warranty_end)}
-                        </p>
-                      </div>
+                        {wOk ? (isExpiringSoon ? 'ประกันใกล้หมด' : 'ประกันยังมีผล') : 'ประกันหมดอายุ'}
+                      </p>
                       {wOk && (
                         <span style={{
-                          padding: '3px 10px', borderRadius: 'var(--r-pill)',
-                          background: '#E8F6EC',
-                          color: '#1F6B33',
-                          border: '1px solid #B8DFC2',
+                          marginLeft: 'auto',
                           fontSize: 11, fontWeight: 800,
-                          flexShrink: 0,
+                          color: isExpiringSoon ? '#8C5A14' : '#1F6B33',
+                          fontVariantNumeric: 'tabular-nums',
                         }}>
                           {daysLeft} วัน
                         </span>
                       )}
                     </div>
-                  </>
+
+                    {/* Visual progress bar — fills with the same accent colour as the top
+                        edge so the whole card reads as a single coherent piece. */}
+                    {wOk && (
+                      <>
+                        <div style={{
+                          height: 5, borderRadius: 100, overflow: 'hidden',
+                          background: isExpiringSoon ? 'rgba(140,90,20,0.12)' : 'rgba(31,107,51,0.12)',
+                        }}>
+                          <div style={{
+                            height: '100%', width: `${warrantyPct}%`,
+                            background: isExpiringSoon
+                              ? 'linear-gradient(90deg, #C58726, #E0A847)'
+                              : 'linear-gradient(90deg, #2E8B47, #4FAA68)',
+                            borderRadius: 100,
+                            transition: 'width 0.4s ease',
+                          }} />
+                        </div>
+                        <p className="serif-i" style={{
+                          fontSize: 10.5, color: 'var(--ink-mute)',
+                          margin: '7px 0 0',
+                        }}>
+                          ถึง {formatDate(p.warranty_end)}
+                        </p>
+                      </>
+                    )}
+                    {!wOk && (
+                      <p className="serif-i" style={{
+                        fontSize: 10.5, color: 'var(--ink-mute)',
+                        margin: '4px 0 0', paddingLeft: 22,
+                      }}>
+                        ถึง {formatDate(p.warranty_end)}
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {/* Pending notice */}
@@ -245,19 +310,33 @@ export default async function PurchasesPage() {
                 )}
               </div>
 
-              {/* Points earned ribbon */}
+              {/* Points earned ribbon — refined with subtle radial highlight */}
               {p.points_awarded > 0 && (
                 <div style={{
-                  background: 'linear-gradient(90deg, rgba(20,18,15,0.92), rgba(40,32,18,0.92))',
+                  position: 'relative',
+                  background: 'linear-gradient(90deg, #14120F 0%, #2A2419 60%, #3A2E18 100%)',
                   padding: '12px 18px',
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  borderTop: '1px solid var(--hair)',
+                  overflow: 'hidden',
                 }}>
-                  <span style={{ fontSize: 10.5, color: 'rgba(255,250,235,0.55)', letterSpacing: '0.10em', textTransform: 'uppercase', fontWeight: 700 }}>
-                    คะแนนที่ได้รับ
+                  {/* Subtle gold spotlight on the right side */}
+                  <div aria-hidden style={{
+                    position: 'absolute', top: -20, right: -20,
+                    width: 100, height: 100, borderRadius: '50%',
+                    background: 'radial-gradient(circle, rgba(160,120,43,0.35) 0%, transparent 70%)',
+                    pointerEvents: 'none',
+                  }} />
+                  <span style={{
+                    position: 'relative',
+                    fontSize: 10, color: 'rgba(255,250,235,0.55)',
+                    letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700,
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                  }}>
+                    <Sparkles size={11} color="rgba(234,219,177,0.7)" /> คะแนนที่ได้รับ
                   </span>
                   <span className="numerals" style={{
-                    fontSize: 19, fontWeight: 800,
+                    position: 'relative',
+                    fontSize: 19, fontWeight: 800, letterSpacing: '-0.01em',
                     background: 'linear-gradient(135deg,#FAF3DC,#EADBB1,#A0782B)',
                     WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
                   }}>

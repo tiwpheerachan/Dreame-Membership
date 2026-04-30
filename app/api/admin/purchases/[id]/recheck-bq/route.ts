@@ -69,7 +69,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   const firstItem = bqData.items?.[0]
   const purchaseDate = bqData.order_date ? new Date(bqData.order_date) : new Date()
   const warrantyEnd = new Date(purchaseDate)
-  warrantyEnd.setMonth(warrantyEnd.getMonth() + 12)
+  warrantyEnd.setMonth(warrantyEnd.getMonth() + 24)  // 2-year warranty
 
   const { error: updErr } = await service
     .from('purchase_registrations')

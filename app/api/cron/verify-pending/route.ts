@@ -63,7 +63,7 @@ export async function GET(req: Request) {
         const firstItem = bqData.items?.[0]
         const purchaseDate = bqData.order_date ? new Date(bqData.order_date) : new Date()
         const warrantyEnd = new Date(purchaseDate)
-        warrantyEnd.setMonth(warrantyEnd.getMonth() + 12)
+        warrantyEnd.setMonth(warrantyEnd.getMonth() + 24)  // 2-year warranty
 
         const { error } = await supabase
           .from('purchase_registrations')

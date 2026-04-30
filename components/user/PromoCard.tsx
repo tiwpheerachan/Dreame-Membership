@@ -2,6 +2,36 @@
 import type { Promotion } from '@/types'
 import { ArrowUpRight, Sparkles } from 'lucide-react'
 
+// Render video (preferred) or image — both at the same natural-aspect sizing
+// so the surrounding card chrome (badges, gradient overlay) stays identical.
+function MediaFill({
+  promo, fit = 'contain', forceFixedAspect,
+}: {
+  promo: Promotion
+  fit?: 'contain' | 'cover'
+  forceFixedAspect?: string  // when set, host wants fixed aspect (e.g. 4:5 square)
+}) {
+  const fillStyle: React.CSSProperties = forceFixedAspect
+    ? { width: '100%', height: '100%', objectFit: 'cover', display: 'block' }
+    : { width: '100%', height: 'auto', objectFit: fit, display: 'block' }
+  if (promo.video_url) {
+    return (
+      <video
+        src={promo.video_url}
+        autoPlay muted loop playsInline preload="metadata"
+        style={{ ...fillStyle, background: '#000' }}
+      />
+    )
+  }
+  if (promo.image_url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={promo.image_url} alt={promo.title} style={fillStyle} />
+    )
+  }
+  return null
+}
+
 // Common bottom-fade overlay: a smooth gradient that goes from transparent
 // at the top to dark + slightly blurred at the bottom. Mask-image fades the
 // blur effect in gradually so the top of the image stays crisp.
@@ -52,12 +82,8 @@ export function PromoHero({ promo }: { promo: Promotion }) {
         background: '#000',
       }}
     >
-      {promo.image_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={promo.image_url} alt={promo.title} style={{
-          width: '100%', height: 'auto', objectFit: 'contain',
-          display: 'block',
-        }} />
+      {(promo.image_url || promo.video_url) ? (
+        <MediaFill promo={promo} fit="contain" />
       ) : (
         <div style={{
           width: '100%', aspectRatio: '16/10',
@@ -167,11 +193,8 @@ export function PromoSmall({ promo }: { promo: Promotion }) {
         aspectRatio: '4/5',
       }}
     >
-      {promo.image_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={promo.image_url} alt={promo.title} style={{
-          width: '100%', height: '100%', objectFit: 'cover', display: 'block',
-        }} />
+      {(promo.image_url || promo.video_url) ? (
+        <MediaFill promo={promo} forceFixedAspect="4/5" />
       ) : (
         <div style={{
           width: '100%', height: '100%',
@@ -252,12 +275,8 @@ export function PromoFeed({ promo }: { promo: Promotion }) {
         boxShadow: '0 10px 32px rgba(20,18,15,0.10)',
       }}
     >
-      {promo.image_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={promo.image_url} alt={promo.title} style={{
-          width: '100%', height: 'auto', objectFit: 'contain',
-          display: 'block',
-        }} />
+      {(promo.image_url || promo.video_url) ? (
+        <MediaFill promo={promo} fit="contain" />
       ) : (
         <div style={{
           width: '100%', aspectRatio: '4/5',

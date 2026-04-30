@@ -1,6 +1,23 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// ─── Performance notes ────────────────────────────────────────────
+// This runs on every navigation under the matcher. We want it to be FAST,
+// because every millisecond here delays the click → render of the next page.
+//
+//   • supabase.auth.getSession()  reads the cookie locally — instant.
+//   • supabase.auth.getUser()     re-validates the JWT against Supabase auth
+//                                 servers — adds 200-800ms over the network.
+//
+// We use getSession() here. The session is only used for redirect decisions
+// (show login vs the app shell). Actual data access is RLS-protected and
+// will reject tampered/expired tokens at the data layer.
+//
+// We also avoid hitting the DB inside middleware — the terms-accepted check
+// happens once at the auth callback / /home page and doesn't need to gate
+// every navigation.
+// ──────────────────────────────────────────────────────────────────
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } })
 
@@ -24,44 +41,27 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const isLoggedIn = !!session?.user
   const path = request.nextUrl.pathname
 
   // ─── User routes ───────────────────────────────────────────
   const isUserRoute = path === '/home' || path.startsWith('/purchases') ||
     path.startsWith('/points') || path.startsWith('/coupons') ||
-    path.startsWith('/profile') || path.startsWith('/promotions')
+    path.startsWith('/profile') || path.startsWith('/promotions') ||
+    path.startsWith('/notifications')
 
-  if (isUserRoute) {
-    if (!user) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
-    // ตรวจ profile + terms — ยกเว้นหน้า /terms เอง
-    if (path !== '/terms') {
-      const { data: profile } = await supabase
-        .from('users')
-        .select('terms_accepted_at')
-        .eq('id', user.id)
-        .maybeSingle()
-      // No profile yet (race with trigger) OR terms not accepted → /terms
-      // /terms page itself will hit /api/users/ensure-profile and accept-terms
-      if (!profile || !profile.terms_accepted_at) {
-        return NextResponse.redirect(new URL('/terms', request.url))
-      }
-    }
+  if (isUserRoute && !isLoggedIn) {
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // ─── Admin routes — auth-gate here, role check happens in app/(admin)/layout.tsx
-  // (admin_staff isn't reachable via anon key under RLS, so we don't query it
-  // at the edge; the layout uses service role to verify role).
-  if (path.startsWith('/admin')) {
-    if (!user) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
+  // ─── Admin routes — auth-gate here, role check in app/(admin)/layout.tsx
+  if (path.startsWith('/admin') && !isLoggedIn) {
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // ─── ถ้า login แล้วพยายามเข้า /login → redirect ไป /home ──
-  if (path === '/login' && user) {
+  // ─── If logged in, /login → /home
+  if (path === '/login' && isLoggedIn) {
     return NextResponse.redirect(new URL('/home', request.url))
   }
 
@@ -76,6 +76,7 @@ export const config = {
     '/coupons',
     '/profile',
     '/promotions',
+    '/notifications',
     '/admin/:path*',
     '/login',
     '/terms',
