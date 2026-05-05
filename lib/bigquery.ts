@@ -98,7 +98,7 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
           SUM(price * quantity) AS total_amount,
           ARRAY_AGG(STRUCT(
             item_id, model_id, item_name, item_sku,
-            model_name, model_sku, quantity, price
+            model_name, model_sku, quantity, price, image_url
           )) AS items
         FROM \`${PROJECT}.${DATASET}.v_dreame_order_items_new\`
         WHERE order_sn = @order_sn
@@ -150,13 +150,18 @@ function mapRow(row: Record<string, unknown>): BQOrderData {
       model_sku: item.model_sku as string,
       quantity: Number(item.quantity),
       price: Number(item.price),
+      image_url: (item.image_url as string | null) ?? null,
     })) : [],
   }
 }
 
 // ============================================================
 // Batch verify pending orders (for cron job)
-// Same strategy: try v_dreame_orders_new, fallback to v_dreame_order_items_new.
+// Query BOTH views and merge. If we early-returned after attempt 1
+// matched even one order, any queued order that exists *only* in
+// v_dreame_order_items_new would never be verified — the cron would
+// retry forever and the customer's PENDING registration would never
+// auto-promote despite the row being live in BQ.
 // ============================================================
 export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData[]> {
   if (orderSns.length === 0) return []
@@ -168,7 +173,9 @@ export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData
     return []
   }
 
-  // ── Attempt 1: v_dreame_orders_new ──
+  const merged = new Map<string, BQOrderData>()
+
+  // ── v_dreame_orders_new ──
   try {
     const [rows] = await bq.query({
       query: `
@@ -182,36 +189,46 @@ export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData
       `,
       params: { sns: orderSns },
     })
-    if (rows && rows.length > 0) return rows.map(mapRow)
+    for (const r of rows || []) {
+      const data = mapRow(r as Record<string, unknown>)
+      merged.set(data.order_sn, data)
+    }
   } catch (e) {
-    console.warn('[BQ] batchVerifyOrders fallback', (e as Error).message)
+    console.warn('[BQ] batchVerifyOrders v_dreame_orders_new failed:', (e as Error).message)
   }
 
-  // ── Attempt 2: aggregate from items ──
-  try {
-    const [rows] = await bq.query({
-      query: `
-        SELECT
-          order_sn,
-          ANY_VALUE(platform) AS platform,
-          CAST(ANY_VALUE(order_create_time) AS STRING) AS order_create_time,
-          CAST(ANY_VALUE(order_date) AS STRING) AS order_date,
-          SUM(price * quantity) AS total_amount,
-          ARRAY_AGG(STRUCT(
-            item_id, model_id, item_name, item_sku,
-            model_name, model_sku, quantity, price
-          )) AS items
-        FROM \`${PROJECT}.${DATASET}.v_dreame_order_items_new\`
-        WHERE order_sn IN UNNEST(@sns)
-        GROUP BY order_sn
-      `,
-      params: { sns: orderSns },
-    })
-    return (rows || []).map(mapRow)
-  } catch (e) {
-    console.error('[BQ] batchVerifyOrders error:', e)
-    return []
+  // ── v_dreame_order_items_new — fill in any order_sn the first view missed ──
+  const missing = orderSns.filter(sn => !merged.has(sn))
+  if (missing.length > 0) {
+    try {
+      const [rows] = await bq.query({
+        query: `
+          SELECT
+            order_sn,
+            ANY_VALUE(platform) AS platform,
+            CAST(ANY_VALUE(order_create_time) AS STRING) AS order_create_time,
+            CAST(ANY_VALUE(order_date) AS STRING) AS order_date,
+            SUM(price * quantity) AS total_amount,
+            ARRAY_AGG(STRUCT(
+              item_id, model_id, item_name, item_sku,
+              model_name, model_sku, quantity, price, image_url
+            )) AS items
+          FROM \`${PROJECT}.${DATASET}.v_dreame_order_items_new\`
+          WHERE order_sn IN UNNEST(@sns)
+          GROUP BY order_sn
+        `,
+        params: { sns: missing },
+      })
+      for (const r of rows || []) {
+        const data = mapRow(r as Record<string, unknown>)
+        merged.set(data.order_sn, data)
+      }
+    } catch (e) {
+      console.error('[BQ] batchVerifyOrders v_dreame_order_items_new failed:', (e as Error).message)
+    }
   }
+
+  return Array.from(merged.values())
 }
 
 // ============================================================

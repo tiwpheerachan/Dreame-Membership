@@ -195,21 +195,35 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
                     padding: 12,
                     background: 'var(--bg-soft)',
                     borderRadius: 'var(--r-sm)',
+                    display: 'flex', gap: 12, alignItems: 'flex-start',
                   }}>
-                    <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600, lineHeight: 1.4 }}>
-                      {it.item_name || it.model_name || '—'}
-                    </p>
-                    {it.model_name && it.item_name && it.model_name !== it.item_name && (
-                      <p style={{ margin: '0 0 4px', fontSize: 11, color: 'var(--ink-mute)' }}>
-                        รุ่น: {it.model_name}
-                      </p>
+                    {it.image_url && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={it.image_url} alt={it.item_name || it.model_name || 'product'}
+                        style={{
+                          width: 64, height: 64, flexShrink: 0,
+                          objectFit: 'cover',
+                          borderRadius: 'var(--r-sm)',
+                          background: '#fff',
+                          border: '1px solid var(--hair)',
+                        }} />
                     )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--ink-soft)' }}>
-                      <span style={{ fontFamily: 'var(--font-mono)' }}>{it.item_sku || it.model_sku || ''}</span>
-                      <span>
-                        ฿{price.toLocaleString()} × {qty} ={' '}
-                        <strong style={{ color: 'var(--ink)' }}>฿{(price * qty).toLocaleString()}</strong>
-                      </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600, lineHeight: 1.4 }}>
+                        {it.item_name || it.model_name || '—'}
+                      </p>
+                      {it.model_name && it.item_name && it.model_name !== it.item_name && (
+                        <p style={{ margin: '0 0 4px', fontSize: 11, color: 'var(--ink-mute)' }}>
+                          รุ่น: {it.model_name}
+                        </p>
+                      )}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)' }}>{it.item_sku || it.model_sku || ''}</span>
+                        <span>
+                          ฿{price.toLocaleString()} × {qty} ={' '}
+                          <strong style={{ color: 'var(--ink)' }}>฿{(price * qty).toLocaleString()}</strong>
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )

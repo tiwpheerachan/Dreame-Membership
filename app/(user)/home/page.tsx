@@ -2,15 +2,22 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
-  Bell, Plus, ShieldCheck, Ticket, Gift, Package,
+  Bell, Plus, Package,
   ChevronRight, TrendingUp, Sparkles, Award, ArrowRight,
 } from 'lucide-react'
 import type { User, PurchaseRegistration, Promotion, UserTier } from '@/types'
 import dynamic from 'next/dynamic'
 const MemberCard = dynamic(() => import('@/components/user/MemberCard'), { ssr: false })
+// Warp uses WebGL — must mount client-side only or the build chokes on `window`.
+const WarpShader = dynamic(() => import('@/components/ui/warp-shader'), { ssr: false })
+// 'use client' already makes this a Client Component — direct import is the
+// safe path. Wrapping a named export with dynamic({ ssr: false }) from a
+// Server Component triggers a Next 14 RSC manifest lookup bug
+// ("…#MembershipDashboardCard#default").
+import { MembershipDashboardCard } from '@/components/ui/animated-dashboard-card'
+import QuickActionsBar from '@/components/user/QuickActionsBar'
 import { PromoHero, PromoSmall, PromoFeed } from '@/components/user/PromoCard'
 import BannerMarquee from '@/components/user/BannerMarquee'
-import TechStatCard from '@/components/user/TechStatCard'
 import { formatDate } from '@/lib/utils'
 import { getNextTierInfo } from '@/lib/points'
 
@@ -90,6 +97,12 @@ export default async function HomePage() {
       ink: '#1B2333',
       sub: 'rgba(27,35,51,0.55)',
       starColor: '#7B8AB8',
+      shaderColors: [
+        'hsl(220, 55%, 30%)',
+        'hsl(210, 70%, 85%)',
+        'hsl(225, 45%, 55%)',
+        'hsl(235, 35%, 92%)',
+      ] as [string, string, string, string],
     },
     GOLD: {
       bg: 'radial-gradient(ellipse at top, #FFF1DD 0%, #FFE0C2 45%, #F8D2A5 100%)',
@@ -97,6 +110,12 @@ export default async function HomePage() {
       ink: '#3A2410',
       sub: 'rgba(58,36,16,0.55)',
       starColor: '#FF8A3D',
+      shaderColors: [
+        'hsl(28, 75%, 35%)',
+        'hsl(38, 100%, 82%)',
+        'hsl(22, 80%, 55%)',
+        'hsl(45, 100%, 90%)',
+      ] as [string, string, string, string],
     },
     PLATINUM: {
       bg: 'radial-gradient(ellipse at top, #DCFAF3 0%, #B5F0E2 45%, #7DD8C5 100%)',
@@ -104,6 +123,12 @@ export default async function HomePage() {
       ink: '#053C36',
       sub: 'rgba(5,60,54,0.55)',
       starColor: '#0E9488',
+      shaderColors: [
+        'hsl(200, 100%, 25%)',
+        'hsl(160, 100%, 80%)',
+        'hsl(180, 90%, 40%)',
+        'hsl(170, 100%, 88%)',
+      ] as [string, string, string, string],
     },
   } as const
   const hero = HERO[userTier]
@@ -111,136 +136,37 @@ export default async function HomePage() {
   return (
     <div className="page-enter" style={{ paddingTop: 0 }}>
       {/* ============================================================
-          LIGHT HERO — tier-tinted gradient with sparkles + shooting stars
+          LIGHT HERO — Warp shader background (replaces stars/sparkles).
+          Card + topbar are unchanged; they sit on zIndex 2 above the shader.
       ============================================================ */}
       <div style={{
         position: 'relative',
-        background: hero.bg,
+        background: hero.bg,        // tier-tinted base shows during shader mount
         paddingTop: 18, paddingBottom: 60,
         overflow: 'hidden',
       }}>
-        {/* aurora blobs (slow background drift) */}
-        <div aria-hidden className="aurora" style={{
-          top: '-10%', left: '-15%', width: 260, height: 260,
-          background: hero.starColor, opacity: 0.18,
-          animationDelay: '0s',
-        }} />
-        <div aria-hidden className="aurora" style={{
-          bottom: '-12%', right: '-18%', width: 320, height: 320,
-          background: hero.starColor, opacity: 0.14,
-          animationDelay: '4s',
-        }} />
-
-        {/* faint tech grid for "futuristic" feel */}
-        <div aria-hidden className="tech-grid" />
-
-        {/* tier-tinted radial glow behind card */}
+        {/* Animated Warp shader fills the hero behind the card */}
         <div aria-hidden style={{
-          position: 'absolute', top: '42%', left: '50%', transform: 'translate(-50%,-50%)',
-          width: 380, height: 380, borderRadius: '50%',
-          background: hero.glow,
-          pointerEvents: 'none',
-          filter: 'blur(8px)',
+          position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
+        }}>
+          <WarpShader
+            colors={hero.shaderColors}
+            speed={0.7}
+            swirl={0.85}
+            swirlIterations={9}
+            proportion={0.45}
+            softness={1}
+            distortion={0.28}
+            shapeScale={0.1}
+          />
+        </div>
+
+        {/* Soft white veil so topbar text stays readable on lighter palettes */}
+        <div aria-hidden style={{
+          position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
+          background:
+            'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.20) 100%)',
         }} />
-
-        {/* concentric pulse rings around the card */}
-        {[0, 1.5, 3].map((delay, i) => (
-          <div key={`ring-${i}`} aria-hidden className="pulse-ring" style={{
-            top: '50%', left: '50%',
-            width: 280, height: 280,
-            transform: 'translate(-50%, -50%)',
-            border: `1.5px solid ${hero.starColor}`,
-            opacity: 0.4,
-            animationDelay: `${delay}s`,
-          }} />
-        ))}
-
-        {/* dense twinkle dots — 18 across the hero, mixed tier + white */}
-        {[
-          { top: '8%',  left: '6%',  size: 3,   delay: '0s',   tone: hero.starColor },
-          { top: '12%', left: '24%', size: 2,   delay: '1.2s', tone: '#fff' },
-          { top: '14%', left: '46%', size: 4,   delay: '0.4s', tone: hero.starColor },
-          { top: '18%', left: '72%', size: 2.5, delay: '2.1s', tone: '#fff' },
-          { top: '20%', left: '90%', size: 3,   delay: '0.8s', tone: hero.starColor },
-          { top: '32%', left: '14%', size: 2,   delay: '1.7s', tone: '#fff' },
-          { top: '34%', left: '38%', size: 1.5, delay: '0.6s', tone: hero.starColor },
-          { top: '38%', left: '88%', size: 5,   delay: '0.0s', tone: hero.starColor },
-          { top: '46%', left: '4%',  size: 2.5, delay: '1.4s', tone: '#fff' },
-          { top: '52%', left: '94%', size: 2,   delay: '2.4s', tone: '#fff' },
-          { top: '58%', left: '8%',  size: 3,   delay: '0.9s', tone: hero.starColor },
-          { top: '64%', left: '76%', size: 2,   delay: '1.9s', tone: hero.starColor },
-          { top: '70%', left: '20%', size: 4,   delay: '0.3s', tone: hero.starColor },
-          { top: '74%', left: '50%', size: 1.5, delay: '2.7s', tone: '#fff' },
-          { top: '78%', left: '88%', size: 3.5, delay: '1.1s', tone: '#fff' },
-          { top: '84%', left: '12%', size: 2,   delay: '2.0s', tone: '#fff' },
-          { top: '88%', left: '60%', size: 3,   delay: '0.5s', tone: hero.starColor },
-          { top: '92%', left: '38%', size: 2,   delay: '1.5s', tone: hero.starColor },
-        ].map((s, i) => (
-          <span key={`tw-${i}`} aria-hidden className="twinkle" style={{
-            top: s.top, left: s.left,
-            width: s.size, height: s.size,
-            background: `radial-gradient(circle, ${s.tone} 0%, transparent 70%)`,
-            boxShadow: `0 0 ${s.size * 4}px ${s.tone}`,
-            animationDelay: s.delay,
-            animationDuration: `${2.4 + (i % 4) * 0.6}s`,
-          }} />
-        ))}
-
-        {/* cross-shaped sparkle bursts — sharper, ray-like */}
-        {[
-          { top: '16%', left: '18%', delay: '0s',   color: hero.starColor },
-          { top: '40%', left: '92%', delay: '1.4s', color: '#fff' },
-          { top: '66%', left: '10%', delay: '2.2s', color: hero.starColor },
-          { top: '82%', left: '70%', delay: '0.6s', color: '#fff' },
-          { top: '28%', left: '50%', delay: '1.8s', color: hero.starColor },
-        ].map((s, i) => (
-          <span key={`cr-${i}`} aria-hidden className="spark-cross" style={{
-            top: s.top, left: s.left,
-            color: s.color,
-            animationDelay: s.delay,
-          }} />
-        ))}
-
-        {/* drifting particles (rise upward with slight sway) */}
-        {[
-          { top: '88%', left: '12%', size: 3, delay: '0s',   tone: hero.starColor },
-          { top: '90%', left: '36%', size: 2, delay: '2s',   tone: '#fff' },
-          { top: '85%', left: '60%', size: 4, delay: '4s',   tone: hero.starColor },
-          { top: '92%', left: '78%', size: 2, delay: '1s',   tone: '#fff' },
-          { top: '86%', left: '92%', size: 3, delay: '3.5s', tone: hero.starColor },
-        ].map((s, i) => (
-          <span key={`dr-${i}`} aria-hidden className="drift" style={{
-            top: s.top, left: s.left,
-            width: s.size, height: s.size,
-            background: s.tone,
-            boxShadow: `0 0 ${s.size * 4}px ${s.tone}`,
-            animationDelay: s.delay,
-          }} />
-        ))}
-
-        {/* ambient star glyphs (✦) — multiple sizes/positions */}
-        {[
-          { top: '14%', left: '12%', size: 14, delay: '0s',   opacity: 0.75 },
-          { top: '20%', left: '78%', size: 10, delay: '0.7s', opacity: 0.55 },
-          { top: '54%', left: '94%', size: 12, delay: '1.4s', opacity: 0.6 },
-          { top: '76%', left: '6%',  size: 16, delay: '2.1s', opacity: 0.7 },
-          { top: '82%', left: '44%', size: 11, delay: '1.0s', opacity: 0.55 },
-          { top: '40%', left: '8%',  size: 9,  delay: '2.8s', opacity: 0.5 },
-        ].map((s, i) => (
-          <span key={`gl-${i}`} aria-hidden style={{
-            position: 'absolute', top: s.top, left: s.left,
-            fontSize: s.size, color: hero.starColor, opacity: s.opacity,
-            animation: `sparkle-spin ${3.2 + (i % 3) * 0.6}s ease-in-out ${s.delay} infinite`,
-            textShadow: `0 0 8px ${hero.starColor}`,
-          }}>✦</span>
-        ))}
-
-        {/* shooting stars — 5 across, varied speeds + angles */}
-        <span aria-hidden className="shooting-star" style={{ top: '6%',  left: '-10%', animationDelay: '0s',   animationDuration: '5.5s' }} />
-        <span aria-hidden className="shooting-star" style={{ top: '24%', left: '-15%', animationDelay: '1.8s', animationDuration: '6.5s' }} />
-        <span aria-hidden className="shooting-star" style={{ top: '46%', left: '-8%',  animationDelay: '3.4s', animationDuration: '5s'   }} />
-        <span aria-hidden className="shooting-star" style={{ top: '62%', left: '-12%', animationDelay: '5.2s', animationDuration: '7s'   }} />
-        <span aria-hidden className="shooting-star" style={{ top: '78%', left: '-6%',  animationDelay: '7s',   animationDuration: '5.8s' }} />
 
         {/* Topbar */}
         <header style={{
@@ -321,144 +247,26 @@ export default async function HomePage() {
           borderRadius: 'var(--r-pill)', margin: '0 auto 10px',
         }} />
 
-      {/* ─── Stats strip — 3 pill cards with solid pastel backgrounds ─── */}
-      <section style={{ padding: '8px 16px 10px' }}>
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8,
-        }}>
-          {/* POINTS — soft sky blue */}
-          <TechStatCard
-            label="POINTS" subLabel="available"
-            value={user.total_points.toLocaleString()}
-            bgColor="#C2DBF5"
-          />
-
-          {/* LIFETIME — warm light gray */}
-          <TechStatCard
-            label="LIFETIME" subLabel="all-time"
-            value={user.lifetime_points.toLocaleString()}
-            bgColor="#D8D4CD"
-          />
-
-          {/* TIER — warm yellow */}
-          <TechStatCard
-            label="TIER" subLabel="level"
-            value={tierLabel}
-            bgColor="#FFDB71"
-          />
-        </div>
+      {/* ─── Animated dashboard card — POINTS / LIFETIME / TIER + tier progress ─── */}
+      <section style={{ padding: '8px 16px 12px' }}>
+        <MembershipDashboardCard
+          availablePoints={user.total_points}
+          lifetimePoints={user.lifetime_points}
+          tierLabel={tierLabel}
+          nextTierLabel={tierInfo.nextTier
+            ? tierInfo.nextTier.charAt(0) + tierInfo.nextTier.slice(1).toLowerCase()
+            : null}
+          progressPct={tierInfo.progress}
+          pointsNeeded={tierInfo.pointsNeeded}
+          toPoints={tierInfo.toPoints}
+          detailsHref="/points"
+          detailsLabel="ดูรายละเอียดคะแนน"
+        />
       </section>
 
-      {/* ─── Tier progress — orange-dashed pill card with trophy + gradient bar ─── */}
-      {tierInfo.nextTier && (() => {
-        const nextLabel = tierInfo.nextTier.charAt(0) + tierInfo.nextTier.slice(1).toLowerCase()
-        return (
-          <section style={{ padding: '4px 16px 12px' }}>
-            <div style={{
-              background: '#fff',
-              border: '2px dashed #FFB04C',
-              borderRadius: 24,
-              padding: '14px 18px 13px',
-            }}>
-              {/* Top row — trophy + tier transition + percent */}
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                marginBottom: 11, gap: 12,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/images/trophy.png" alt=""
-                    style={{ width: 38, height: 38, objectFit: 'contain', flexShrink: 0 }} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 17, fontWeight: 800 }}>
-                    <span style={{ color: '#0E0E0E' }}>{tierLabel}</span>
-                    <span style={{ color: '#0E0E0E', fontSize: 16 }}>→</span>
-                    <span style={{ color: '#5DADE2' }}>{nextLabel}</span>
-                  </div>
-                </div>
-                <div className="tnum" style={{ fontSize: 18, fontWeight: 800, color: '#FF8A3D', flexShrink: 0 }}>
-                  {tierInfo.progress}%
-                </div>
-              </div>
-
-              {/* Bar — yellow → orange gradient on grey track */}
-              <div style={{
-                position: 'relative',
-                height: 8, background: '#E0E0E0',
-                borderRadius: 999, overflow: 'hidden',
-              }}>
-                <div style={{
-                  position: 'relative',
-                  height: '100%', width: `${tierInfo.progress}%`,
-                  background: 'linear-gradient(90deg, #FFD43B 0%, #FF8A3D 100%)',
-                  borderRadius: 999,
-                  transition: 'width 1s cubic-bezier(0.34,1.1,0.64,1)',
-                }} />
-              </div>
-
-              {/* Bottom — start (orange), "อีก X pts" dashed pill, end (black) */}
-              <div style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                marginTop: 11,
-              }}>
-                <span className="tnum" style={{ fontSize: 13, fontWeight: 700 }}>
-                  <span style={{ color: '#FF8A3D' }}>{user.lifetime_points.toLocaleString()}</span>{' '}
-                  <span style={{ color: '#0E0E0E' }}>pts</span>
-                </span>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'baseline', gap: 5,
-                  padding: '4px 14px', borderRadius: 999,
-                  background: '#FFE5C0',
-                  border: '1.5px dashed #FF8A3D',
-                  fontSize: 13, fontWeight: 700,
-                }}>
-                  <span style={{ color: '#FF8A3D' }}>อีก</span>
-                  <span className="tnum" style={{ color: '#FF8A3D', fontWeight: 800 }}>
-                    {tierInfo.pointsNeeded.toLocaleString()}
-                  </span>
-                  <span style={{ color: '#FF8A3D' }}>pts</span>
-                </span>
-                <span className="tnum" style={{ fontSize: 13, fontWeight: 700, color: '#0E0E0E' }}>
-                  {tierInfo.toPoints.toLocaleString()}{' '}
-                  <span style={{ color: '#5C5C5C' }}>pts</span>
-                </span>
-              </div>
-            </div>
-          </section>
-        )
-      })()}
-
-      {/* ─── Quick Actions: simple 4-icon row ─── */}
-      <section style={{ padding: '4px 16px 8px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-          {[
-            { href: '/purchases/register', Icon: Plus,        label: 'ลงทะเบียน', accent: true  },
-            { href: '/purchases',          Icon: ShieldCheck, label: 'ประกัน' },
-            { href: '/coupons',            Icon: Ticket,      label: 'คูปอง' },
-            { href: '/points',             Icon: Gift,        label: 'แลกของ' },
-          ].map(a => (
-            <Link key={a.href} href={a.href} className="tap" style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-              textDecoration: 'none',
-              padding: '10px 4px',
-              borderRadius: 'var(--r-md)',
-              background: 'transparent',
-            }}>
-              <div style={{
-                width: 48, height: 48, borderRadius: 'var(--r-md)',
-                background: a.accent ? 'var(--black)' : '#fff',
-                border: a.accent ? 'none' : '1px solid var(--line)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: a.accent ? 'var(--gold-soft)' : 'var(--ink)',
-                boxShadow: a.accent ? '0 4px 14px rgba(14,14,14,0.15)' : 'none',
-              }}>
-                <a.Icon size={20} strokeWidth={1.8} />
-              </div>
-              <p style={{ fontSize: 11, fontWeight: 600, margin: 0, color: 'var(--ink-soft)' }}>
-                {a.label}
-              </p>
-            </Link>
-          ))}
-        </div>
+      {/* ─── Quick Actions: gradient-pill bar that slides between buttons ─── */}
+      <section style={{ padding: '6px 16px 10px' }}>
+        <QuickActionsBar />
       </section>
 
       {/* ─── BRAND BANNERS — 2 horizontally-scrolling marquee rows ─── */}

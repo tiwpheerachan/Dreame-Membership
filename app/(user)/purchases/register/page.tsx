@@ -223,6 +223,7 @@ export default function RegisterPage() {
                           const itemName = (it.item_name as string) || ''
                           const modelName = (it.model_name as string) || ''
                           const sku = (it.item_sku as string) || (it.model_sku as string) || ''
+                          const imageUrl = (it.image_url as string | null) || null
                           const showModel = modelName && itemName && modelName !== itemName
                           return (
                             <div key={i} style={{
@@ -230,21 +231,35 @@ export default function RegisterPage() {
                               background: 'rgba(255,255,255,0.6)',
                               borderRadius: 'var(--r-sm)',
                               fontSize: 11.5, color: 'var(--ink)',
+                              display: 'flex', gap: 10, alignItems: 'flex-start',
                             }}>
-                              <p style={{ margin: '0 0 2px', fontWeight: 600, lineHeight: 1.35 }}>
-                                {itemName || modelName || '—'}
-                              </p>
-                              {showModel && (
-                                <p style={{ margin: '0 0 2px', fontSize: 10.5, color: 'var(--ink-mute)' }}>
-                                  รุ่น: {modelName}
-                                </p>
+                              {imageUrl && (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img src={imageUrl} alt={itemName || modelName || 'product'}
+                                  style={{
+                                    width: 48, height: 48, flexShrink: 0,
+                                    objectFit: 'cover',
+                                    borderRadius: 'var(--r-sm)',
+                                    background: 'var(--bg-soft)',
+                                    border: '1px solid var(--hair)',
+                                  }} />
                               )}
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
-                                <span>{sku}</span>
-                                <span>
-                                  ฿{price.toLocaleString()} × {qty} ={' '}
-                                  <strong style={{ color: 'var(--ink)' }}>฿{(price * qty).toLocaleString()}</strong>
-                                </span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ margin: '0 0 2px', fontWeight: 600, lineHeight: 1.35 }}>
+                                  {itemName || modelName || '—'}
+                                </p>
+                                {showModel && (
+                                  <p style={{ margin: '0 0 2px', fontSize: 10.5, color: 'var(--ink-mute)' }}>
+                                    รุ่น: {modelName}
+                                  </p>
+                                )}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+                                  <span>{sku}</span>
+                                  <span>
+                                    ฿{price.toLocaleString()} × {qty} ={' '}
+                                    <strong style={{ color: 'var(--ink)' }}>฿{(price * qty).toLocaleString()}</strong>
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           )

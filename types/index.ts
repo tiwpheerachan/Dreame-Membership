@@ -141,6 +141,7 @@ export interface BQOrderItem {
   model_sku: string
   quantity: number
   price: number
+  image_url: string | null
 }
 
 export interface BQOrderData {

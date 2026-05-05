@@ -23,6 +23,31 @@ export async function GET(req: Request) {
   const supabase = createServiceClient()
 
   try {
+    // Self-heal: any PENDING+ONLINE registration that's missing from the
+    // queue (e.g. legacy rows, or an insert that raced with a queue failure)
+    // would never get re-checked. Backfill them before reading the queue.
+    const { data: orphans } = await supabase
+      .from('purchase_registrations')
+      .select('id, order_sn')
+      .eq('status', 'PENDING')
+      .eq('channel_type', 'ONLINE')
+      .limit(500)
+    if (orphans && orphans.length > 0) {
+      const orphanIds = orphans.map(o => o.id)
+      const { data: queued } = await supabase
+        .from('pending_verifications')
+        .select('purchase_reg_id')
+        .in('purchase_reg_id', orphanIds)
+      const queuedSet = new Set((queued || []).map(q => q.purchase_reg_id))
+      const toInsert = orphans
+        .filter(o => !queuedSet.has(o.id))
+        .map(o => ({ purchase_reg_id: o.id, order_sn: o.order_sn }))
+      if (toInsert.length > 0) {
+        await supabase.from('pending_verifications').insert(toInsert)
+        console.log(`[CRON] Backfilled ${toInsert.length} orphan PENDING orders into queue`)
+      }
+    }
+
     // Only retry ONLINE orders. STORE/ONSITE rows can never appear in BQ and
     // must be admin-approved instead. The register endpoint already gates
     // inserts by channel_type, but the inner join here also protects against

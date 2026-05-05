@@ -1,4 +1,4 @@
-import type { PurchaseRegistration } from '@/lib/types'
+import type { PurchaseRegistration, BQOrderData } from '@/lib/types'
 import { CHANNEL_LABELS, STATUS_LABELS } from '@/lib/types'
 import { formatDate, formatCurrency, warrantyDaysLeft } from '@/lib/utils'
 import { Badge } from '@/components/ui/index'
@@ -20,6 +20,8 @@ interface PurchaseCardProps {
 export function PurchaseCard({ purchase, onClick }: PurchaseCardProps) {
   const daysLeft = warrantyDaysLeft(purchase.warranty_end)
   const warrantyValid = daysLeft > 0
+  const bq = purchase.bq_raw_data as BQOrderData | null
+  const itemImage = bq?.items?.[0]?.image_url || null
 
   return (
     <div
@@ -28,9 +30,18 @@ export function PurchaseCard({ purchase, onClick }: PurchaseCardProps) {
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-dreame-50 rounded-xl flex items-center justify-center">
-            <Package size={20} className="text-dreame-500" />
-          </div>
+          {itemImage ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={itemImage}
+              alt={purchase.model_name || 'product'}
+              className="w-10 h-10 rounded-xl object-cover bg-gray-50 border border-gray-100"
+            />
+          ) : (
+            <div className="w-10 h-10 bg-dreame-50 rounded-xl flex items-center justify-center">
+              <Package size={20} className="text-dreame-500" />
+            </div>
+          )}
           <div>
             <p className="font-semibold text-gray-900 text-sm line-clamp-1">
               {purchase.model_name || purchase.item_name || purchase.sku || 'สินค้า Dreame'}

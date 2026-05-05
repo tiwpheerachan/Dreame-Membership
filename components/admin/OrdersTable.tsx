@@ -8,6 +8,7 @@ import {
   CheckCircle, XCircle,
 } from 'lucide-react'
 import { channelLabel, formatDate, formatDateTime } from '@/lib/utils'
+import type { BQOrderData } from '@/types'
 import Drawer from './Drawer'
 
 export type OrderRow = {
@@ -30,6 +31,7 @@ export type OrderRow = {
   approved_by?: string | null
   approved_at?: string | null
   receipt_image_url?: string | null
+  bq_raw_data?: BQOrderData | null
   created_at: string
   users: { full_name: string | null; member_id: string | null; phone: string | null } | null
 }
@@ -252,6 +254,7 @@ export default function OrdersTable({ initialItems, totalCount, statusCounts, pa
 
 function Row({ row, active, onSelect }: { row: OrderRow; active: boolean; onSelect: () => void }) {
   const u = row.users
+  const thumbUrl = row.bq_raw_data?.items?.[0]?.image_url || null
   return (
     <tr
       onClick={onSelect}
@@ -266,12 +269,27 @@ function Row({ row, active, onSelect }: { row: OrderRow; active: boolean; onSele
         <p className="num muted" style={{ margin: 0, fontSize: 10.5 }}>{u?.member_id || '-'}</p>
       </td>
       <td>
-        <p style={{ margin: 0, fontSize: 12.5, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {row.model_name || '-'}
-        </p>
-        {row.serial_number && (
-          <p className="muted" style={{ margin: 0, fontSize: 10.5 }}>SN: {row.serial_number}</p>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {thumbUrl && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={thumbUrl} alt={row.model_name || 'product'}
+              style={{
+                width: 32, height: 32, flexShrink: 0,
+                objectFit: 'cover',
+                borderRadius: 'var(--r-sm)',
+                background: 'var(--bg-soft)',
+                border: '1px solid var(--hair)',
+              }} />
+          )}
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: 12.5, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {row.model_name || '-'}
+            </p>
+            {row.serial_number && (
+              <p className="muted" style={{ margin: 0, fontSize: 10.5 }}>SN: {row.serial_number}</p>
+            )}
+          </div>
+        </div>
       </td>
       <td className="muted" style={{ fontSize: 11 }}>{channelLabel(row.channel)}</td>
       <td>
@@ -326,6 +344,55 @@ function DetailPanel({
         onLocalRemove={onLocalRemove}
         onLocalPatch={onLocalPatch}
       />
+
+      {/* BQ items (with product images) */}
+      {row.bq_raw_data?.items && row.bq_raw_data.items.length > 0 && (
+        <div className="admin-card" style={{ padding: 14 }}>
+          <p style={{ fontSize: 10, color: 'var(--ink-mute)', fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', margin: '0 0 10px' }}>
+            รายการสินค้า ({row.bq_raw_data.items.length})
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {row.bq_raw_data.items.map((it, i) => (
+              <div key={i} style={{
+                display: 'flex', gap: 10, alignItems: 'center',
+                padding: 8,
+                background: 'var(--bg-soft)',
+                borderRadius: 'var(--r-sm)',
+              }}>
+                {it.image_url ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={it.image_url} alt={it.item_name || 'product'}
+                    style={{
+                      width: 48, height: 48, flexShrink: 0,
+                      objectFit: 'cover',
+                      borderRadius: 'var(--r-sm)',
+                      background: '#fff',
+                      border: '1px solid var(--hair)',
+                    }} />
+                ) : (
+                  <div style={{
+                    width: 48, height: 48, flexShrink: 0,
+                    background: '#fff',
+                    borderRadius: 'var(--r-sm)',
+                    border: '1px solid var(--hair)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Package size={18} color="var(--ink-faint)" />
+                  </div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {it.item_name || it.model_name || '—'}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 10.5, color: 'var(--ink-mute)', fontFamily: 'var(--font-mono)' }}>
+                    {it.item_sku || it.model_sku || ''} · ฿{Number(it.price).toLocaleString()} × {it.quantity}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Edit form */}
       <EditForm row={row} onLocalPatch={onLocalPatch} />

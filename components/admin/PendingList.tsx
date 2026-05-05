@@ -637,7 +637,7 @@ function Info({ label, value, mono, bold }: { label: string; value: string; mono
 type LookupResult =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'found'; data: { order_sn: string; platform: string; total_amount: number; order_date: string; items: { item_name: string; item_sku: string; quantity: number; price: number }[] } }
+  | { kind: 'found'; data: { order_sn: string; platform: string; total_amount: number; order_date: string; items: { item_name: string; item_sku: string; quantity: number; price: number; image_url?: string | null }[] } }
   | { kind: 'not_found'; message: string }
   | { kind: 'bq_error'; message: string; bq_error: string }
   | { kind: 'error'; message: string }
@@ -703,6 +703,47 @@ function BQLookup() {
                 <div>ยอดรวม: <strong>฿{Number(result.data.total_amount).toLocaleString()}</strong></div>
                 <div>จำนวนรายการ: <strong>{result.data.items?.length || 0}</strong></div>
               </div>
+              {result.data.items && result.data.items.length > 0 && (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {result.data.items.map((it, i) => (
+                    <div key={i} style={{
+                      display: 'flex', gap: 10, alignItems: 'center',
+                      padding: '6px 8px',
+                      background: 'rgba(255,255,255,0.6)',
+                      borderRadius: 'var(--r-sm)',
+                    }}>
+                      {it.image_url ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={it.image_url} alt={it.item_name || 'product'}
+                          style={{
+                            width: 40, height: 40, flexShrink: 0,
+                            objectFit: 'cover',
+                            borderRadius: 'var(--r-sm)',
+                            background: '#fff',
+                            border: '1px solid var(--hair)',
+                          }} />
+                      ) : (
+                        <div style={{
+                          width: 40, height: 40, flexShrink: 0,
+                          background: 'var(--bg-soft)',
+                          borderRadius: 'var(--r-sm)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <Package size={16} color="var(--ink-faint)" />
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 11.5, fontWeight: 600, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {it.item_name || '—'}
+                        </p>
+                        <p style={{ margin: 0, fontSize: 10.5, color: 'var(--ink-mute)', fontFamily: 'var(--font-mono)' }}>
+                          {it.item_sku || ''} · ฿{Number(it.price).toLocaleString()} × {it.quantity}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {result.kind === 'not_found' && (

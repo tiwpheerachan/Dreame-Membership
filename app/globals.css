@@ -646,3 +646,17 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; line-he
 .divider::before, .divider::after {
   content: ''; flex: 1; height: 1px; background: var(--line);
 }
+
+/* ── Animated keyframes for <StarButton /> ──
+   star-btn: drives the light streak around the rounded perimeter
+   hue-cycle: continuously shifts the streak's color through the spectrum
+   so the laps "ไล่สีไปเรื่อยๆ" instead of staying one tone. */
+@keyframes star-btn {
+  0%   { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
+}
+@keyframes hue-cycle {
+  0%   { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+

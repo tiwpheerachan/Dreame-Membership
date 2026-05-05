@@ -10,6 +10,8 @@ import { getNextTierInfo, normalizeTier } from '@/lib/tier'
 import dynamic from 'next/dynamic'
 
 const MemberCard = dynamic(() => import('@/components/user/MemberCard'), { ssr: false })
+// Warp uses WebGL — must mount client-side only or the build chokes on `window`.
+const WarpShader = dynamic(() => import('@/components/ui/warp-shader'), { ssr: false })
 
 const TYPE_CFG = {
   EARNED:       { label: 'ได้รับ',         Icon: TrendingUp,   tone: 'green' as const },
@@ -25,21 +27,43 @@ const TONES = {
   amber: { ink: '#8C5A14', bg: '#FFF1DD', border: '#F0D7A4' },
 }
 
-const HERO: Record<UserTier, { bg: string; glow: string; ink: string; sub: string; star: string }> = {
+type ShaderColors = [string, string, string, string]
+const HERO: Record<UserTier, {
+  bg: string; glow: string; ink: string; sub: string; star: string;
+  shaderColors: ShaderColors
+}> = {
   SILVER: {
     bg:   'radial-gradient(ellipse at top, #F1F5FA 0%, #E2E8F2 45%, #DDD0E5 100%)',
     glow: 'radial-gradient(circle, rgba(120,140,200,0.30) 0%, transparent 65%)',
     ink:  '#1B2333', sub: 'rgba(27,35,51,0.55)', star: '#7B8AB8',
+    shaderColors: [
+      'hsl(220, 55%, 30%)',
+      'hsl(210, 70%, 85%)',
+      'hsl(225, 45%, 55%)',
+      'hsl(235, 35%, 92%)',
+    ],
   },
   GOLD: {
     bg:   'radial-gradient(ellipse at top, #FFF1DD 0%, #FFE0C2 45%, #F8D2A5 100%)',
     glow: 'radial-gradient(circle, rgba(255,166,77,0.32) 0%, transparent 65%)',
     ink:  '#3A2410', sub: 'rgba(58,36,16,0.55)', star: '#FF8A3D',
+    shaderColors: [
+      'hsl(28, 75%, 35%)',
+      'hsl(38, 100%, 82%)',
+      'hsl(22, 80%, 55%)',
+      'hsl(45, 100%, 90%)',
+    ],
   },
   PLATINUM: {
     bg:   'radial-gradient(ellipse at top, #DCFAF3 0%, #B5F0E2 45%, #7DD8C5 100%)',
     glow: 'radial-gradient(circle, rgba(20,184,166,0.30) 0%, transparent 65%)',
     ink:  '#053C36', sub: 'rgba(5,60,54,0.55)', star: '#0E9488',
+    shaderColors: [
+      'hsl(200, 100%, 25%)',
+      'hsl(160, 100%, 80%)',
+      'hsl(180, 90%, 40%)',
+      'hsl(170, 100%, 88%)',
+    ],
   },
 }
 
@@ -88,79 +112,38 @@ export default async function PointsPage() {
     <div className="page-enter" style={{ paddingTop: 0, paddingBottom: 32 }}>
 
       {/* ============================================================
-          HERO STAGE — sparkles + member card with wake animation
+          HERO STAGE — Warp shader background + member card.
+          Header / card / balance sit on zIndex 2 above the shader,
+          matching the home page treatment.
       ============================================================ */}
       <div style={{
         position: 'relative',
-        background: hero.bg,
+        background: hero.bg,        // tier-tinted base shows during shader mount
         paddingTop: 18, paddingBottom: 40,
         overflow: 'hidden',
       }}>
-        {/* aurora */}
-        <div aria-hidden className="aurora" style={{
-          top: '-10%', left: '-15%', width: 260, height: 260,
-          background: hero.star, opacity: 0.18, animationDelay: '0s',
-        }} />
-        <div aria-hidden className="aurora" style={{
-          bottom: '-12%', right: '-18%', width: 320, height: 320,
-          background: hero.star, opacity: 0.14, animationDelay: '4s',
-        }} />
-        <div aria-hidden className="tech-grid" />
-
-        {/* radial glow behind card */}
+        {/* Animated Warp shader fills the hero behind the card */}
         <div aria-hidden style={{
-          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-          width: 380, height: 380, borderRadius: '50%',
-          background: hero.glow, pointerEvents: 'none', filter: 'blur(8px)',
+          position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
+        }}>
+          <WarpShader
+            colors={hero.shaderColors}
+            speed={0.7}
+            swirl={0.85}
+            swirlIterations={9}
+            proportion={0.45}
+            softness={1}
+            distortion={0.28}
+            shapeScale={0.1}
+          />
+        </div>
+
+        {/* Soft white veil — keeps the header text and pills readable */}
+        <div aria-hidden style={{
+          position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
+          background:
+            'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.20) 100%)',
         }} />
-
-        {/* pulse rings */}
-        {[0, 1.5, 3].map((delay, i) => (
-          <div key={`ring-${i}`} aria-hidden className="pulse-ring" style={{
-            top: '52%', left: '50%',
-            width: 280, height: 280,
-            transform: 'translate(-50%, -50%)',
-            border: `1.5px solid ${hero.star}`,
-            opacity: 0.4, animationDelay: `${delay}s`,
-          }} />
-        ))}
-
-        {/* twinkles */}
-        {[
-          { top: '10%', left: '8%',  size: 3,   delay: '0s',   tone: hero.star },
-          { top: '14%', left: '46%', size: 4,   delay: '0.4s', tone: hero.star },
-          { top: '20%', left: '90%', size: 3,   delay: '0.8s', tone: hero.star },
-          { top: '30%', left: '14%', size: 2,   delay: '1.7s', tone: '#fff' },
-          { top: '38%', left: '88%', size: 5,   delay: '0.0s', tone: hero.star },
-          { top: '46%', left: '4%',  size: 2.5, delay: '1.4s', tone: '#fff' },
-          { top: '70%', left: '20%', size: 4,   delay: '0.3s', tone: hero.star },
-          { top: '78%', left: '88%', size: 3.5, delay: '1.1s', tone: '#fff' },
-          { top: '88%', left: '60%', size: 3,   delay: '0.5s', tone: hero.star },
-          { top: '92%', left: '38%', size: 2,   delay: '1.5s', tone: hero.star },
-        ].map((s, i) => (
-          <span key={`tw-${i}`} aria-hidden className="twinkle" style={{
-            top: s.top, left: s.left,
-            width: s.size, height: s.size,
-            background: `radial-gradient(circle, ${s.tone} 0%, transparent 70%)`,
-            boxShadow: `0 0 ${s.size * 4}px ${s.tone}`,
-            animationDelay: s.delay,
-            animationDuration: `${2.4 + (i % 4) * 0.6}s`,
-          }} />
-        ))}
-
-        {[
-          { top: '16%', left: '18%', delay: '0s',   color: hero.star },
-          { top: '40%', left: '92%', delay: '1.4s', color: '#fff' },
-          { top: '82%', left: '70%', delay: '0.6s', color: '#fff' },
-        ].map((s, i) => (
-          <span key={`cr-${i}`} aria-hidden className="spark-cross" style={{
-            top: s.top, left: s.left, color: s.color, animationDelay: s.delay,
-          }} />
-        ))}
-
-        <span aria-hidden className="shooting-star" style={{ top: '6%',  left: '-10%', animationDelay: '0s',   animationDuration: '5.5s' }} />
-        <span aria-hidden className="shooting-star" style={{ top: '24%', left: '-15%', animationDelay: '1.8s', animationDuration: '6.5s' }} />
-        <span aria-hidden className="shooting-star" style={{ top: '78%', left: '-6%',  animationDelay: '7s',   animationDuration: '5.8s' }} />
 
         {/* Header — left-aligned for editorial feel */}
         <header style={{
