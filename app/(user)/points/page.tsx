@@ -249,81 +249,100 @@ export default async function PointsPage() {
             background: 'linear-gradient(90deg, transparent 0%, #EADBB1 25%, #A0782B 50%, #EADBB1 75%, transparent 100%)',
           }} />
 
-          <div style={{ padding: '18px 20px 22px' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
-              <p style={{ margin: 0, fontSize: 11, color: 'var(--ink-mute)', letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700 }}>
+          <div style={{ padding: '20px 22px 22px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--ink-mute)', letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 800 }}>
                 Tier Ladder
               </p>
               {tierInfo.nextTier && (
-                <p style={{ margin: 0, fontSize: 11.5, color: 'var(--ink-mute)' }}>
-                  อีก{' '}
-                  <span style={{ fontWeight: 800, color: 'var(--gold-deep)' }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'baseline', gap: 4,
+                  padding: '4px 12px', borderRadius: 999,
+                  background: 'linear-gradient(135deg,#FAF3DC,#EADBB1)',
+                  border: '1px solid rgba(160,120,43,0.30)',
+                  fontSize: 11, fontWeight: 700, color: '#5B3417',
+                  boxShadow: 'inset 0 1px 0 rgba(255,250,235,0.6)',
+                }}>
+                  อีก
+                  <span className="tnum" style={{ fontWeight: 800, color: '#A0782B' }}>
                     {tierInfo.pointsNeeded.toLocaleString()}
-                  </span>{' '}
+                  </span>
                   แต้ม
-                </p>
+                </span>
               )}
             </div>
 
-            {/* Track + dots */}
-            <div style={{ position: 'relative', padding: '0 8px' }}>
+            {/* Track + tier coins */}
+            <div style={{ position: 'relative', padding: '0 14px' }}>
               {/* Background track */}
               <div style={{
-                height: 6, borderRadius: 100,
+                height: 4, borderRadius: 100,
                 background: 'rgba(160,120,43,0.10)',
                 position: 'relative', overflow: 'hidden',
               }}>
-                {/* Filled portion based on lifetime points */}
+                {/* Filled portion */}
                 <div style={{
                   position: 'absolute', top: 0, left: 0, bottom: 0,
                   width: `${ladderProgressPct(user.lifetime_points)}%`,
                   background: 'linear-gradient(90deg,#A0782B,#EADBB1,#A0782B)',
                   borderRadius: 100,
-                  boxShadow: '0 0 12px rgba(160,120,43,0.45)',
+                  boxShadow: '0 0 10px rgba(160,120,43,0.45)',
                   transition: 'width 0.6s ease',
                 }} />
               </div>
 
-              {/* Tier dots positioned along track */}
+              {/* Tier coins — replace dots with elegant gold-coined badges */}
               {TIER_LADDER.map(t => {
                 const left = ladderTierPosition(t.threshold)
                 const isCurrent = userTier === t.key
                 const isPassed  = user.lifetime_points >= t.threshold
                 return (
                   <div key={t.key} style={{
-                    position: 'absolute', top: -7, left: `calc(${left}% - 10px)`,
-                    width: 20, height: 20, borderRadius: '50%',
+                    position: 'absolute', top: -12, left: `calc(${left}% - 14px)`,
+                    width: 28, height: 28, borderRadius: '50%',
                     background: isPassed
-                      ? 'linear-gradient(135deg,#FAF3DC,#EADBB1,#A0782B)'
+                      ? 'linear-gradient(135deg,#FAF3DC 0%,#EADBB1 35%,#C9A063 70%,#A0782B 100%)'
                       : '#fff',
-                    border: `2px solid ${isPassed ? '#A0782B' : 'var(--hair)'}`,
-                    boxShadow: isPassed ? '0 2px 6px rgba(160,120,43,0.40)' : 'none',
-                  }}
-                  className={isCurrent ? 'tier-dot-active' : undefined}
-                  />
+                    border: `1.5px solid ${isPassed ? '#A0782B' : 'rgba(160,120,43,0.28)'}`,
+                    boxShadow: isPassed
+                      ? 'inset 0 1px 0 rgba(255,250,235,0.95), 0 4px 12px rgba(160,120,43,0.40)'
+                      : 'inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 3px rgba(20,18,15,0.05)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, fontWeight: 800, letterSpacing: '0.02em',
+                    color: isPassed ? '#1A1815' : 'rgba(160,120,43,0.55)',
+                    transition: 'all 0.3s ease',
+                    transform: isCurrent ? 'scale(1.18)' : 'scale(1)',
+                    zIndex: isCurrent ? 2 : 1,
+                    textShadow: isPassed ? '0 1px 0 rgba(255,250,235,0.5)' : 'none',
+                  }}>
+                    {t.label.charAt(0)}
+                  </div>
                 )
               })}
             </div>
 
-            {/* Tier labels under dots */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, padding: '0 4px' }}>
+            {/* Tier labels */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 22, padding: '0 4px' }}>
               {TIER_LADDER.map(t => {
                 const isCurrent = userTier === t.key
                 const isPassed  = user.lifetime_points >= t.threshold
                 return (
                   <div key={t.key} style={{ textAlign: 'center', flex: 1 }}>
                     <p style={{
-                      margin: 0, fontSize: 12,
+                      margin: 0, fontSize: 12.5,
                       fontWeight: isCurrent ? 800 : 600,
-                      color: isPassed ? 'var(--ink)' : 'var(--ink-faint)',
-                      letterSpacing: '-0.005em',
+                      lineHeight: 1.2,
+                      ...(isCurrent ? {
+                        background: 'linear-gradient(135deg,#A0782B,#C9A063,#A0782B)',
+                        WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+                      } : { color: isPassed ? 'var(--ink)' : 'var(--ink-faint)' }),
                     }}>
                       {t.label}
                     </p>
-                    <p style={{
-                      margin: '2px 0 0', fontSize: 10,
-                      color: isPassed ? 'var(--gold-deep)' : 'var(--ink-faint)',
-                      fontWeight: 600,
+                    <p className="tnum" style={{
+                      margin: '3px 0 0', fontSize: 9.5,
+                      color: isPassed ? 'rgba(160,120,43,0.75)' : 'var(--ink-faint)',
+                      fontWeight: 600, letterSpacing: '0.02em',
                     }}>
                       {t.threshold === 0 ? 'Start' : `${t.threshold}+ pts`}
                     </p>
@@ -333,19 +352,27 @@ export default async function PointsPage() {
             </div>
 
             {tierInfo.nextTier && (
-              <p style={{
-                margin: '18px 0 0', fontSize: 11.5, color: 'var(--ink-mute)',
-                textAlign: 'center', lineHeight: 1.55,
+              <div style={{
+                marginTop: 18,
+                padding: '10px 14px',
+                background: 'rgba(160,120,43,0.06)',
+                border: '1px solid rgba(160,120,43,0.14)',
+                borderRadius: 12,
+                textAlign: 'center',
               }}>
-                สะสมอีกหน่อยเพื่อก้าวสู่{' '}
-                <span style={{
-                  fontWeight: 800,
-                  background: 'linear-gradient(135deg,#A0782B,#EADBB1)',
-                  WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+                <p style={{
+                  margin: 0, fontSize: 11.5, color: 'var(--ink-soft)', lineHeight: 1.55,
                 }}>
-                  {tierInfo.nextTier.charAt(0)}{tierInfo.nextTier.slice(1).toLowerCase()}
-                </span>
-              </p>
+                  สะสมอีกหน่อยเพื่อก้าวสู่{' '}
+                  <span style={{
+                    fontWeight: 800,
+                    background: 'linear-gradient(135deg,#A0782B,#C9A063,#A0782B)',
+                    WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+                  }}>
+                    {tierInfo.nextTier.charAt(0)}{tierInfo.nextTier.slice(1).toLowerCase()}
+                  </span>
+                </p>
+              </div>
             )}
           </div>
         </div>
@@ -360,13 +387,13 @@ export default async function PointsPage() {
             Icon={Calendar}
             label="กิจกรรม 30 วัน"
             value={`${recent30.length} รายการ`}
-            tone={{ bg: '#EEF2FF', ink: '#4F46E5' }}
+            tone={{ bg: 'linear-gradient(135deg,#FFF8EB,#FCEDD0)', ink: '#8C5A14' }}
           />
           <InsightTile
             Icon={ArrowUpRight}
             label="ได้รับ 30 วัน"
             value={`+${earned30.toLocaleString()} pts`}
-            tone={{ bg: '#E8F6EC', ink: '#1F6B33' }}
+            tone={{ bg: 'linear-gradient(135deg,#EAF7EE,#D4ECDB)', ink: '#1F6B33' }}
             featured
           />
         </div>
@@ -442,10 +469,12 @@ export default async function PointsPage() {
                 </div>
 
                 <div style={{ position: 'relative' }}>
+                  {/* Gold rail behind the icon column */}
                   <div aria-hidden style={{
                     position: 'absolute',
-                    top: 18, bottom: 18, left: 36,
-                    width: 1, background: 'var(--hair)',
+                    top: 22, bottom: 22, left: 37,
+                    width: 1.5,
+                    background: 'linear-gradient(180deg, transparent 0%, rgba(160,120,43,0.22) 12%, rgba(160,120,43,0.22) 88%, transparent 100%)',
                   }} />
 
                   {group.entries.map((log, idx) => {
@@ -458,31 +487,34 @@ export default async function PointsPage() {
                       <article key={log.id} style={{
                         position: 'relative',
                         display: 'flex', alignItems: 'flex-start', gap: 14,
-                        padding: '12px 18px',
+                        padding: '14px 18px',
                         borderBottom: isLast ? 'none' : '1px solid rgba(20,18,15,0.04)',
                       }}>
                         <div style={{
                           position: 'relative', zIndex: 1,
-                          width: 38, height: 38, borderRadius: 11,
+                          width: 38, height: 38, borderRadius: 12,
                           background: tone.bg,
-                          border: `1.5px solid ${tone.border}`,
+                          border: `1px solid ${tone.border}`,
                           color: tone.ink, flexShrink: 0,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          boxShadow: '0 2px 6px rgba(20,18,15,0.05)',
+                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55), 0 2px 6px rgba(20,18,15,0.05)',
                         }}>
-                          <Icon size={15} strokeWidth={2} />
+                          <Icon size={15} strokeWidth={2.2} />
                         </div>
 
-                        <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+                        <div style={{ flex: 1, minWidth: 0, paddingTop: 3 }}>
                           <p style={{
                             fontSize: 13, fontWeight: 700, margin: 0, color: 'var(--ink)',
-                            lineHeight: 1.4,
+                            lineHeight: 1.4, letterSpacing: '-0.005em',
                             overflow: 'hidden', display: '-webkit-box',
                             WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
                           }}>
                             {log.description || cfg.label}
                           </p>
-                          <p style={{ fontSize: 10.5, color: 'var(--ink-faint)', margin: '3px 0 0' }}>
+                          <p style={{
+                            fontSize: 10.5, color: 'var(--ink-faint)', margin: '3px 0 0',
+                            letterSpacing: '0.02em',
+                          }}>
                             {formatDateTime(log.created_at)}
                           </p>
                         </div>
@@ -490,21 +522,24 @@ export default async function PointsPage() {
                         <div style={{ textAlign: 'right', flexShrink: 0, paddingTop: 2 }}>
                           {isPos ? (
                             <span className="display tnum" style={{
-                              fontSize: 17, fontWeight: 800, letterSpacing: '-0.005em',
-                              background: 'linear-gradient(135deg,#FAF3DC,#EADBB1,#A0782B)',
-                              WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+                              fontSize: 18, fontWeight: 800, letterSpacing: '-0.015em',
+                              color: '#A0782B',
+                              textShadow: '0 1px 0 rgba(255,250,235,0.4)',
                             }}>
                               +{log.points_delta.toLocaleString()}
                             </span>
                           ) : (
                             <span className="display tnum" style={{
-                              fontSize: 17, fontWeight: 800, color: tone.ink,
-                              letterSpacing: '-0.005em',
+                              fontSize: 18, fontWeight: 800, color: tone.ink,
+                              letterSpacing: '-0.015em',
                             }}>
                               {log.points_delta.toLocaleString()}
                             </span>
                           )}
-                          <p style={{ fontSize: 10, color: 'var(--ink-faint)', margin: '2px 0 0', fontWeight: 600 }}>
+                          <p className="tnum" style={{
+                            fontSize: 10, color: 'var(--ink-faint)',
+                            margin: '2px 0 0', fontWeight: 600, letterSpacing: '0.02em',
+                          }}>
                             คงเหลือ {log.balance_after.toLocaleString()}
                           </p>
                         </div>
@@ -556,36 +591,41 @@ function InsightTile({
       padding: '14px 14px 16px',
       background: '#fff',
       border: '1px solid var(--hair)',
-      borderRadius: 'var(--r-md)',
-      boxShadow: '0 2px 10px rgba(20,18,15,0.04)',
+      borderRadius: 16,
+      boxShadow: featured
+        ? '0 4px 14px rgba(31,107,51,0.08), 0 1px 2px rgba(20,18,15,0.03)'
+        : '0 2px 10px rgba(20,18,15,0.04)',
     }}>
-      {featured && (
-        <div aria-hidden style={{
-          position: 'absolute', top: -20, right: -20,
-          width: 80, height: 80, borderRadius: '50%',
-          background: `radial-gradient(circle, ${tone.bg} 0%, transparent 70%)`,
-        }} />
-      )}
+      {/* Soft gradient halo in the top-right — feels lit, not flat */}
+      <div aria-hidden style={{
+        position: 'absolute', top: -28, right: -28,
+        width: 90, height: 90, borderRadius: '50%',
+        background: tone.bg, opacity: 0.55,
+        filter: 'blur(6px)',
+      }} />
       <div style={{
         position: 'relative',
-        width: 32, height: 32, borderRadius: 9,
+        width: 34, height: 34, borderRadius: 10,
         background: tone.bg, color: tone.ink,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        marginBottom: 8,
+        marginBottom: 10,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 3px rgba(20,18,15,0.06)',
+        border: '1px solid rgba(255,255,255,0.4)',
       }}>
-        <Icon size={15} strokeWidth={2} />
+        <Icon size={15} strokeWidth={2.2} />
       </div>
       <p style={{
         position: 'relative',
-        margin: '0 0 4px', fontSize: 10, fontWeight: 700,
-        letterSpacing: '0.14em', textTransform: 'uppercase',
+        margin: '0 0 5px', fontSize: 9.5, fontWeight: 800,
+        letterSpacing: '0.16em', textTransform: 'uppercase',
         color: 'var(--ink-mute)',
       }}>
         {label}
       </p>
       <p className="display tnum" style={{
         position: 'relative',
-        margin: 0, fontSize: 17, fontWeight: 800, color: tone.ink, letterSpacing: '-0.01em',
+        margin: 0, fontSize: 19, fontWeight: 800, color: tone.ink, letterSpacing: '-0.015em',
+        lineHeight: 1.1,
       }}>
         {value}
       </p>

@@ -5,7 +5,7 @@ import {
   Bell, Plus, Package,
   ChevronRight, TrendingUp, Sparkles, Award, ArrowRight,
 } from 'lucide-react'
-import type { User, PurchaseRegistration, Promotion, UserTier } from '@/types'
+import type { User, PurchaseRegistration, Promotion, UserTier, BQOrderData } from '@/types'
 import dynamic from 'next/dynamic'
 const MemberCard = dynamic(() => import('@/components/user/MemberCard'), { ssr: false })
 // Warp uses WebGL — must mount client-side only or the build chokes on `window`.
@@ -381,33 +381,43 @@ export default async function HomePage() {
 
         {purchases && purchases.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {(purchases as PurchaseRegistration[]).map(p => (
-              <article key={p.id} className="card" style={{
-                display: 'flex', alignItems: 'center', gap: 14,
-                padding: 14,
-              }}>
-                <div style={{
-                  width: 52, height: 52, borderRadius: 'var(--r-md)',
-                  background: 'var(--bg-soft)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'var(--ink-mute)', flexShrink: 0,
+            {(purchases as PurchaseRegistration[]).map(p => {
+              const image = (p.bq_raw_data as BQOrderData | null)?.items?.[0]?.image_url || null
+              return (
+                <article key={p.id} className="card" style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: 14,
                 }}>
-                  <Package size={20} strokeWidth={1.5} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{
-                    fontSize: 13.5, fontWeight: 700, margin: 0, color: 'var(--ink)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  <div style={{
+                    width: 52, height: 52, borderRadius: 'var(--r-md)',
+                    background: 'var(--bg-soft)',
+                    overflow: 'hidden',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'var(--ink-mute)', flexShrink: 0,
                   }}>
-                    {p.model_name || p.order_sn}
-                  </p>
-                  <p style={{ fontSize: 11.5, color: 'var(--ink-mute)', margin: '2px 0 0' }}>
-                    {formatDate(p.purchase_date || p.created_at)}
-                  </p>
-                </div>
-                <StatusPill status={p.status} />
-              </article>
-            ))}
+                    {image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={image} alt={p.model_name || 'product'}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <Package size={20} strokeWidth={1.5} />
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      fontSize: 13.5, fontWeight: 700, margin: 0, color: 'var(--ink)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {p.model_name || p.order_sn}
+                    </p>
+                    <p style={{ fontSize: 11.5, color: 'var(--ink-mute)', margin: '2px 0 0' }}>
+                      {formatDate(p.purchase_date || p.created_at)}
+                    </p>
+                  </div>
+                  <StatusPill status={p.status} />
+                </article>
+              )
+            })}
           </div>
         ) : (
           <div className="card-product" style={{ overflow: 'hidden' }}>

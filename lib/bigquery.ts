@@ -66,27 +66,7 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
 
   const attempted: { view: string; error: string }[] = []
 
-  // ── Attempt 1: v_dreame_orders_new ──
-  try {
-    const [rows] = await bq.query({
-      query: `
-        SELECT
-          order_sn, platform,
-          CAST(order_create_time AS STRING) AS order_create_time,
-          CAST(order_date AS STRING) AS order_date,
-          total_amount, items
-        FROM \`${PROJECT}.${DATASET}.v_dreame_orders_new\`
-        WHERE order_sn = @order_sn
-        LIMIT 1
-      `,
-      params: { order_sn },
-    })
-    if (rows && rows.length > 0) return { status: 'found', data: mapRow(rows[0]) }
-  } catch (e) {
-    attempted.push({ view: 'v_dreame_orders_new', error: (e as Error).message })
-  }
-
-  // ── Attempt 2: aggregate from v_dreame_order_items_new ──
+  // ── Attempt 1: v_dreame_order_items_new (preferred — has image_url) ──
   try {
     const [rows] = await bq.query({
       query: `
@@ -110,6 +90,26 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
     if (rows && rows.length > 0) return { status: 'found', data: mapRow(rows[0]) }
   } catch (e) {
     attempted.push({ view: 'v_dreame_order_items_new', error: (e as Error).message })
+  }
+
+  // ── Attempt 2: v_dreame_orders_new (fallback — no image_url) ──
+  try {
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          order_sn, platform,
+          CAST(order_create_time AS STRING) AS order_create_time,
+          CAST(order_date AS STRING) AS order_date,
+          total_amount, items
+        FROM \`${PROJECT}.${DATASET}.v_dreame_orders_new\`
+        WHERE order_sn = @order_sn
+        LIMIT 1
+      `,
+      params: { order_sn },
+    })
+    if (rows && rows.length > 0) return { status: 'found', data: mapRow(rows[0]) }
+  } catch (e) {
+    attempted.push({ view: 'v_dreame_orders_new', error: (e as Error).message })
   }
 
   // If both attempts errored, surface that — otherwise it's a real "not found"
@@ -175,17 +175,23 @@ export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData
 
   const merged = new Map<string, BQOrderData>()
 
-  // ── v_dreame_orders_new ──
+  // ── v_dreame_order_items_new (preferred — has image_url) ──
   try {
     const [rows] = await bq.query({
       query: `
         SELECT
-          order_sn, platform,
-          CAST(order_create_time AS STRING) AS order_create_time,
-          CAST(order_date AS STRING) AS order_date,
-          total_amount, items
-        FROM \`${PROJECT}.${DATASET}.v_dreame_orders_new\`
+          order_sn,
+          ANY_VALUE(platform) AS platform,
+          CAST(ANY_VALUE(order_create_time) AS STRING) AS order_create_time,
+          CAST(ANY_VALUE(order_date) AS STRING) AS order_date,
+          SUM(price * quantity) AS total_amount,
+          ARRAY_AGG(STRUCT(
+            item_id, model_id, item_name, item_sku,
+            model_name, model_sku, quantity, price, image_url
+          )) AS items
+        FROM \`${PROJECT}.${DATASET}.v_dreame_order_items_new\`
         WHERE order_sn IN UNNEST(@sns)
+        GROUP BY order_sn
       `,
       params: { sns: orderSns },
     })
@@ -194,28 +200,22 @@ export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData
       merged.set(data.order_sn, data)
     }
   } catch (e) {
-    console.warn('[BQ] batchVerifyOrders v_dreame_orders_new failed:', (e as Error).message)
+    console.warn('[BQ] batchVerifyOrders v_dreame_order_items_new failed:', (e as Error).message)
   }
 
-  // ── v_dreame_order_items_new — fill in any order_sn the first view missed ──
+  // ── v_dreame_orders_new — fallback for any order_sn the items view missed ──
   const missing = orderSns.filter(sn => !merged.has(sn))
   if (missing.length > 0) {
     try {
       const [rows] = await bq.query({
         query: `
           SELECT
-            order_sn,
-            ANY_VALUE(platform) AS platform,
-            CAST(ANY_VALUE(order_create_time) AS STRING) AS order_create_time,
-            CAST(ANY_VALUE(order_date) AS STRING) AS order_date,
-            SUM(price * quantity) AS total_amount,
-            ARRAY_AGG(STRUCT(
-              item_id, model_id, item_name, item_sku,
-              model_name, model_sku, quantity, price, image_url
-            )) AS items
-          FROM \`${PROJECT}.${DATASET}.v_dreame_order_items_new\`
+            order_sn, platform,
+            CAST(order_create_time AS STRING) AS order_create_time,
+            CAST(order_date AS STRING) AS order_date,
+            total_amount, items
+          FROM \`${PROJECT}.${DATASET}.v_dreame_orders_new\`
           WHERE order_sn IN UNNEST(@sns)
-          GROUP BY order_sn
         `,
         params: { sns: missing },
       })
@@ -224,7 +224,7 @@ export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData
         merged.set(data.order_sn, data)
       }
     } catch (e) {
-      console.error('[BQ] batchVerifyOrders v_dreame_order_items_new failed:', (e as Error).message)
+      console.error('[BQ] batchVerifyOrders v_dreame_orders_new failed:', (e as Error).message)
     }
   }
 

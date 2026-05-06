@@ -56,7 +56,7 @@ export async function GET(req: Request) {
       .from('pending_verifications')
       .select('id, purchase_reg_id, order_sn, retry_count, purchase_registrations!inner(channel_type)')
       .eq('purchase_registrations.channel_type', 'ONLINE')
-      .lt('retry_count', 48)  // 48 × 1h cron = 2 days; BQ refresh is 6h so ~8 real chances
+      .lt('retry_count', 168)  // 168 × 1h = 7 days; BQ refresh is ~6h so ~28 real chances
       .order('created_at', { ascending: true })
       .limit(200)
 

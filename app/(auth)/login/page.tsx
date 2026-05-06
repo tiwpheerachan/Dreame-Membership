@@ -6,6 +6,7 @@ import {
   Mail, Lock, Eye, EyeOff, User,
   ArrowLeft, LogIn, UserPlus, CheckCircle, AlertCircle
 } from 'lucide-react'
+import { GlassEffect, GlassFilter } from '@/components/ui/liquid-glass'
 
 type Mode = 'login' | 'register' | 'forgot' | 'verify-sent'
 const KEY_EMAIL = 'dreame_email'
@@ -22,91 +23,167 @@ const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap');
   * { -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
   @keyframes spin    { to { transform:rotate(360deg) } }
-  @keyframes slideUp { from { opacity:0;transform:translateY(30px) } to { opacity:1;transform:translateY(0) } }
+  @keyframes slideUp { from { opacity:0;transform:translateY(20px) } to { opacity:1;transform:translateY(0) } }
   .lg-root {
     position:fixed; inset:0; overflow:hidden;
     display:flex; justify-content:center; align-items:stretch;
     font-family:'Prompt',system-ui,sans-serif;
-    /* Cream backdrop matches the new key visual (light beige), so the
-       sides outside the 430px frame don't look like a black void. */
     background:#ECE0CC;
   }
   .lg-bg {
     position:absolute; top:0; left:50%; transform:translateX(-50%);
     width:100%; max-width:430px; height:100%; z-index:0;
   }
-  /* contain (not cover) so the full key visual fits without being cropped at
-     the sides — the wordmark "DREAME MEMBERSHIP" stays intact. The cream
-     backdrop (.lg-root) fills any leftover space below the image so the
-     transition into the form sheet still looks seamless. */
-  .lg-bg img { width:100%; height:100%; object-fit:contain; object-position:center top; }
-  .lg-overlay {
-    /* Soft white-ish fade at the bottom only, so the cream image blends
-       into the white form sheet without a hard line. No dark tint. */
-    position:absolute; inset:0;
+  .lg-bg img { width:100%; height:100%; object-fit:cover; object-position:center top; }
+  /* Gradient-masked backdrop blur — top half of the bg stays sharp, bottom half
+     ramps into a frosted blur. backdrop-filter only paints where the mask is
+     opaque, so this gives a smooth fade without any visible card border. */
+  .lg-blur-veil {
+    position:absolute; inset:0; z-index:1;
+    backdrop-filter:blur(28px) saturate(1.2);
+    -webkit-backdrop-filter:blur(28px) saturate(1.2);
+    mask-image:linear-gradient(to bottom,
+      transparent 0%,
+      transparent 38%,
+      rgba(0,0,0,0.5) 52%,
+      black 70%);
+    -webkit-mask-image:linear-gradient(to bottom,
+      transparent 0%,
+      transparent 38%,
+      rgba(0,0,0,0.5) 52%,
+      black 70%);
+  }
+  /* Soft cream wash over the blur so dark text stays legible without a card */
+  .lg-tint {
+    position:absolute; inset:0; z-index:2; pointer-events:none;
     background:linear-gradient(to bottom,
-      rgba(255,255,255,0) 0%,
-      rgba(255,255,255,0) 55%,
-      rgba(255,255,255,0.20) 80%,
-      rgba(255,255,255,0.55) 100%);
+      rgba(255,250,240,0) 35%,
+      rgba(255,250,240,0.40) 58%,
+      rgba(255,250,240,0.70) 78%,
+      rgba(255,250,240,0.88) 100%);
   }
   .lg-inner {
-    position:relative; z-index:1;
+    position:relative; z-index:3;
     width:100%; max-width:430px;
     display:flex; flex-direction:column; height:100%;
   }
   .lg-logo-area {
     flex:1; min-height:0;
     display:flex; align-items:flex-start; justify-content:center;
-    padding:64px 24px 20px;
+    padding:48px 24px 12px;
   }
-  .lg-sheet {
+  .lg-form {
     flex-shrink:0;
-    background:#fff; border-radius:24px 24px 0 0;
-    padding:26px 22px 44px;
-    box-shadow:0 -8px 40px rgba(0,0,0,0.3);
-    animation:slideUp 0.4s cubic-bezier(0.34,1.1,0.64,1);
-    max-height:70vh; overflow-y:auto;
+    padding:14px 22px 32px;
+    animation:slideUp 0.45s cubic-bezier(0.34,1.1,0.64,1);
+    max-height:72vh; overflow-y:auto;
   }
+  /* Outer wrapper for the GlassEffect that holds the tab row */
+  .tab-glass { width:100%; margin-bottom:16px; }
+  /* Inner row sits inside GlassEffect (which provides the frosted surface) */
   .tab-row {
-    display:flex; background:#f5f5f3; border-radius:12px;
-    padding:3px; margin-bottom:18px;
+    position:relative;
+    display:flex; padding:5px;
+    border-radius:9999px;
+    overflow:hidden;
   }
   .tab {
-    flex:1; padding:10px; border:none; border-radius:10px;
+    flex:1; padding:10px 12px; border:none; border-radius:9999px;
     font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;
-    transition:all 0.18s; display:flex; align-items:center; justify-content:center; gap:6px;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    background:transparent;
+    transition:all 0.32s cubic-bezier(0.34,1.1,0.64,1);
   }
-  .tab-on  { background:#fff; color:#111; box-shadow:0 1px 4px rgba(0,0,0,0.1); }
-  .tab-off { background:transparent; color:#9ca3af; }
+  /* Active = gold-coined pill, identical to the navbar's active item */
+  .tab-on {
+    background:linear-gradient(180deg, #FAF3DC 0%, #EADBB1 35%, #C9A063 75%, #A0782B 100%);
+    color:#1A1815;
+    font-weight:800;
+    letter-spacing:0.02em;
+    box-shadow:
+      inset 0 1px 0 rgba(255,250,235,0.95),
+      inset 0 -1px 0 rgba(120,80,20,0.35),
+      0 4px 14px rgba(160,120,43,0.35),
+      0 1px 2px rgba(120,80,20,0.20);
+    text-shadow:0 1px 0 rgba(255,250,235,0.6);
+  }
+  .tab-off { color:rgba(40,38,32,0.65); }
   .lbl {
-    font-size:10px; font-weight:700; color:#9ca3af;
-    text-transform:uppercase; letter-spacing:0.07em; margin:0 0 6px; display:block;
+    font-size:10px; font-weight:700; color:#8a7f6a;
+    text-transform:uppercase; letter-spacing:0.10em; margin:0 0 6px; display:block;
   }
+  /* Liquid-glass inputs — same translucent material + inner-rim highlights as
+     the navbar pill, scaled to a text input. Pill shape, strong backdrop blur,
+     soft amber focus ring. */
   .inp {
-    width:100%; background:#f7f7f5; border:1.5px solid #ebebeb; border-radius:12px;
-    padding:12px 14px 12px 42px; font-size:14px; color:#111;
-    outline:none; font-family:inherit; transition:all 0.15s;
+    width:100%;
+    background:rgba(255,255,255,0.28);
+    backdrop-filter:blur(20px) saturate(1.4);
+    -webkit-backdrop-filter:blur(20px) saturate(1.4);
+    border:1px solid rgba(255,255,255,0.55);
+    border-radius:9999px;
+    padding:14px 18px 14px 48px; font-size:14px; color:#1a1815;
+    outline:none; font-family:inherit;
+    transition:background 0.2s, border-color 0.2s, box-shadow 0.2s;
+    /* Mirrors GlassEffect's layer 3 (inner-rim highlight) so the field
+       reads as the same material as the navbar pill */
+    box-shadow:
+      inset 1.5px 1.5px 1px 0 rgba(255,255,255,0.55),
+      inset -1px -1px 1px 1px rgba(255,255,255,0.45),
+      0 4px 14px rgba(20,18,15,0.06);
   }
-  .inp:focus { border-color:#d4af37; background:#fff; box-shadow:0 0 0 3px rgba(212,175,55,0.1); }
-  .ico { position:absolute; left:13px; top:50%; transform:translateY(-50%); color:#c4c4c4; pointer-events:none; }
+  .inp::placeholder { color:rgba(40,38,32,0.42); }
+  .inp:focus {
+    background:rgba(255,255,255,0.42);
+    border-color:rgba(212,175,55,0.55);
+    box-shadow:
+      inset 1.5px 1.5px 1px 0 rgba(255,255,255,0.70),
+      inset -1px -1px 1px 1px rgba(255,255,255,0.55),
+      0 0 0 3px rgba(212,175,55,0.20),
+      0 4px 14px rgba(20,18,15,0.06);
+  }
+  .ico { position:absolute; left:18px; top:50%; transform:translateY(-50%); color:rgba(40,38,32,0.55); pointer-events:none; }
   .a-ok {
-    padding:10px 13px; border-radius:11px; background:#f0fdf4;
-    border:1px solid #dcfce7; color:#15803d; font-size:12px;
+    padding:11px 14px; border-radius:12px;
+    background:rgba(220,252,231,0.85);
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    border:1px solid rgba(167,243,208,0.7);
+    color:#15803d; font-size:12px;
     display:flex; align-items:flex-start; gap:8px; margin-bottom:12px; line-height:1.5;
   }
   .a-err {
-    padding:10px 13px; border-radius:11px; background:#fef2f2;
-    border:1px solid #fee2e2; color:#dc2626; font-size:12px;
+    padding:11px 14px; border-radius:12px;
+    background:rgba(254,226,226,0.85);
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    border:1px solid rgba(252,165,165,0.6);
+    color:#dc2626; font-size:12px;
     display:flex; align-items:flex-start; gap:8px; margin-bottom:12px; line-height:1.5;
   }
+  /* Primary CTA — black pill with gold text */
   .btn-g {
-    width:100%; padding:14px; background:#0d0d0d; color:#d4af37;
-    border:none; border-radius:14px; font-size:15px; font-weight:700;
-    font-family:inherit; cursor:pointer; display:flex; align-items:center;
-    justify-content:center; gap:8px; transition:opacity 0.15s;
+    width:100%; padding:14px;
+    background:linear-gradient(180deg, #14120F 0%, #0d0d0d 50%, #050505 100%);
+    color:#EADBB1;
+    border:none; border-radius:9999px;
+    font-size:15px; font-weight:800; letter-spacing:0.02em;
+    font-family:inherit; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    transition:opacity 0.15s, transform 0.15s, box-shadow 0.18s;
+    box-shadow:
+      inset 0 1px 0 rgba(234,219,177,0.18),
+      inset 0 -1px 0 rgba(0,0,0,0.4),
+      0 6px 20px rgba(20,18,15,0.32),
+      0 2px 4px rgba(0,0,0,0.20);
   }
-  .btn-g:disabled { opacity:0.35; cursor:not-allowed; }
+  .btn-g:not(:disabled):hover {
+    box-shadow:
+      inset 0 1px 0 rgba(234,219,177,0.22),
+      inset 0 -1px 0 rgba(0,0,0,0.4),
+      0 8px 26px rgba(20,18,15,0.40),
+      0 2px 4px rgba(0,0,0,0.20);
+  }
+  .btn-g:not(:disabled):active { transform:scale(0.98); }
+  .btn-g:disabled { opacity:0.45; cursor:not-allowed; }
   .btn-plain { background:none; border:none; font-family:inherit; cursor:pointer; }
   .str-bar { display:flex; gap:4px; margin-top:6px; }
   .str-seg { flex:1; height:3px; border-radius:2px; transition:background 0.3s; }
@@ -116,8 +193,8 @@ function Spin() {
   return (
     <div style={{
       width: 15, height: 15, flexShrink: 0,
-      border: '2px solid rgba(212,175,55,0.3)',
-      borderTop: '2px solid #d4af37',
+      border: '2px solid rgba(234,219,177,0.30)',
+      borderTop: '2px solid #EADBB1',
       borderRadius: '50%', animation: 'spin 0.8s linear infinite',
     }} />
   )
@@ -321,22 +398,27 @@ function LoginForm() {
       <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="lg-root">
 
-        {/* Layer 1 — Background image */}
+        {/* SVG filter that powers the liquid-glass distortion (mounted once) */}
+        <GlassFilter />
+
+        {/* Layer 1 — Full-bleed background image (top-anchored, uncropped at top) */}
         <div className="lg-bg">
           <img src={BG_IMAGE} alt="" draggable={false} />
-          <div className="lg-overlay" />
         </div>
 
-        {/* Layer 2 — UI */}
+        {/* Layer 2 — Gradient-masked backdrop blur (top sharp, bottom frosted) */}
+        <div aria-hidden className="lg-blur-veil" />
+        {/* Layer 3 — Soft cream wash over the blur for text legibility */}
+        <div aria-hidden className="lg-tint" />
+
+        {/* Layer 4 — UI */}
         <div className="lg-inner">
 
-          {/* Spacer that lets the brand visual breathe above the form sheet.
-              The image already carries the DREAME MEMBERSHIP wordmark, so
-              we no longer overlay a separate logo here. */}
+          {/* Spacer for the brand visual at the top */}
           <div className="lg-logo-area" style={{ opacity: mounted ? 1 : 0, transition: 'opacity 0.5s' }} />
 
-          {/* Form sheet bottom */}
-          <div className="lg-sheet">
+          {/* Form area — sits directly on the blur, no card border */}
+          <div className="lg-form">
             {mode === 'verify-sent' ? (
               <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
                 <div style={{
@@ -408,14 +490,16 @@ function LoginForm() {
             </h2>
 
             {mode !== 'forgot' && (
-              <div className="tab-row">
-                <button className={`tab ${mode === 'login' ? 'tab-on' : 'tab-off'}`} onClick={() => switchMode('login')}>
-                  <LogIn size={13} /> เข้าสู่ระบบ
-                </button>
-                <button className={`tab ${mode === 'register' ? 'tab-on' : 'tab-off'}`} onClick={() => switchMode('register')}>
-                  <UserPlus size={13} /> สมัครสมาชิก
-                </button>
-              </div>
+              <GlassEffect radius={9999} className="tab-glass">
+                <div className="tab-row">
+                  <button className={`tab ${mode === 'login' ? 'tab-on' : 'tab-off'}`} onClick={() => switchMode('login')}>
+                    <LogIn size={13} /> เข้าสู่ระบบ
+                  </button>
+                  <button className={`tab ${mode === 'register' ? 'tab-on' : 'tab-off'}`} onClick={() => switchMode('register')}>
+                    <UserPlus size={13} /> สมัครสมาชิก
+                  </button>
+                </div>
+              </GlassEffect>
             )}
 
             {/* Pending-verify banner — shown when user just registered and
@@ -527,12 +611,12 @@ function LoginForm() {
                       placeholder={mode === 'register' ? 'อย่างน้อย 8 ตัวอักษร' : '••••••••'}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
-                      style={{ paddingRight: 44 }}
+                      style={{ paddingRight: 50 }}
                       autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                       onKeyDown={e => { if (e.key === 'Enter' && mode === 'login') handleLogin() }}
                     />
                     <button className="btn-plain" onClick={() => setShowPass(s => !s)}
-                      style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', padding: 0 }}>
+                      style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', color: 'rgba(40,38,32,0.55)', padding: 0 }}>
                       {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>

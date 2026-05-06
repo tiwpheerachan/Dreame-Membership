@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   User, Phone, Mail, MapPin, Lock, Eye, EyeOff,
-  Camera, LogOut, ChevronRight, Shield, CheckCircle, Bell,
-  Award, Sparkles,
+  Camera, LogOut, CheckCircle,
+  Sparkles, MessageCircle,
 } from 'lucide-react'
 import type { User as UserType, UserTier } from '@/types'
 import { normalizeTier } from '@/lib/tier'
@@ -168,7 +168,7 @@ export default function ProfilePage() {
   const strLabels = ['', 'สั้นเกินไป', 'ปานกลาง', 'ดี', 'แข็งแกร่ง']
 
   return (
-    <div className="page-enter" style={{ paddingTop: 18, paddingBottom: 32 }}>
+    <div className="page-enter" style={{ paddingBottom: 32 }}>
       {/* Toast */}
       {toast && (
         <div style={{
@@ -184,233 +184,176 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Header */}
-      <header style={{ padding: '14px 20px 18px' }}>
-        <p className="eyebrow" style={{ marginBottom: 8 }}>Account Settings</p>
-        <h1 style={{ margin: 0, fontSize: 30, lineHeight: 1.1, letterSpacing: '-0.02em' }}>
-          <span style={{ fontWeight: 800 }}>โปรไฟล์</span>{' '}
-          <span className="serif-i" style={{ fontWeight: 400 }}>ของคุณ</span>
-        </h1>
-      </header>
-
-      {/* ── Hero identity card — animated sparkle stage matching home hero ── */}
-      <section style={{ padding: '0 16px 14px' }}>
+      {/* ── Hero — top half: uncropped photo · bottom half: gradient blur with content ── */}
+      <section style={{ padding: '12px 16px 14px' }}>
         <div style={{
           position: 'relative',
-          background: theme.bg,
-          border: '1px solid rgba(0,0,0,0.06)',
-          borderRadius: 'var(--r-lg)',
+          aspectRatio: '3 / 4',
+          borderRadius: 28,
           overflow: 'hidden',
-          boxShadow: '0 4px 24px rgba(20,18,15,0.05), 0 1px 2px rgba(20,18,15,0.04)',
+          background: theme.bg,
+          boxShadow: '0 12px 36px rgba(20,18,15,0.18), 0 2px 6px rgba(20,18,15,0.08)',
         }}>
-          {/* aurora blobs (slow background drift) */}
-          <div aria-hidden className="aurora" style={{
-            top: '-20%', left: '-15%', width: 200, height: 200,
-            background: theme.starColor, opacity: 0.18,
-            animationDelay: '0s',
-          }} />
-          <div aria-hidden className="aurora" style={{
-            bottom: '-20%', right: '-18%', width: 220, height: 220,
-            background: theme.starColor, opacity: 0.14,
-            animationDelay: '4s',
-          }} />
-
-          {/* faint tech grid for "futuristic" feel */}
-          <div aria-hidden className="tech-grid" />
-
-          {/* tier-tinted radial glow behind avatar */}
-          <div aria-hidden style={{
-            position: 'absolute', top: '32%', left: '50%', transform: 'translate(-50%,-50%)',
-            width: 260, height: 260, borderRadius: '50%',
-            background: theme.glow,
-            pointerEvents: 'none',
-            filter: 'blur(8px)',
-          }} />
-
-          {/* concentric pulse rings around the avatar */}
-          {[0, 1.5, 3].map((delay, i) => (
-            <div key={`ring-${i}`} aria-hidden className="pulse-ring" style={{
-              top: '32%', left: '50%',
-              width: 180, height: 180,
-              transform: 'translate(-50%, -50%)',
-              border: `1.5px solid ${theme.starColor}`,
-              opacity: 0.35,
-              animationDelay: `${delay}s`,
-            }} />
-          ))}
-
-          {/* twinkle dots */}
-          {[
-            { top: '8%',  left: '8%',  size: 3,   delay: '0s',   tone: theme.starColor },
-            { top: '14%', left: '88%', size: 2.5, delay: '1.4s', tone: '#fff' },
-            { top: '22%', left: '32%', size: 2,   delay: '0.6s', tone: '#fff' },
-            { top: '28%', left: '72%', size: 4,   delay: '0.2s', tone: theme.starColor },
-            { top: '52%', left: '6%',  size: 2.5, delay: '2.0s', tone: '#fff' },
-            { top: '54%', left: '94%', size: 3,   delay: '1.0s', tone: theme.starColor },
-            { top: '70%', left: '14%', size: 3.5, delay: '0.4s', tone: theme.starColor },
-            { top: '74%', left: '78%', size: 2,   delay: '1.8s', tone: '#fff' },
-            { top: '86%', left: '40%', size: 2.5, delay: '0.8s', tone: theme.starColor },
-            { top: '90%', left: '62%', size: 3,   delay: '2.4s', tone: '#fff' },
-            { top: '40%', left: '20%', size: 1.5, delay: '1.2s', tone: theme.starColor },
-            { top: '44%', left: '84%', size: 2,   delay: '2.6s', tone: '#fff' },
-          ].map((s, i) => (
-            <span key={`tw-${i}`} aria-hidden className="twinkle" style={{
-              top: s.top, left: s.left,
-              width: s.size, height: s.size,
-              background: `radial-gradient(circle, ${s.tone} 0%, transparent 70%)`,
-              boxShadow: `0 0 ${s.size * 4}px ${s.tone}`,
-              animationDelay: s.delay,
-              animationDuration: `${2.4 + (i % 4) * 0.6}s`,
-            }} />
-          ))}
-
-          {/* cross-shaped sparkle bursts */}
-          {[
-            { top: '18%', left: '14%', delay: '0s',   color: theme.starColor },
-            { top: '36%', left: '90%', delay: '1.4s', color: '#fff' },
-            { top: '64%', left: '8%',  delay: '2.0s', color: theme.starColor },
-            { top: '80%', left: '70%', delay: '0.6s', color: '#fff' },
-          ].map((s, i) => (
-            <span key={`cr-${i}`} aria-hidden className="spark-cross" style={{
-              top: s.top, left: s.left,
-              color: s.color,
-              animationDelay: s.delay,
-            }} />
-          ))}
-
-          {/* drifting upward particles */}
-          {[
-            { top: '88%', left: '18%', size: 3, delay: '0s',   tone: theme.starColor },
-            { top: '90%', left: '50%', size: 2, delay: '2s',   tone: '#fff' },
-            { top: '85%', left: '82%', size: 3, delay: '3.5s', tone: theme.starColor },
-          ].map((s, i) => (
-            <span key={`dr-${i}`} aria-hidden className="drift" style={{
-              top: s.top, left: s.left,
-              width: s.size, height: s.size,
-              background: s.tone,
-              boxShadow: `0 0 ${s.size * 4}px ${s.tone}`,
-              animationDelay: s.delay,
-            }} />
-          ))}
-
-          {/* ambient star glyphs (✦) */}
-          {[
-            { top: '12%', left: '22%', size: 12, delay: '0s',   opacity: 0.65 },
-            { top: '20%', left: '80%', size: 10, delay: '0.7s', opacity: 0.50 },
-            { top: '60%', left: '90%', size: 12, delay: '1.4s', opacity: 0.55 },
-            { top: '78%', left: '10%', size: 14, delay: '2.1s', opacity: 0.60 },
-          ].map((s, i) => (
-            <span key={`gl-${i}`} aria-hidden style={{
-              position: 'absolute', top: s.top, left: s.left,
-              fontSize: s.size, color: theme.starColor, opacity: s.opacity,
-              animation: `sparkle-spin ${3.2 + (i % 3) * 0.6}s ease-in-out ${s.delay} infinite`,
-              textShadow: `0 0 8px ${theme.starColor}`,
-              pointerEvents: 'none',
-            }}>✦</span>
-          ))}
-
-          {/* shooting stars — sweep across the card from left to right */}
-          <span aria-hidden className="shooting-star" style={{ top: '14%', left: '-10%', animationDelay: '0s',   animationDuration: '5.5s' }} />
-          <span aria-hidden className="shooting-star" style={{ top: '38%', left: '-15%', animationDelay: '2.8s', animationDuration: '6.5s' }} />
-          <span aria-hidden className="shooting-star" style={{ top: '72%', left: '-8%',  animationDelay: '5.2s', animationDuration: '5s'   }} />
-
-          <div style={{ position: 'relative', zIndex: 2, padding: '26px 22px 16px', textAlign: 'center' }}>
-            {/* Avatar with gold/tier ring */}
-            <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={uploadAvatar} />
-              <div style={{
-                padding: 3, borderRadius: '50%',
-                background: theme.ring,
-                boxShadow: '0 8px 24px rgba(20,18,15,0.10), inset 0 1px 0 rgba(255,255,255,0.6)',
-              }}>
-                {user.profile_image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.profile_image_url} alt={user.full_name || 'avatar'}
-                    style={{ width: 92, height: 92, borderRadius: '50%', objectFit: 'cover', display: 'block', background: '#fff' }} />
-                ) : (
-                  <div style={{
-                    width: 92, height: 92, borderRadius: '50%',
-                    background: '#1A1815',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#EADBB1', fontSize: 30, fontWeight: 800,
-                    letterSpacing: '0.02em',
-                  }}>{initials}</div>
-                )}
-              </div>
-              <button onClick={() => fileRef.current?.click()} disabled={uploading} className="tap-down" style={{
-                position: 'absolute', bottom: 0, right: 0,
-                width: 30, height: 30, borderRadius: '50%',
-                background: '#1A1815', color: '#EADBB1',
-                border: '2.5px solid #fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(20,18,15,0.25)',
-              }}>
-                {uploading ? (
-                  <div className="spinner" style={{
-                    width: 12, height: 12, border: '2px solid rgba(234,219,177,0.3)',
-                    borderTopColor: '#EADBB1', borderRadius: '50%',
-                  }} />
-                ) : <Camera size={13} />}
-              </button>
-            </div>
-
-            <h2 className="display" style={{
-              margin: '0 0 4px', fontSize: 20, fontWeight: 800, letterSpacing: '-0.01em',
-              color: theme.accent,
+          {/* Background photo — anchored to top so the face/head stays visible
+              and the bottom of the photo (which gets the blur fade) is where the
+              less-important part of the frame sits. */}
+          {user.profile_image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={user.profile_image_url}
+              alt={user.full_name || 'profile'}
+              style={{
+                position: 'absolute', inset: 0,
+                width: '100%', height: '100%',
+                objectFit: 'cover',
+                objectPosition: 'top center',
+              }}
+            />
+          ) : (
+            <div aria-hidden style={{
+              position: 'absolute', inset: 0,
+              background: theme.bg,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: theme.accent, fontSize: 92, fontWeight: 800,
+              letterSpacing: '0.02em',
             }}>
-              {user.full_name || 'สมาชิก'}
+              {initials}
+            </div>
+          )}
+
+          {/* Top corner controls */}
+          <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={uploadAvatar} />
+          <Link href="/home" aria-label="back" className="tap-down" style={{
+            position: 'absolute', top: 16, left: 16, zIndex: 5,
+            width: 40, height: 40, borderRadius: '50%',
+            background: 'rgba(20,18,15,0.55)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.18)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', textDecoration: 'none', fontSize: 18, fontWeight: 600,
+          }}>
+            ✕
+          </Link>
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            aria-label="upload photo"
+            className="tap-down"
+            style={{
+              position: 'absolute', top: 16, right: 16, zIndex: 5,
+              width: 40, height: 40, borderRadius: '50%',
+              background: 'rgba(20,18,15,0.55)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.18)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', cursor: 'pointer',
+            }}
+          >
+            {uploading ? (
+              <div className="spinner" style={{
+                width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)',
+                borderTopColor: '#fff', borderRadius: '50%',
+              }} />
+            ) : <Camera size={15} />}
+          </button>
+
+          {/* Gradient-masked backdrop blur — fades from sharp (top) to fully blurred (bottom).
+              No box, no border — just a smooth blur ramp over the lower half of the photo. */}
+          <div aria-hidden style={{
+            position: 'absolute', inset: 0, zIndex: 2,
+            backdropFilter: 'blur(28px) saturate(1.2)',
+            WebkitBackdropFilter: 'blur(28px) saturate(1.2)',
+            // Mask: invisible at top → fully opaque at ~55% → black at the bottom.
+            // backdrop-filter only paints where the element is opaque, so the
+            // top half of the photo stays crystal-clear.
+            maskImage: 'linear-gradient(to bottom, transparent 0%, transparent 42%, rgba(0,0,0,0.5) 56%, black 72%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, transparent 42%, rgba(0,0,0,0.5) 56%, black 72%)',
+          }} />
+
+          {/* Dark vignette over the same fade so white text reads cleanly */}
+          <div aria-hidden style={{
+            position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none',
+            background:
+              'linear-gradient(180deg, transparent 38%, rgba(20,18,15,0.18) 55%, rgba(20,18,15,0.55) 100%)',
+          }} />
+
+          {/* Content — sits in the bottom half over the blur, no card border */}
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 4,
+            padding: '20px 22px 24px',
+            color: '#fff',
+          }}>
+            <h2 style={{
+              margin: 0, fontSize: 28, fontWeight: 700, lineHeight: 1.15,
+              letterSpacing: '-0.015em', textAlign: 'center',
+              textShadow: '0 2px 12px rgba(0,0,0,0.45)',
+            }}>
+              {user.full_name || 'สมาชิก Dreame'}
             </h2>
             <p style={{
-              fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.16em',
-              color: theme.accent, opacity: 0.6, margin: 0,
+              margin: '4px 0 18px', textAlign: 'center',
+              fontSize: 13, color: 'rgba(255,255,255,0.72)',
+              fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
+              textShadow: '0 1px 6px rgba(0,0,0,0.35)',
             }}>
-              {user.member_id}
+              @{user.member_id?.toLowerCase()}
             </p>
+
+            {/* Primary CTA + secondary icon */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 18 }}>
+              <Link href="/home" className="tap-down" style={{
+                flex: 1,
+                padding: '13px 18px', borderRadius: 999,
+                background: '#fff', color: '#1A1815',
+                fontSize: 14, fontWeight: 700, letterSpacing: '0.01em',
+                textAlign: 'center', textDecoration: 'none',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.20)',
+              }}>
+                ดูบัตรสมาชิก
+              </Link>
+              <Link href="/notifications" aria-label="messages" className="tap-down" style={{
+                width: 44, height: 44, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.14)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255,255,255,0.22)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', flexShrink: 0, textDecoration: 'none',
+              }}>
+                <MessageCircle size={17} strokeWidth={1.7} />
+              </Link>
+            </div>
 
             {/* Stats row */}
             <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8,
-              marginTop: 18,
+              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4,
             }}>
-              <Stat
-                label="คะแนน"
-                value={user.total_points.toLocaleString()}
-                accent={theme.accent}
-                bg="rgba(255,255,255,0.55)"
-                border="rgba(0,0,0,0.04)"
+              <GlassStat label="คะแนน" value={user.total_points.toLocaleString()} />
+              <GlassStat label="สะสม"  value={user.lifetime_points.toLocaleString()} />
+              <GlassStat
+                label="ระดับ"
+                value={
+                  <span style={{
+                    background: 'linear-gradient(135deg,#FAF3DC,#EADBB1,#A0782B)',
+                    WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+                  }}>{theme.label}</span>
+                }
               />
-              <Stat
-                label="สะสม"
-                value={user.lifetime_points.toLocaleString()}
-                accent={theme.accent}
-                bg="rgba(255,255,255,0.55)"
-                border="rgba(0,0,0,0.04)"
-              />
-              <div style={{
-                padding: '10px 6px', textAlign: 'center',
-                background: 'linear-gradient(135deg,#1A1815,#2A2419)',
-                border: '1px solid rgba(0,0,0,0.20)',
-                borderRadius: 'var(--r-md)',
-                boxShadow: 'inset 0 1px 0 rgba(255,250,235,0.10)',
-              }}>
-                <p style={{
-                  fontSize: 9, color: 'rgba(234,219,177,0.55)',
-                  letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700,
-                  margin: '0 0 4px',
-                }}>
-                  Tier
-                </p>
-                <p className="display" style={{
-                  margin: 0, fontSize: 13, fontWeight: 800, letterSpacing: '0.02em',
-                  background: 'linear-gradient(135deg,#FAF3DC,#EADBB1,#A0782B)',
-                  WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                }}>
-                  <Award size={12} color="#EADBB1" /> {theme.label}
-                </p>
-              </div>
             </div>
+
+            {/* Bio — plain text, no border/box */}
+            <p style={{
+              marginTop: 14, marginBottom: 0,
+              fontSize: 12, lineHeight: 1.55,
+              color: 'rgba(255,255,255,0.78)',
+              textAlign: 'center',
+              textShadow: '0 1px 6px rgba(0,0,0,0.35)',
+            }}>
+              {form.address?.trim()
+                || `สมาชิก ${theme.label} · พร้อมรับสิทธิประโยชน์พิเศษจาก Dreame`}
+            </p>
           </div>
         </div>
       </section>
@@ -555,44 +498,6 @@ export default function ProfilePage() {
         )}
       </SectionCard>
 
-      {/* ── Notifications & privacy ── */}
-      <section style={{ padding: '0 16px 14px' }}>
-        <div style={{
-          background: '#fff',
-          border: '1px solid var(--hair)',
-          borderRadius: 'var(--r-lg)',
-          overflow: 'hidden',
-          boxShadow: '0 2px 12px rgba(20,18,15,0.04)',
-        }}>
-          {[
-            { Icon: Bell,   label: 'การแจ้งเตือน',     sub: 'จัดการอีเมล + SMS', color: '#FFEDD5', iconColor: '#9A6E1F', href: '/notifications' },
-            { Icon: Shield, label: 'ความเป็นส่วนตัว', sub: 'จัดการข้อมูลของคุณ',  color: '#E8F6EC', iconColor: '#1F6B33', href: '/terms' },
-          ].map((r, i, arr) => (
-            <Link key={r.label} href={r.href} className="tap-down" style={{
-              display: 'flex', alignItems: 'center', gap: 14,
-              padding: '14px 18px',
-              borderBottom: i < arr.length - 1 ? '1px solid var(--hair)' : 'none',
-              cursor: 'pointer',
-              textDecoration: 'none', color: 'inherit',
-            }}>
-              <div style={{
-                width: 38, height: 38, borderRadius: 11,
-                background: r.color,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: r.iconColor, flexShrink: 0,
-              }}>
-                <r.Icon size={16} strokeWidth={1.8} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 13.5, fontWeight: 700, margin: 0 }}>{r.label}</p>
-                <p className="serif-i" style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '2px 0 0' }}>{r.sub}</p>
-              </div>
-              <ChevronRight size={16} color="var(--ink-faint)" />
-            </Link>
-          ))}
-        </div>
-      </section>
-
       {/* ── Logout ── */}
       <div style={{ padding: '4px 16px 24px' }}>
         <button onClick={() => { supabase.auth.signOut(); router.push('/login') }} className="tap-down" style={{
@@ -650,6 +555,26 @@ function SectionCard({ title, children }: { title: string; children: React.React
   )
 }
 
+function GlassStat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ textAlign: 'center', minWidth: 0 }}>
+      <p className="numerals" style={{
+        margin: 0, fontSize: 22, fontWeight: 700, color: '#fff',
+        letterSpacing: '-0.005em', lineHeight: 1.1,
+      }}>
+        {value}
+      </p>
+      <p style={{
+        margin: '3px 0 0', fontSize: 10.5, fontWeight: 500,
+        color: 'rgba(255,255,255,0.62)', letterSpacing: '0.04em',
+      }}>
+        {label}
+      </p>
+    </div>
+  )
+}
+
+// Legacy helper retained for any other call site; the redesigned hero uses GlassStat.
 function Stat({
   label, value, accent, bg, border,
 }: {
