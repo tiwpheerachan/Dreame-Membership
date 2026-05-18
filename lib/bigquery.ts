@@ -44,7 +44,16 @@ function getBQClient(): BigQuery {
 }
 
 const PROJECT = process.env.BQ_PROJECT_ID ?? ''
-const DATASET = process.env.BQ_DATASET ?? 'Dashboard'
+const DATASET = process.env.BQ_DATASET ?? 'Membership'
+
+// Tables (พาร์ทิชันด้วย order_date — query ต้องใส่ filter เสมอ ไม่งั้นค่าใช้จ่ายพุ่ง)
+const T_ITEMS  = 'order_items'  // 1 row / SKU / order — มี buyer_paid + image_url
+const T_ORDERS = 'orders'       // 1 row / order — มี items[] aggregated แล้ว
+
+// Partition filter: ต้องครอบ "อายุข้อมูลใน BQ ทั้งหมด" — เคยตั้ง 13 เดือน
+// แล้ว user เจอเคสออเดอร์ที่มีจริงแต่ตกขอบ (oldest ใน dataset = 2025-04-13)
+// 24 เดือนกัน edge case ระยะยาว — ถ้า dataset โตเกินนี้ในอนาคต ค่อยรีวิวเพิ่ม
+const PARTITION_RANGE = `order_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)`
 
 // ============================================================
 // Verbose verify — distinguishes between "no row in BQ" and "BQ failed".
@@ -65,56 +74,70 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
   }
 
   const attempted: { view: string; error: string }[] = []
+  let viewsQueried = 0
 
-  // ── Attempt 1: v_dreame_order_items_new (preferred — has image_url) ──
+  // Normalize: trim whitespace + uppercase. BQ comparison is normalized symmetrically
+  // (TRIM + UPPER on column side) so leading spaces / case mismatch / pasted-from-email
+  // order_sn don't slip through as "not found".
+  const normalized = order_sn.trim().toUpperCase()
+
+  // ── Attempt 1: Membership.order_items (raw, มี image_url + buyer_paid) ──
   try {
     const [rows] = await bq.query({
       query: `
         SELECT
           order_sn,
-          ANY_VALUE(platform) AS platform,
+          ANY_VALUE(platform)     AS platform,
+          ANY_VALUE(order_status) AS order_status,
           CAST(ANY_VALUE(order_create_time) AS STRING) AS order_create_time,
-          CAST(ANY_VALUE(order_date) AS STRING) AS order_date,
-          SUM(price * quantity) AS total_amount,
+          CAST(ANY_VALUE(order_date)        AS STRING) AS order_date,
+          SUM(buyer_paid) AS total_amount,
           ARRAY_AGG(STRUCT(
             item_id, model_id, item_name, item_sku,
-            model_name, model_sku, quantity, price, image_url
+            model_name, model_sku, quantity, price, buyer_paid, image_url
           )) AS items
-        FROM \`${PROJECT}.${DATASET}.v_dreame_order_items_new\`
-        WHERE order_sn = @order_sn
+        FROM \`${PROJECT}.${DATASET}.${T_ITEMS}\`
+        WHERE ${PARTITION_RANGE}
+          AND UPPER(TRIM(order_sn)) = @order_sn
         GROUP BY order_sn
         LIMIT 1
       `,
-      params: { order_sn },
+      params: { order_sn: normalized },
     })
+    viewsQueried += 1
     if (rows && rows.length > 0) return { status: 'found', data: mapRow(rows[0]) }
   } catch (e) {
-    attempted.push({ view: 'v_dreame_order_items_new', error: (e as Error).message })
+    attempted.push({ view: T_ITEMS, error: (e as Error).message })
   }
 
-  // ── Attempt 2: v_dreame_orders_new (fallback — no image_url) ──
+  // ── Attempt 2: Membership.orders (pre-aggregated fallback) ──
   try {
     const [rows] = await bq.query({
       query: `
         SELECT
-          order_sn, platform,
+          order_sn, platform, order_status,
           CAST(order_create_time AS STRING) AS order_create_time,
-          CAST(order_date AS STRING) AS order_date,
+          CAST(order_date        AS STRING) AS order_date,
           total_amount, items
-        FROM \`${PROJECT}.${DATASET}.v_dreame_orders_new\`
-        WHERE order_sn = @order_sn
+        FROM \`${PROJECT}.${DATASET}.${T_ORDERS}\`
+        WHERE ${PARTITION_RANGE}
+          AND UPPER(TRIM(order_sn)) = @order_sn
         LIMIT 1
       `,
-      params: { order_sn },
+      params: { order_sn: normalized },
     })
+    viewsQueried += 1
     if (rows && rows.length > 0) return { status: 'found', data: mapRow(rows[0]) }
   } catch (e) {
-    attempted.push({ view: 'v_dreame_orders_new', error: (e as Error).message })
+    attempted.push({ view: T_ORDERS, error: (e as Error).message })
   }
 
-  // If both attempts errored, surface that — otherwise it's a real "not found"
-  if (attempted.length === 2) {
-    return { status: 'error', error: attempted[1].error, attempted }
+  // ถ้า "ไม่มี view ไหน return rows สำเร็จเลย" = ไม่ทราบจริงๆ ว่ามีหรือไม่
+  //  → คืน error เพื่อให้ caller รู้ว่าเป็น infra/auth ปัญหา ไม่ใช่ "not found จริง"
+  // (กรณีเดิม: partial error 1 view + อีก view คืน 0 rows → ตอบ not_found เงียบๆ
+  //  ทำให้ user เห็น "ยังไม่พบใน BigQuery" ทั้งที่จริงๆ query fail บางส่วน)
+  if (viewsQueried === 0 && attempted.length > 0) {
+    return { status: 'error', error: attempted[attempted.length - 1].error, attempted }
   }
   return { status: 'not_found' }
 }
@@ -138,6 +161,7 @@ function mapRow(row: Record<string, unknown>): BQOrderData {
   return {
     order_sn: row.order_sn as string,
     platform: row.platform as string,
+    order_status: (row.order_status as string | null) ?? null,
     order_create_time: row.order_create_time as string,
     order_date: row.order_date as string,
     total_amount: Number(row.total_amount),
@@ -150,6 +174,7 @@ function mapRow(row: Record<string, unknown>): BQOrderData {
       model_sku: item.model_sku as string,
       quantity: Number(item.quantity),
       price: Number(item.price),
+      buyer_paid: item.buyer_paid != null ? Number(item.buyer_paid) : undefined,
       image_url: (item.image_url as string | null) ?? null,
     })) : [],
   }
@@ -157,10 +182,10 @@ function mapRow(row: Record<string, unknown>): BQOrderData {
 
 // ============================================================
 // Batch verify pending orders (for cron job)
-// Query BOTH views and merge. If we early-returned after attempt 1
+// Query BOTH tables and merge. If we early-returned after attempt 1
 // matched even one order, any queued order that exists *only* in
-// v_dreame_order_items_new would never be verified — the cron would
-// retry forever and the customer's PENDING registration would never
+// `order_items` would never be verified — the cron would retry
+// forever and the customer's PENDING registration would never
 // auto-promote despite the row being live in BQ.
 // ============================================================
 export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData[]> {
@@ -173,58 +198,74 @@ export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData
     return []
   }
 
+  // Normalize input SNs once; map normalized → original so we can return rows
+  // keyed by what the caller passed in (callers may match against
+  // purchase_registrations.order_sn that's stored un-normalized).
+  const origBySn = new Map<string, string>()
+  const normalizedSns: string[] = []
+  for (const sn of orderSns) {
+    const norm = sn.trim().toUpperCase()
+    if (!origBySn.has(norm)) origBySn.set(norm, sn)
+    normalizedSns.push(norm)
+  }
   const merged = new Map<string, BQOrderData>()
 
-  // ── v_dreame_order_items_new (preferred — has image_url) ──
+  // ── Membership.order_items (raw — มี image_url + buyer_paid) ──
   try {
     const [rows] = await bq.query({
       query: `
         SELECT
           order_sn,
-          ANY_VALUE(platform) AS platform,
+          ANY_VALUE(platform)     AS platform,
+          ANY_VALUE(order_status) AS order_status,
           CAST(ANY_VALUE(order_create_time) AS STRING) AS order_create_time,
-          CAST(ANY_VALUE(order_date) AS STRING) AS order_date,
-          SUM(price * quantity) AS total_amount,
+          CAST(ANY_VALUE(order_date)        AS STRING) AS order_date,
+          SUM(buyer_paid) AS total_amount,
           ARRAY_AGG(STRUCT(
             item_id, model_id, item_name, item_sku,
-            model_name, model_sku, quantity, price, image_url
+            model_name, model_sku, quantity, price, buyer_paid, image_url
           )) AS items
-        FROM \`${PROJECT}.${DATASET}.v_dreame_order_items_new\`
-        WHERE order_sn IN UNNEST(@sns)
+        FROM \`${PROJECT}.${DATASET}.${T_ITEMS}\`
+        WHERE ${PARTITION_RANGE}
+          AND UPPER(TRIM(order_sn)) IN UNNEST(@sns)
         GROUP BY order_sn
       `,
-      params: { sns: orderSns },
+      params: { sns: normalizedSns },
     })
     for (const r of rows || []) {
       const data = mapRow(r as Record<string, unknown>)
-      merged.set(data.order_sn, data)
+      const norm = data.order_sn.trim().toUpperCase()
+      merged.set(origBySn.get(norm) ?? data.order_sn, data)
     }
   } catch (e) {
-    console.warn('[BQ] batchVerifyOrders v_dreame_order_items_new failed:', (e as Error).message)
+    console.warn(`[BQ] batchVerifyOrders ${T_ITEMS} failed:`, (e as Error).message)
   }
 
-  // ── v_dreame_orders_new — fallback for any order_sn the items view missed ──
+  // ── Membership.orders — fallback for any order_sn the items table missed ──
   const missing = orderSns.filter(sn => !merged.has(sn))
   if (missing.length > 0) {
+    const missingNorm = missing.map(sn => sn.trim().toUpperCase())
     try {
       const [rows] = await bq.query({
         query: `
           SELECT
-            order_sn, platform,
+            order_sn, platform, order_status,
             CAST(order_create_time AS STRING) AS order_create_time,
-            CAST(order_date AS STRING) AS order_date,
+            CAST(order_date        AS STRING) AS order_date,
             total_amount, items
-          FROM \`${PROJECT}.${DATASET}.v_dreame_orders_new\`
-          WHERE order_sn IN UNNEST(@sns)
+          FROM \`${PROJECT}.${DATASET}.${T_ORDERS}\`
+          WHERE ${PARTITION_RANGE}
+            AND UPPER(TRIM(order_sn)) IN UNNEST(@sns)
         `,
-        params: { sns: missing },
+        params: { sns: missingNorm },
       })
       for (const r of rows || []) {
         const data = mapRow(r as Record<string, unknown>)
-        merged.set(data.order_sn, data)
+        const norm = data.order_sn.trim().toUpperCase()
+        merged.set(origBySn.get(norm) ?? data.order_sn, data)
       }
     } catch (e) {
-      console.error('[BQ] batchVerifyOrders v_dreame_orders_new failed:', (e as Error).message)
+      console.error(`[BQ] batchVerifyOrders ${T_ORDERS} failed:`, (e as Error).message)
     }
   }
 
@@ -237,23 +278,23 @@ export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData
 export async function searchOrdersByKeyword(keyword: string, limit = 20): Promise<BQOrderData[]> {
   try {
     const bq = getBQClient()
+    // Admin search ใช้ window กว้างกว่า verify (24 เดือน) เผื่อค้นออเดอร์เก่า
     const query = `
       SELECT
-        order_sn,
-        platform,
+        order_sn, platform, order_status,
         CAST(order_create_time AS STRING) AS order_create_time,
-        CAST(order_date AS STRING) AS order_date,
-        total_amount,
-        items
-      FROM \`${PROJECT}.${DATASET}.v_dreame_orders_new\`
-      WHERE LOWER(order_sn) LIKE @keyword
+        CAST(order_date        AS STRING) AS order_date,
+        total_amount, items
+      FROM \`${PROJECT}.${DATASET}.${T_ORDERS}\`
+      WHERE order_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
+        AND LOWER(order_sn) LIKE @keyword
       LIMIT @limit
     `
     const [rows] = await bq.query({
       query,
       params: { keyword: `%${keyword.toLowerCase()}%`, limit },
     })
-    return rows || []
+    return (rows || []).map(r => mapRow(r as Record<string, unknown>))
   } catch (error) {
     console.error('[BQ] searchOrders error:', error)
     return []

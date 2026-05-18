@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { verifyOrderInBQ } from '@/lib/bigquery'
+import { verifyOrderInBQVerbose } from '@/lib/bigquery'
 
 export async function POST(req: Request) {
   try {
@@ -16,17 +16,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ status: 'PENDING', message: 'คำสั่งซื้อหน้าร้านจะได้รับการตรวจสอบโดย Admin' })
     }
 
-    // Try BigQuery verification
-    const order = await verifyOrderInBQ(order_sn.trim())
+    const result = await verifyOrderInBQVerbose(order_sn.trim())
 
-    if (order) {
-      return NextResponse.json({ status: 'VERIFIED', order })
-    } else {
+    if (result.status === 'found') {
+      return NextResponse.json({ status: 'VERIFIED', order: result.data })
+    }
+    if (result.status === 'error') {
+      // ทำให้ user เห็นความต่าง: query fail ≠ ออเดอร์ไม่มีอยู่ใน BQ
+      // ลงทะเบียนต่อได้อยู่ (admin จะ verify เอง) แต่บอกตรงๆ ว่าระบบตรวจไม่ได้
+      console.error('[API] verify-order BQ error:', result.error, result.attempted)
       return NextResponse.json({
-        status: 'PENDING',
-        message: 'ยังไม่พบข้อมูลใน BigQuery (ระบบอัปเดตทุก 6 ชั่วโมง) ลงทะเบียนต่อได้เลย ระบบจะตรวจสอบให้อัตโนมัติ',
+        status: 'BQ_ERROR',
+        message: 'ตรวจสอบกับ BigQuery ไม่สำเร็จ ลงทะเบียนต่อได้ — แอดมินจะ verify ให้',
       })
     }
+    return NextResponse.json({
+      status: 'PENDING',
+      message: 'ยังไม่พบข้อมูลใน BigQuery (ระบบอัปเดตทุก 6 ชั่วโมง) ลงทะเบียนต่อได้เลย ระบบจะตรวจสอบให้อัตโนมัติ',
+    })
   } catch (error) {
     console.error('[API] verify-order error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

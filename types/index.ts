@@ -141,6 +141,7 @@ export interface BQOrderItem {
   model_sku: string
   quantity: number
   price: number
+  buyer_paid?: number
   image_url: string | null
 }
 
@@ -149,6 +150,7 @@ export interface BQOrderData {
   platform: string
   order_create_time: string
   order_date: string
+  order_status?: string | null
   total_amount: number
   items: BQOrderItem[]
 }

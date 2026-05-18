@@ -8,7 +8,7 @@ import {
 import Link from 'next/link'
 
 type Step = 'order' | 'upload' | 'done'
-type VerifyStatus = 'idle' | 'loading' | 'verified' | 'pending' | 'error'
+type VerifyStatus = 'idle' | 'loading' | 'verified' | 'pending' | 'bq_error' | 'error'
 
 const CHANNELS = [
   { value: 'SHOPEE',  label: 'Shopee',   Icon: ShoppingBag, type: 'ONLINE' },
@@ -45,6 +45,7 @@ export default function RegisterPage() {
       const data = await res.json()
       if (data.status === 'VERIFIED') { setVerifiedData(data.order); setVerifyStatus('verified') }
       else if (data.status === 'PENDING') setVerifyStatus('pending')
+      else if (data.status === 'BQ_ERROR') setVerifyStatus('bq_error')
       else setVerifyStatus('error')
     } catch { setVerifyStatus('error') }
   }
@@ -287,6 +288,24 @@ export default function RegisterPage() {
                   </div>
                 </div>
               )}
+              {verifyStatus === 'bq_error' && (
+                <div style={{
+                  marginTop: 12, padding: 14, display: 'flex', gap: 10,
+                  background: 'var(--amber-soft)',
+                  border: '1px solid rgba(154,110,31,0.20)',
+                  borderRadius: 'var(--r-md)',
+                }}>
+                  <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
+                  <div>
+                    <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>
+                      ตรวจสอบ BigQuery ไม่สำเร็จ
+                    </p>
+                    <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0 }}>
+                      ลงทะเบียนต่อได้ แอดมินจะตรวจสอบให้
+                    </p>
+                  </div>
+                </div>
+              )}
               {verifyStatus === 'error' && (
                 <div style={{
                   marginTop: 12, padding: 14,
@@ -301,7 +320,7 @@ export default function RegisterPage() {
               )}
             </div>
 
-            {(verifyStatus === 'verified' || verifyStatus === 'pending') && (
+            {(verifyStatus === 'verified' || verifyStatus === 'pending' || verifyStatus === 'bq_error') && (
               <button className="btn btn-ink tap-down" onClick={() => setStep('upload')}>
                 ถัดไป →
               </button>
