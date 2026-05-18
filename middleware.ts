@@ -1,21 +1,17 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// ─── Performance notes ────────────────────────────────────────────
-// This runs on every navigation under the matcher. We want it to be FAST,
-// because every millisecond here delays the click → render of the next page.
+// ─── Auth check: getUser, not getSession ──────────────────────────
+// getSession() อ่านจาก cookie ตรงๆ — ถ้า JWT หมดอายุ/invalid
+// แต่ cookie ยังมี → คืนค่า user เป็น truthy
+// getUser() validate กับ Supabase auth server — refresh token อัตโนมัติ
+// ถ้า refresh ไม่ได้ → คืน null
 //
-//   • supabase.auth.getSession()  reads the cookie locally — instant.
-//   • supabase.auth.getUser()     re-validates the JWT against Supabase auth
-//                                 servers — adds 200-800ms over the network.
-//
-// We use getSession() here. The session is only used for redirect decisions
-// (show login vs the app shell). Actual data access is RLS-protected and
-// will reject tampered/expired tokens at the data layer.
-//
-// We also avoid hitting the DB inside middleware — the terms-accepted check
-// happens once at the auth callback / /home page and doesn't need to gate
-// every navigation.
+// เคยใช้ getSession() เพื่อ perf (~200-800ms ต่างกัน) แต่เกิด redirect loop:
+//   • middleware (getSession) คิดว่า login → ปล่อยผ่าน /home
+//   • /home (getUser) คิดว่าไม่ login → redirect /login
+//   • middleware ดู /login (getSession) คิดว่า login → redirect /home → loop
+// correctness > speed
 // ──────────────────────────────────────────────────────────────────
 
 export async function middleware(request: NextRequest) {
@@ -41,8 +37,8 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
-  const isLoggedIn = !!session?.user
+  const { data: { user } } = await supabase.auth.getUser()
+  const isLoggedIn = !!user
   const path = request.nextUrl.pathname
 
   // ─── User routes ───────────────────────────────────────────
