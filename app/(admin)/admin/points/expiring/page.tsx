@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import PageShell from '@/components/admin/PageShell'
 
 interface SearchParams { window?: string }
 
@@ -19,25 +20,26 @@ export default async function PointsExpiringPage({ searchParams }: { searchParam
   const totalExpiring = (rows || []).reduce((s, r) => s + Number(r.points_remaining || 0), 0)
   const userCount = new Set((rows || []).map(r => r.user_id)).size
 
-  return (
-    <div style={{ padding: '28px 32px', maxWidth: 1200 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 18 }}>
-        <div>
-          <h1 className="admin-h1">แต้มจะหมดอายุ</h1>
-          <p className="admin-sub">ใน {win} วันข้างหน้า · {userCount} คน · {totalExpiring.toLocaleString()} pts</p>
-        </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {[7, 30, 60, 90].map(d => (
-            <a key={d} href={`?window=${d}`}
-              className={d === win ? 'admin-btn admin-btn-ink' : 'admin-btn admin-btn-ghost'}
-              style={{ padding: '6px 14px', fontSize: 12 }}>
-              {d} วัน
-            </a>
-          ))}
-        </div>
-      </div>
+  const actions = (
+    <div className="flex gap-1">
+      {[7, 30, 60, 90].map(d => (
+        <a key={d} href={`?window=${d}`}
+          className={d === win ? 'admin-btn admin-btn-ink' : 'admin-btn admin-btn-ghost'}
+          style={{ padding: '6px 14px', fontSize: 12 }}>
+          {d} วัน
+        </a>
+      ))}
+    </div>
+  )
 
-      <div className="admin-card" style={{ overflow: 'hidden' }}>
+  return (
+    <PageShell
+      eyebrow="Loyalty"
+      title="แต้มจะหมดอายุ"
+      subtitle={`ใน ${win} วันข้างหน้า · ${userCount} คน · ${totalExpiring.toLocaleString()} pts`}
+      actions={actions}>
+
+      <div className="admin-card overflow-hidden">
         <table className="admin-table">
           <thead>
             <tr>
@@ -54,7 +56,7 @@ export default async function PointsExpiringPage({ searchParams }: { searchParam
               <tr key={`${r.user_id}-${i}`}>
                 <td className="num muted">{r.member_id as string}</td>
                 <td style={{ fontWeight: 600 }}>{(r.full_name as string) || '-'}</td>
-                <td className="num" style={{ color: 'var(--gold-deep)', fontWeight: 700 }}>
+                <td className="num font-semibold" style={{ color: 'var(--admin-gold-deep)' }}>
                   {Number(r.points_remaining).toLocaleString()}
                 </td>
                 <td className="muted" style={{ fontSize: 11 }}>{formatDate(r.expires_at as string)}</td>
@@ -64,7 +66,7 @@ export default async function PointsExpiringPage({ searchParams }: { searchParam
                   </span>
                 </td>
                 <td>
-                  <Link href={`/admin/members/${r.user_id}`} style={{ color: 'var(--ink-mute)' }}>
+                  <Link href={`/admin/members/${r.user_id}`} style={{ color: 'var(--admin-ink-mute)' }}>
                     <ChevronRight size={15} />
                   </Link>
                 </td>
@@ -73,12 +75,12 @@ export default async function PointsExpiringPage({ searchParams }: { searchParam
           </tbody>
         </table>
         {(rows || []).length === 0 && (
-          <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--ink-mute)' }}>
-            <AlertTriangle size={28} style={{ margin: '0 auto 8px', display: 'block', color: 'var(--ink-faint)' }} />
-            <p style={{ margin: 0, fontSize: 13 }}>ไม่มีแต้มที่จะหมดอายุในช่วงนี้</p>
+          <div className="py-16 text-center" style={{ color: 'var(--admin-ink-mute)' }}>
+            <AlertTriangle size={28} className="mx-auto mb-2" style={{ color: 'var(--admin-ink-faint)' }} />
+            <p className="text-sm">ไม่มีแต้มที่จะหมดอายุในช่วงนี้</p>
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { X, Copy, Check, Calendar, ShoppingBag, Tag, Clock, Sparkles } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { X, Copy, Check, Calendar, ShoppingBag, Tag, Clock, Sparkles, Undo2, AlertTriangle } from 'lucide-react'
 import type { Coupon } from '@/types'
 import { formatDate } from '@/lib/utils'
 import { getCouponTheme } from '@/lib/coupon-themes'
@@ -12,8 +13,35 @@ interface Props {
 }
 
 export default function CouponDetail({ coupon, status, onClose }: Props) {
+  const router = useRouter()
   const [copied, setCopied] = useState(false)
   const [closing, setClosing] = useState(false)
+  const [livePrice, setLivePrice] = useState<{ current: number; discount: number; cash: number } | null>(null)
+
+  // Refund state
+  const [refundMode, setRefundMode]   = useState<'idle'|'confirm'|'final'|'doing'|'done'>('idle')
+  const [refundError, setRefundError] = useState('')
+  const [refundedPts, setRefundedPts] = useState(0)
+
+  // ── Live price sync (POINTS_CASH reward only) ──
+  const isPointsCashReward = !!coupon
+    && status === 'active'
+    && coupon.reward_meta?.redeem_type === 'POINTS_CASH'
+    && coupon.reward_meta?.cash_top_up_thb != null
+
+  useEffect(() => {
+    if (!isPointsCashReward || !coupon?.reward_meta?.redemption_id) return
+    let cancel = false
+    fetch(`/api/redemptions/${coupon.reward_meta.redemption_id}/live-price`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (cancel || !d.success) return
+        const cash = Number(coupon!.reward_meta!.cash_top_up_thb || 0)
+        setLivePrice({ current: d.current_price, discount: d.current_price - cash, cash })
+      })
+      .catch(() => { /* ignore */ })
+    return () => { cancel = true }
+  }, [isPointsCashReward, coupon])
 
   useEffect(() => {
     if (coupon) {
@@ -40,11 +68,44 @@ export default function CouponDetail({ coupon, status, onClose }: Props) {
   const isActive = status === 'active'
   const isPercent = coupon.discount_type === 'PERCENT'
   const theme = getCouponTheme(isActive ? coupon.theme : 'black')
+  // ใช้ live discount ถ้ามี (POINTS_CASH only) — fallback เป็น snapshot
+  const displayDiscount = livePrice ? livePrice.discount : coupon.discount_value
+  const discountChanged = livePrice && Math.abs(livePrice.discount - coupon.discount_value) > 0.01
 
   function copy() {
     navigator.clipboard.writeText(coupon!.code)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  // ── Self-refund eligibility ──
+  // coupon มาจาก reward redemption + ไม่ใช่ PREMIUM (ส่งของจริง)
+  const isRewardCoupon = !!coupon.auto_issue_key?.startsWith('REWARD_')
+  const canRefund = isActive
+    && isRewardCoupon
+    && coupon.reward_meta?.redeem_type !== 'PREMIUM'
+
+  async function submitRefund() {
+    setRefundMode('doing')
+    setRefundError('')
+    try {
+      const r = await fetch(`/api/coupons/${coupon!.id}/refund`, { method: 'POST' })
+      const d = await r.json()
+      if (!r.ok) {
+        setRefundError(d.error || 'แลกคืนไม่สำเร็จ')
+        setRefundMode('final')
+        return
+      }
+      setRefundedPts(d.refunded_points || 0)
+      setRefundMode('done')
+      setTimeout(() => {
+        handleClose()
+        router.refresh()
+      }, 1400)
+    } catch (e) {
+      setRefundError((e as Error).message || 'เกิดข้อผิดพลาด')
+      setRefundMode('final')
+    }
   }
 
   const conditionLines = (coupon.description || '')
@@ -59,17 +120,31 @@ export default function CouponDetail({ coupon, status, onClose }: Props) {
         @keyframes pop-out     { from { opacity:1; transform: scale(1); } to { opacity:0; transform: scale(0.96); } }
       `}</style>
       <div onClick={handleClose} style={{
-        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 200,
+        position: 'fixed',
+        // ใช้ inset แทน top/left/right/bottom ให้ปลอดภัย iOS Safari
+        top: 0, left: 0, right: 0, bottom: 0,
+        zIndex: 200,
         background: 'rgba(14,14,14,0.55)',
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 16,
+        // ใช้ grid place-items: center → centering ทำใน space ที่เหลือหลัง padding
+        display: 'grid',
+        placeItems: 'center',
+        // Reserve space ให้ navbar (~96px) + safe-area iPhone notch
+        paddingTop:    'max(16px, env(safe-area-inset-top))',
+        paddingLeft:   16,
+        paddingRight:  16,
+        paddingBottom: 'calc(96px + env(safe-area-inset-bottom))',
+        // กัน scroll bleed ไป body ฝั่งล่าง
+        overscrollBehavior: 'contain',
         animation: closing ? 'pop-bd-out 0.18s ease forwards' : 'pop-bd-in 0.2s ease forwards',
       }}>
         <div onClick={e => e.stopPropagation()} style={{
-          width: '100%', maxWidth: 380,
-          maxHeight: 'min(80vh, 680px)',
+          // กว้างเต็มแต่ไม่เกิน 420 desktop
+          width: '100%',
+          maxWidth: 420,
+          // maxHeight 100% = สูงสุดเท่าพื้นที่ที่ grid จัดให้ (viewport - padding ทุกด้าน)
+          maxHeight: '100%',
           background: '#fff',
           borderRadius: 'var(--r-xl)',
           overflow: 'hidden',
@@ -98,7 +173,7 @@ export default function CouponDetail({ coupon, status, onClose }: Props) {
             position: 'relative',
             background: theme.heroBg,
             color: '#fff',
-            padding: '22px 22px',
+            padding: '18px 22px 16px',
             textAlign: 'center',
             overflow: 'hidden',
             flexShrink: 0,
@@ -136,18 +211,38 @@ export default function CouponDetail({ coupon, status, onClose }: Props) {
 
             <p className="display tnum" style={{
               position: 'relative', zIndex: 2,
-              fontSize: 48, fontWeight: 800, lineHeight: 0.95, margin: 0,
+              fontSize: 42, fontWeight: 800, lineHeight: 0.95, margin: 0,
               color: theme.heroAccent,
               textShadow: '0 2px 12px rgba(0,0,0,0.20)',
+              transition: 'all 0.3s ease',
             }}>
-              {isPercent ? `${coupon.discount_value}%` : `฿${Number(coupon.discount_value).toLocaleString()}`}
+              {isPercent
+                ? `${displayDiscount}%`
+                : `฿${Number(Math.round(displayDiscount)).toLocaleString()}`}
             </p>
+
+            {discountChanged && (
+              <p style={{
+                position: 'relative', zIndex: 2,
+                fontSize: 13, color: 'rgba(255,255,255,0.6)', margin: '4px 0 0',
+                textDecoration: 'line-through', fontWeight: 600,
+              }}>
+                {isPercent
+                  ? `${coupon.discount_value}%`
+                  : `฿${Number(coupon.discount_value).toLocaleString()}`}
+              </p>
+            )}
 
             <p style={{
               position: 'relative', zIndex: 2,
               fontSize: 11, color: theme.heroLabel, margin: '6px 0 0', fontWeight: 500,
             }}>
               {isPercent ? 'percent off' : 'baht off'}
+              {livePrice && (
+                <span style={{ marginLeft: 6, opacity: 0.85 }}>
+                  · ราคาตอนนี้ ฿{livePrice.current.toLocaleString()} → จ่าย ฿{livePrice.cash.toLocaleString()}
+                </span>
+              )}
             </p>
           </div>
 
@@ -215,29 +310,149 @@ export default function CouponDetail({ coupon, status, onClose }: Props) {
               borderTop: '1px solid var(--hair)',
               background: '#fff',
             }}>
-              <p className="kicker" style={{ margin: '0 0 8px', textAlign: 'center' }}>
-                Coupon Code
-              </p>
-              <div style={{
-                position: 'relative', overflow: 'hidden',
-                border: '2px dashed var(--gold-line)',
-                borderRadius: 'var(--r-md)',
-                padding: '12px 16px',
-                background: 'var(--gold-glow)',
-                textAlign: 'center',
-                marginBottom: 10,
-              }}>
-                <p style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 18, fontWeight: 800, letterSpacing: '0.18em',
-                  color: 'var(--ink)', margin: 0,
-                }}>
-                  {coupon.code}
-                </p>
-              </div>
-              <button onClick={copy} className="btn btn-ink tap" style={{ width: '100%', padding: '12px 18px' }}>
-                {copied ? <><Check size={13} /> คัดลอกแล้ว</> : <><Copy size={13} /> คัดลอกโค้ด</>}
-              </button>
+              {refundMode === 'idle' && (
+                <>
+                  <p className="kicker" style={{ margin: '0 0 8px', textAlign: 'center' }}>
+                    Coupon Code
+                  </p>
+                  <div style={{
+                    position: 'relative', overflow: 'hidden',
+                    border: '2px dashed var(--gold-line)',
+                    borderRadius: 'var(--r-md)',
+                    padding: '12px 16px',
+                    background: 'var(--gold-glow)',
+                    textAlign: 'center',
+                    marginBottom: 10,
+                  }}>
+                    <p style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 18, fontWeight: 800, letterSpacing: '0.18em',
+                      color: 'var(--ink)', margin: 0,
+                    }}>
+                      {coupon.code}
+                    </p>
+                  </div>
+                  <button onClick={copy} className="btn btn-ink tap" style={{ width: '100%', padding: '12px 18px' }}>
+                    {copied ? <><Check size={13} /> คัดลอกแล้ว</> : <><Copy size={13} /> คัดลอกโค้ด</>}
+                  </button>
+
+                  {canRefund && (
+                    <button onClick={() => { setRefundMode('confirm'); setRefundError('') }}
+                      style={{
+                        width:'100%', marginTop:8, padding:'10px 12px',
+                        background:'transparent', border:'1px dashed var(--hair)',
+                        borderRadius:'var(--r-md)', cursor:'pointer',
+                        display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6,
+                        fontSize:12, fontWeight:600, color:'var(--ink-mute)',
+                      }}>
+                      <Undo2 size={12}/> แลกคืนเพื่อรับแต้มกลับ
+                    </button>
+                  )}
+                </>
+              )}
+
+              {refundMode === 'confirm' && (
+                <>
+                  <div style={{ textAlign:'center', marginBottom:12 }}>
+                    <div style={{
+                      width:44, height:44, margin:'0 auto 8px',
+                      borderRadius:'50%', background:'var(--gold-glow)',
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                    }}>
+                      <Undo2 size={20} color="var(--gold-deep)"/>
+                    </div>
+                    <p style={{ margin:0, fontSize:15, fontWeight:800 }}>
+                      ต้องการแลกคืนคูปองนี้?
+                    </p>
+                    <p style={{ margin:'6px 0 0', fontSize:11.5, color:'var(--ink-mute)', lineHeight:1.5 }}>
+                      แต้มที่ใช้แลกจะถูกคืนกลับเข้าบัญชีของคุณ
+                    </p>
+                  </div>
+                  <div style={{
+                    padding:'10px 12px', borderRadius:10,
+                    background:'#fef9e7', border:'1px solid #fce4a8',
+                    display:'flex', gap:8, alignItems:'flex-start', marginBottom:12,
+                  }}>
+                    <AlertTriangle size={14} color="#a16207" style={{ flexShrink:0, marginTop:1 }}/>
+                    <p style={{ margin:0, fontSize:11, color:'#78350f', lineHeight:1.5 }}>
+                      หลังแลกคืน คูปองจะหายไปจากบัญชีและไม่สามารถนำกลับมาใช้ได้
+                    </p>
+                  </div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button onClick={() => setRefundMode('idle')} className="btn tap"
+                      style={{ flex:1, padding:'12px 0', background:'var(--bg-soft)', color:'var(--ink)' }}>
+                      ยกเลิก
+                    </button>
+                    <button onClick={() => setRefundMode('final')} className="btn btn-ink tap"
+                      style={{ flex:1, padding:'12px 0' }}>
+                      ดำเนินการต่อ
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {(refundMode === 'final' || refundMode === 'doing') && (
+                <>
+                  <div style={{ textAlign:'center', marginBottom:12 }}>
+                    <div style={{
+                      width:44, height:44, margin:'0 auto 8px',
+                      borderRadius:'50%', background:'#fef2f2',
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                    }}>
+                      <AlertTriangle size={20} color="#dc2626"/>
+                    </div>
+                    <p style={{ margin:0, fontSize:15, fontWeight:800 }}>
+                      ยืนยันแลกคืนอีกครั้ง
+                    </p>
+                    <p style={{ margin:'6px 0 0', fontSize:11.5, color:'var(--ink-mute)', lineHeight:1.5 }}>
+                      การกระทำนี้ไม่สามารถย้อนกลับได้
+                    </p>
+                  </div>
+                  {refundError && (
+                    <div style={{
+                      padding:'10px 12px', borderRadius:10,
+                      background:'#fef2f2', border:'1px solid #fecaca',
+                      fontSize:11.5, color:'#991b1b', marginBottom:10,
+                    }}>
+                      {refundError}
+                    </div>
+                  )}
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button onClick={() => setRefundMode('confirm')} disabled={refundMode==='doing'}
+                      className="btn tap"
+                      style={{ flex:1, padding:'12px 0', background:'var(--bg-soft)', color:'var(--ink)',
+                        opacity: refundMode==='doing' ? 0.5 : 1 }}>
+                      ย้อนกลับ
+                    </button>
+                    <button onClick={submitRefund} disabled={refundMode==='doing'}
+                      className="tap"
+                      style={{
+                        flex:1, padding:'12px 0', borderRadius:'var(--r-md)',
+                        background: refundMode==='doing' ? '#9ca3af' : '#dc2626',
+                        color:'#fff', border:'none', fontSize:13, fontWeight:700,
+                        cursor: refundMode==='doing' ? 'wait' : 'pointer',
+                      }}>
+                      {refundMode==='doing' ? 'กำลังแลกคืน…' : 'ใช่, แลกคืน'}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {refundMode === 'done' && (
+                <div style={{ textAlign:'center', padding:'8px 0' }}>
+                  <div style={{
+                    width:52, height:52, margin:'0 auto 10px',
+                    borderRadius:'50%', background:'#ecfdf5',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                  }}>
+                    <Check size={26} color="#16a34a"/>
+                  </div>
+                  <p style={{ margin:0, fontSize:16, fontWeight:800 }}>แลกคืนสำเร็จ</p>
+                  <p style={{ margin:'4px 0 0', fontSize:13, color:'#16a34a', fontWeight:700 }}>
+                    + {refundedPts.toLocaleString()} แต้ม
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <div style={{

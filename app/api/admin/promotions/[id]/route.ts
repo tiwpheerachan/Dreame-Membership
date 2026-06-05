@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { uploadToSupabase } from '@/lib/upload'
 
 async function requireAdmin() {
@@ -85,6 +86,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     error = retry.error
   }
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  revalidatePath('/admin/promotions')
+  revalidatePath('/promotions')
+  revalidatePath('/home')
   return NextResponse.json({ success: true, promotion: data })
 }
 
@@ -94,5 +98,8 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 
   const { error } = await auth.service.from('promotions').delete().eq('id', params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  revalidatePath('/admin/promotions')
+  revalidatePath('/promotions')
+  revalidatePath('/home')
   return NextResponse.json({ success: true })
 }

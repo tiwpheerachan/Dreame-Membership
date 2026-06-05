@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Send, CalendarHeart, Users } from 'lucide-react'
+import { Send, CalendarHeart, Users, AlertTriangle } from 'lucide-react'
 
 export default function CampaignsPage() {
   const [form, setForm] = useState({
@@ -13,6 +13,7 @@ export default function CampaignsPage() {
   const [estimated, setEstimated] = useState<number | null>(null)
   const [sending, setSending] = useState(false)
   const [msg, setMsg] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   // live preview count
   useEffect(() => {
@@ -53,18 +54,28 @@ export default function CampaignsPage() {
     })
     const d = await r.json()
     setSending(false)
+    setConfirmOpen(false)
     if (r.ok) setMsg(`ส่งคูปองให้ ${d.target_count} คนเรียบร้อย`)
     else setMsg(d.error || 'ไม่สำเร็จ')
   }
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 900 }}>
-      <div style={{ marginBottom: 18 }}>
-        <h1 className="admin-h1"><CalendarHeart size={18} style={{ verticalAlign: 'baseline' }} /> Targeted Campaigns</h1>
-        <p className="admin-sub">ส่งคูปองตรงกลุ่ม — เลือกเงื่อนไข segment + กำหนดส่วนลด</p>
-      </div>
+    <div className="flex flex-col h-full" style={{ background: 'var(--admin-bg)' }}>
+      <header className="border-b flex-shrink-0"
+        style={{ background: 'var(--admin-card)', borderColor: 'var(--admin-border)' }}>
+        <div className="px-6 lg:px-8 py-5">
+          <p style={{ color: 'var(--admin-gold)', fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 500, marginBottom: 4 }}>
+            Marketing
+          </p>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--admin-ink)' }}>Targeted Campaigns</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--admin-ink-mute)' }}>
+            ส่งคูปองตรงกลุ่ม — เลือกเงื่อนไข segment + กำหนดส่วนลด
+          </p>
+        </div>
+      </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
+      <div className="flex-1 overflow-y-auto px-6 lg:px-8 py-5">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, maxWidth: 1100 }}>
         {/* Form */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="admin-card" style={{ padding: 20 }}>
@@ -144,14 +155,57 @@ export default function CampaignsPage() {
           <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '0 0 16px' }}>
             <Users size={11} style={{ verticalAlign: 'baseline' }} /> คนตามเงื่อนไข
           </p>
-          <button onClick={send} disabled={sending || !form.title || !form.discount_value || !form.valid_until || !estimated}
+          <button onClick={() => setConfirmOpen(true)}
+            disabled={sending || !form.title || !form.discount_value || !form.valid_until || !estimated}
             className="admin-btn admin-btn-ink" style={{ width: '100%' }}>
             <Send size={13} /> {sending ? 'กำลังส่ง...' : 'ส่งคูปอง'}
           </button>
-          <p style={{ fontSize: 10, color: 'var(--ink-faint)', margin: '8px 0 0', textAlign: 'center' }}>
+          <p style={{ fontSize: 10, color: 'var(--admin-ink-faint)', margin: '8px 0 0', textAlign: 'center' }}>
             ⚠️ คนละ 1 รหัสคูปอง · กดส่งแล้วยกเลิกไม่ได้
           </p>
         </div>
+
+        {/* Confirm modal */}
+        {confirmOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(14,14,14,0.45)', backdropFilter: 'blur(6px)' }}>
+            <div className="admin-card p-5 w-full max-w-md">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: '#FBE9E9' }}>
+                  <AlertTriangle size={18} style={{ color: '#B14242' }} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-sm" style={{ color: 'var(--admin-ink)' }}>
+                    ยืนยันส่งคูปอง?
+                  </h3>
+                  <p className="text-xs mt-1" style={{ color: 'var(--admin-ink-mute)' }}>
+                    จะส่งคูปอง <strong>{form.title || '(ไม่มีชื่อ)'}</strong> ให้ <strong>{estimated} คน</strong>
+                    <br />
+                    {form.discount_type === 'PERCENT'
+                      ? `ส่วนลด ${form.discount_value}%`
+                      : `ส่วนลด ฿${Number(form.discount_value).toLocaleString()}`}
+                    {Number(form.min_purchase) > 0 && ` · ขั้นต่ำ ฿${Number(form.min_purchase).toLocaleString()}`}
+                    {' · '}หมดอายุ {form.valid_until}
+                  </p>
+                  <p className="text-xs mt-2" style={{ color: '#B14242' }}>
+                    การกระทำนี้ไม่สามารถยกเลิกได้
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmOpen(false)} className="admin-btn admin-btn-ghost flex-1">
+                  ยกเลิก
+                </button>
+                <button onClick={send} disabled={sending}
+                  className="admin-btn admin-btn-ink flex-1">
+                  {sending ? 'กำลังส่ง…' : `ส่ง ${estimated} คูปอง`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
       </div>
     </div>
   )

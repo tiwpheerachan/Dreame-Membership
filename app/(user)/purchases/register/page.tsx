@@ -3,19 +3,19 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Search, Upload, CheckCircle, Clock, X, Loader2,
-  ShoppingBag, Globe, Store, Sparkles
 } from 'lucide-react'
 import Link from 'next/link'
+import PlatformLogo from '@/components/admin/PlatformLogo'
 
 type Step = 'order' | 'upload' | 'done'
 type VerifyStatus = 'idle' | 'loading' | 'verified' | 'pending' | 'bq_error' | 'error'
 
 const CHANNELS = [
-  { value: 'SHOPEE',  label: 'Shopee',   Icon: ShoppingBag, type: 'ONLINE' },
-  { value: 'LAZADA',  label: 'Lazada',   Icon: ShoppingBag, type: 'ONLINE' },
-  { value: 'WEBSITE', label: 'Website',  Icon: Globe,       type: 'ONLINE' },
-  { value: 'TIKTOK',  label: 'TikTok',   Icon: Sparkles,    type: 'ONLINE' },
-  { value: 'STORE',   label: 'หน้าร้าน', Icon: Store,       type: 'ONSITE' },
+  { value: 'SHOPEE',  label: 'Shopee',     type: 'ONLINE' },
+  { value: 'LAZADA',  label: 'Lazada',     type: 'ONLINE' },
+  { value: 'WEBSITE', label: 'Website',    type: 'ONLINE' },
+  { value: 'TIKTOK',  label: 'TikTok',     type: 'ONLINE' },
+  { value: 'STORE',   label: 'หน้าร้าน',   type: 'ONSITE' },
 ]
 
 export default function RegisterPage() {
@@ -157,7 +157,7 @@ export default function RegisterPage() {
                       cursor: 'pointer', fontFamily: 'inherit',
                       transition: 'all 0.18s ease',
                     }}>
-                      <c.Icon size={15} strokeWidth={1.6} />
+                      <PlatformLogo channel={c.value} size={18} />
                       {c.label}
                     </button>
                   )

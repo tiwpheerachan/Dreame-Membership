@@ -7,6 +7,7 @@ import {
   CheckCircle, XCircle, Clock,
 } from 'lucide-react'
 import type { PurchaseRegistration, BQOrderData } from '@/types'
+import TrackOrderBanner from '@/components/user/TrackOrderBanner'
 import { formatDate, warrantyDaysLeft } from '@/lib/utils'
 import { calculatePoints, normalizeTier } from '@/lib/points'
 import { batchVerifyOrders } from '@/lib/bigquery'
@@ -166,7 +167,7 @@ export default async function PurchasesPage() {
       background: '#fff',
     }}>
       {/* Header */}
-      <header style={{ padding: '14px 20px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+      <header style={{ padding: '14px 20px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10 }}>
         <div>
           <p className="eyebrow" style={{ marginBottom: 10 }}>Wardrobe</p>
           <h1 style={{ margin: 0, fontSize: 32, lineHeight: 1.1, letterSpacing: '-0.02em' }}>
@@ -179,12 +180,15 @@ export default async function PurchasesPage() {
             </p>
           )}
         </div>
-        <Link href="/purchases/register" className="btn btn-ink tap-down" style={{
-          padding: '10px 16px', fontSize: 12,
-          boxShadow: '0 4px 16px rgba(20,18,15,0.18)',
-        }}>
-          <Plus size={13} /> ลงทะเบียน
-        </Link>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+          <TrackOrderBanner variant="button" />
+          <Link href="/purchases/register" className="btn btn-ink tap-down" style={{
+            padding: '10px 16px', fontSize: 12,
+            boxShadow: '0 4px 16px rgba(20,18,15,0.18)',
+          }}>
+            <Plus size={13} /> ลงทะเบียน
+          </Link>
+        </div>
       </header>
 
       <div style={{ padding: '0 16px 32px', display: 'flex', flexDirection: 'column', gap: 14 }}>

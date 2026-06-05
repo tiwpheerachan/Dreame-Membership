@@ -2,7 +2,7 @@
 // BigQuery Integration — Dreame Membership
 // ============================================================
 import { BigQuery } from '@google-cloud/bigquery'
-import type { BQOrderData } from '@/types'
+import type { BQOrderData, BQOrderItem } from '@/types'
 
 let bqClient: BigQuery | null = null
 
@@ -297,6 +297,197 @@ export async function searchOrdersByKeyword(keyword: string, limit = 20): Promis
     return (rows || []).map(r => mapRow(r as Record<string, unknown>))
   } catch (error) {
     console.error('[BQ] searchOrders error:', error)
+    return []
+  }
+}
+
+// ============================================================
+// SHIPPING STATUS — Membership.shipping_status (cross-platform)
+//
+// Schema: 1 row per fulfillment (Shopee/TikTok = order; Shopify = can be many per order)
+// Normalized status: label_printed | in_transit | out_for_delivery | delivered | failure | cancelled
+// ============================================================
+
+const T_SHIPPING = 'shipping_status'
+const T_DISCOUNT = 'discount_code_status'
+
+export interface BQShippingRow {
+  platform:           string
+  brand_id:           string
+  brand_name:         string
+  shop_id:            string
+  order_sn:           string
+  fulfillment_id:     string
+  fulfillment_status: string | null
+  shipment_status:    'label_printed' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'failure' | 'cancelled' | string | null
+  carrier:            string | null
+  tracking_numbers:   string[]
+  tracking_urls:      string[]
+  shipped_at:         string | null
+  delivered_at:       string | null
+  last_event_status:  string | null
+  last_event_at:      string | null
+  last_event_location: string | null
+  order_date:         string
+}
+
+function mapShipping(r: Record<string, unknown>): BQShippingRow {
+  const arr = (k: string): string[] => {
+    const v = r[k]
+    if (Array.isArray(v)) return v.map(x => String(x))
+    return []
+  }
+  const ts = (k: string): string | null => {
+    const v = r[k]
+    if (!v) return null
+    if (typeof v === 'object' && 'value' in v) return String((v as { value: unknown }).value)
+    return String(v)
+  }
+  return {
+    platform:            String(r.platform || ''),
+    brand_id:            String(r.brand_id || ''),
+    brand_name:          String(r.brand_name || ''),
+    shop_id:             String(r.shop_id || ''),
+    order_sn:            String(r.order_sn || ''),
+    fulfillment_id:      String(r.fulfillment_id || ''),
+    fulfillment_status:  r.fulfillment_status ? String(r.fulfillment_status) : null,
+    shipment_status:     r.shipment_status ? String(r.shipment_status) : null,
+    carrier:             r.carrier ? String(r.carrier) : null,
+    tracking_numbers:    arr('tracking_numbers'),
+    tracking_urls:       arr('tracking_urls'),
+    shipped_at:          ts('shipped_at'),
+    delivered_at:        ts('delivered_at'),
+    last_event_status:   r.last_event_status ? String(r.last_event_status) : null,
+    last_event_at:       ts('last_event_at'),
+    last_event_location: r.last_event_location ? String(r.last_event_location) : null,
+    order_date:          ts('order_date') || '',
+  }
+}
+
+/**
+ * ดึง shipping status ของ order_sn เดียว (ทุก fulfillment ที่มี)
+ * เร็ว — ใช้ partition + cluster pruning
+ */
+export async function getShippingByOrderSn(order_sn: string): Promise<BQShippingRow[]> {
+  try {
+    const bq = getBQClient()
+    const query = `
+      SELECT * FROM \`${PROJECT}.${DATASET}.${T_SHIPPING}\`
+      WHERE ${PARTITION_RANGE}
+        AND brand_id = 'dreame'
+        AND order_sn = @order_sn
+      ORDER BY shipped_at DESC NULLS LAST, last_event_at DESC NULLS LAST
+    `
+    const [rows] = await bq.query({ query, params: { order_sn } })
+    return (rows || []).map(r => mapShipping(r as Record<string, unknown>))
+  } catch (e) {
+    console.error('[BQ] getShippingByOrderSn:', (e as Error).message)
+    return []
+  }
+}
+
+/**
+ * ดึง shipping ของหลาย order_sn พร้อมกัน (สำหรับ /api/orders/me)
+ */
+export async function getShippingByOrderSns(order_sns: string[]): Promise<BQShippingRow[]> {
+  if (order_sns.length === 0) return []
+  try {
+    const bq = getBQClient()
+    const query = `
+      SELECT * FROM \`${PROJECT}.${DATASET}.${T_SHIPPING}\`
+      WHERE ${PARTITION_RANGE}
+        AND brand_id = 'dreame'
+        AND order_sn IN UNNEST(@order_sns)
+      ORDER BY shipped_at DESC NULLS LAST, last_event_at DESC NULLS LAST
+    `
+    const [rows] = await bq.query({ query, params: { order_sns } })
+    return (rows || []).map(r => mapShipping(r as Record<string, unknown>))
+  } catch (e) {
+    console.error('[BQ] getShippingByOrderSns:', (e as Error).message)
+    return []
+  }
+}
+
+/**
+ * Recent shipping ของ brand dreame (active = ยังไม่ delivered)
+ * Admin dashboard / overview
+ */
+export async function getRecentActiveShipments(daysBack = 30, limit = 100): Promise<BQShippingRow[]> {
+  try {
+    const bq = getBQClient()
+    const query = `
+      SELECT * FROM \`${PROJECT}.${DATASET}.${T_SHIPPING}\`
+      WHERE order_date >= DATE_SUB(CURRENT_DATE('Asia/Bangkok'), INTERVAL @days DAY)
+        AND brand_id = 'dreame'
+        AND shipment_status IN ('label_printed','in_transit','out_for_delivery')
+      ORDER BY last_event_at DESC NULLS LAST
+      LIMIT @limit
+    `
+    const [rows] = await bq.query({ query, params: { days: daysBack, limit } })
+    return (rows || []).map(r => mapShipping(r as Record<string, unknown>))
+  } catch (e) {
+    console.error('[BQ] getRecentActive:', (e as Error).message)
+    return []
+  }
+}
+
+/**
+ * Bulk fetch order info (items + platform + total) for many order_sns at once
+ * ใช้ใน /api/orders/me-bq → 1 query แทน N queries
+ */
+export interface BQOrderInfo {
+  platform: string
+  order_sn: string
+  brand_name: string | null
+  order_create_time: string | null
+  total_amount: number | null
+  items: BQOrderItem[]
+}
+
+export async function getOrdersByOrderSns(order_sns: string[]): Promise<BQOrderInfo[]> {
+  if (order_sns.length === 0) return []
+  try {
+    const bq = getBQClient()
+    const query = `
+      SELECT
+        platform, order_sn, brand_name,
+        CAST(order_create_time AS STRING) AS order_create_time,
+        total_amount, items
+      FROM \`${PROJECT}.${DATASET}.${T_ORDERS}\`
+      WHERE ${PARTITION_RANGE}
+        AND brand_id = 'dreame'
+        AND order_sn IN UNNEST(@order_sns)
+    `
+    const [rows] = await bq.query({ query, params: { order_sns } })
+    return (rows || []).map(r => {
+      const obj = r as Record<string, unknown>
+      const itemsRaw = (obj.items as unknown[]) || []
+      const items: BQOrderItem[] = itemsRaw.map(it => {
+        const item = it as Record<string, unknown>
+        return {
+          item_id:    String(item.item_id    ?? ''),
+          model_id:   String(item.model_id   ?? ''),
+          item_name:  String(item.item_name  ?? ''),
+          item_sku:   String(item.item_sku   ?? ''),
+          model_name: String(item.model_name ?? ''),
+          model_sku:  String(item.model_sku  ?? ''),
+          quantity:   Number(item.quantity || 0),
+          price:      Number(item.price || 0),
+          buyer_paid: item.buyer_paid != null ? Number(item.buyer_paid) : undefined,
+          image_url:  (item.image_url as string | null) ?? null,
+        }
+      })
+      return {
+        platform:          String(obj.platform || ''),
+        order_sn:          String(obj.order_sn || ''),
+        brand_name:        obj.brand_name ? String(obj.brand_name) : null,
+        order_create_time: obj.order_create_time as string | null,
+        total_amount:      Number(obj.total_amount || 0),
+        items,
+      }
+    })
+  } catch (e) {
+    console.error('[BQ] getOrdersByOrderSns:', (e as Error).message)
     return []
   }
 }

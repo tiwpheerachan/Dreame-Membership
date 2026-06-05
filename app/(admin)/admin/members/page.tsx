@@ -2,22 +2,22 @@ import { createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Search, ChevronRight, Users as UsersIcon, Crown } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import MemberAvatar from '@/components/admin/MemberAvatar'
+import PageShell from '@/components/admin/PageShell'
 
 interface SearchParams { q?: string; tier?: string; tag?: string; page?: string; vip?: string }
 
 const TIER_PILL: Record<string, string> = {
   SILVER:   'admin-pill',
   GOLD:     'admin-pill admin-pill-amber',
-  PLATINUM: 'admin-pill admin-pill-gold',
-  // Legacy fallbacks
+  PLATINUM: 'admin-pill admin-pill-ink',
   PLUS:     'admin-pill',
   PRO:      'admin-pill admin-pill-amber',
-  ULTRA:    'admin-pill admin-pill-amber',
-  MASTER:   'admin-pill admin-pill-gold',
+  ULTRA:    'admin-pill admin-pill-ink',
+  MASTER:   'admin-pill admin-pill-ink',
 }
 const TIER_LABEL: Record<string, string> = {
   SILVER: 'Silver', GOLD: 'Gold', PLATINUM: 'Platinum',
-  // Legacy fallbacks
   PLUS: 'Silver', PRO: 'Gold', ULTRA: 'Platinum', MASTER: 'Platinum',
 }
 
@@ -30,7 +30,10 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
   const page = parseInt(searchParams.page || '1')
   const pageSize = 25
 
-  let query = supabase.from('users').select('id, member_id, full_name, phone, email, tier, total_points, lifetime_points, created_at, is_active, tags, is_vip', { count: 'exact' })
+  let query = supabase.from('users').select(
+    'id, member_id, full_name, phone, email, tier, total_points, lifetime_points, created_at, is_active, tags, is_vip, profile_image_url',
+    { count: 'exact' }
+  )
 
   if (q)    query = query.or(`full_name.ilike.%${q}%,phone.ilike.%${q}%,email.ilike.%${q}%,member_id.ilike.%${q}%`)
   if (tier) query = query.eq('tier', tier)
@@ -41,7 +44,6 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
     .order('created_at', { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1)
 
-  // Pull existing tags for filter chip suggestions
   const { data: tagSamples } = await supabase
     .from('users').select('tags').not('tags', 'is', null).limit(500)
   const allTags = Array.from(new Set((tagSamples || []).flatMap(t => t.tags as string[]))).filter(Boolean).sort()
@@ -58,46 +60,47 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
     return '?' + sp.toString()
   }
 
-  return (
-    <div style={{ padding: '28px 32px', maxWidth: 1280 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 18 }}>
-        <div>
-          <h1 className="admin-h1">สมาชิก</h1>
-          <p className="admin-sub">{(count ?? 0).toLocaleString()} คน</p>
-        </div>
+  const filters = (
+    <form className="flex flex-wrap gap-2 items-center" method="GET">
+      <div className="relative flex-1 min-w-[280px]">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2"
+          style={{ color: 'var(--admin-ink-faint)' }} />
+        <input name="q" defaultValue={q}
+          placeholder="ค้นหาชื่อ, เบอร์, อีเมล, Member ID..."
+          className="admin-field" style={{ paddingLeft: 36 }} />
       </div>
-
-      {/* Filter bar */}
-      <form className="admin-card" style={{ padding: 14, marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }} method="GET">
-        <div style={{ position: 'relative', flex: '1 1 320px', minWidth: 200 }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-faint)' }} />
-          <input name="q" defaultValue={q}
-            placeholder="ค้นหาชื่อ, เบอร์, อีเมล, Member ID..."
-            className="admin-field" style={{ paddingLeft: 36 }} />
-        </div>
-        <select name="tier" defaultValue={tier} className="admin-field" style={{ width: 140 }}>
-          <option value="">ทุก Tier</option>
-          <option value="SILVER">Silver</option>
-          <option value="GOLD">Gold</option>
-          <option value="PLATINUM">Platinum</option>
+      <select name="tier" defaultValue={tier} className="admin-field" style={{ width: 140 }}>
+        <option value="">ทุก Tier</option>
+        <option value="SILVER">Silver</option>
+        <option value="GOLD">Gold</option>
+        <option value="PLATINUM">Platinum</option>
+      </select>
+      {allTags.length > 0 && (
+        <select name="tag" defaultValue={tag} className="admin-field" style={{ width: 160 }}>
+          <option value="">ทุก Tag</option>
+          {allTags.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        {allTags.length > 0 && (
-          <select name="tag" defaultValue={tag} className="admin-field" style={{ width: 160 }}>
-            <option value="">ทุก Tag</option>
-            {allTags.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        )}
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>
-          <input type="checkbox" name="vip" value="1" defaultChecked={vip} /> VIP เท่านั้น
-        </label>
-        <button type="submit" className="admin-btn admin-btn-ink">ค้นหา</button>
-      </form>
+      )}
+      <label className="inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-semibold cursor-pointer"
+        style={{ background: 'var(--admin-bg)', color: 'var(--admin-ink-soft)', height: 40 }}>
+        <input type="checkbox" name="vip" value="1" defaultChecked={vip} /> VIP เท่านั้น
+      </label>
+      <button type="submit" className="admin-btn admin-btn-ink">ค้นหา</button>
+    </form>
+  )
 
-      {/* Table */}
-      <div className="admin-card" style={{ overflow: 'hidden' }}>
+  return (
+    <PageShell
+      eyebrow="Customers"
+      title="สมาชิก"
+      subtitle={`${(count ?? 0).toLocaleString()} คน${q || tier || tag || vip ? ' (ตามตัวกรอง)' : ''}`}
+      filters={filters}>
+
+      <div className="admin-card overflow-hidden">
         <table className="admin-table">
           <thead>
             <tr>
+              <th style={{ width: 56 }}></th>
               <th>Member ID</th>
               <th>ชื่อ</th>
               <th>ติดต่อ</th>
@@ -111,28 +114,37 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
           <tbody>
             {(users || []).map((u: Record<string, unknown>) => (
               <tr key={u.id as string}>
+                <td style={{ paddingLeft: 14, paddingRight: 0 }}>
+                  <MemberAvatar
+                    name={u.full_name as string | null}
+                    src={u.profile_image_url as string | null}
+                    tier={u.tier as string}
+                    size={36} />
+                </td>
                 <td className="num muted">{u.member_id as string}</td>
                 <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontWeight: 600 }}>{(u.full_name as string) || '-'}</span>
-                    {u.is_vip ? <Crown size={11} color="var(--gold)" /> : null}
+                  <div className="flex items-center gap-1.5">
+                    <span style={{ fontWeight: 600, color: 'var(--admin-ink)' }}>
+                      {(u.full_name as string) || '-'}
+                    </span>
+                    {u.is_vip ? <Crown size={11} style={{ color: 'var(--admin-gold)' }} /> : null}
                   </div>
-                  {!u.is_active ? <span style={{ fontSize: 10, color: 'var(--red)' }}>ปิดใช้งาน</span> : null}
+                  {!u.is_active ? <span style={{ fontSize: 10, color: '#B14242' }}>ปิดใช้งาน</span> : null}
                 </td>
                 <td>
-                  <p style={{ margin: 0, fontSize: 12 }}>{(u.phone as string) || '-'}</p>
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--ink-mute)' }}>{(u.email as string) || '-'}</p>
+                  <p className="text-[12px]" style={{ color: 'var(--admin-ink)' }}>{(u.phone as string) || '-'}</p>
+                  <p className="text-[11px]" style={{ color: 'var(--admin-ink-mute)' }}>{(u.email as string) || '-'}</p>
                 </td>
                 <td>
                   <span className={TIER_PILL[u.tier as string] || 'admin-pill'}>
                     {TIER_LABEL[u.tier as string] || (u.tier as string)}
                   </span>
                 </td>
-                <td className="num" style={{ color: 'var(--gold-deep)', fontWeight: 700 }}>
+                <td className="num font-semibold" style={{ color: 'var(--admin-gold-deep)' }}>
                   {Number(u.total_points).toLocaleString()}
                 </td>
                 <td>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  <div className="flex flex-wrap gap-1">
                     {((u.tags as string[]) || []).slice(0, 3).map(t => (
                       <span key={t} className="admin-pill admin-pill-blue" style={{ fontSize: 10 }}>{t}</span>
                     ))}
@@ -140,8 +152,8 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
                 </td>
                 <td className="muted" style={{ fontSize: 11 }}>{formatDate(u.created_at as string)}</td>
                 <td>
-                  <Link href={`/admin/members/${u.id}`} style={{ color: 'var(--ink-mute)' }}>
-                    <ChevronRight size={15} />
+                  <Link href={`/admin/members/${u.id}`} style={{ color: 'var(--admin-ink-mute)' }}>
+                    <ChevronRight size={16} />
                   </Link>
                 </td>
               </tr>
@@ -149,16 +161,15 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
           </tbody>
         </table>
         {(users || []).length === 0 && (
-          <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--ink-mute)' }}>
-            <UsersIcon size={28} style={{ margin: '0 auto 8px', display: 'block', color: 'var(--ink-faint)' }} />
-            <p style={{ margin: 0, fontSize: 13 }}>ไม่พบข้อมูล</p>
+          <div className="py-16 text-center" style={{ color: 'var(--admin-ink-mute)' }}>
+            <UsersIcon size={28} className="mx-auto mb-2" style={{ color: 'var(--admin-ink-faint)' }} />
+            <p className="text-sm">ไม่พบข้อมูล</p>
           </div>
         )}
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 16, flexWrap: 'wrap' }}>
+        <div className="flex justify-center gap-2 flex-wrap mt-5">
           {Array.from({ length: totalPages }, (_, i) => i + 1)
             .slice(Math.max(0, page - 4), page + 3)
             .map(p => (
@@ -170,6 +181,6 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
             ))}
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }

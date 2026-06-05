@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { uploadToSupabase } from '@/lib/upload'
 
 async function requireAdmin() {
@@ -59,5 +60,6 @@ export async function POST(req: Request) {
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  revalidatePath('/admin/announcements')
   return NextResponse.json({ success: true, announcement: data })
 }

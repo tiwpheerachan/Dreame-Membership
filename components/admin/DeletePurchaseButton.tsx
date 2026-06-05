@@ -32,53 +32,54 @@ export default function DeletePurchaseButton({ purchaseId, orderSn, modelName, p
     }
   }
 
-  if (done) return <span className="text-xs text-red-500 opacity-60">ลบแล้ว</span>
+  if (done) return <span className="text-xs opacity-60" style={{ color: '#B14242' }}>ลบแล้ว</span>
 
   return (
     <>
-      <button
-        onClick={() => setShowConfirm(true)}
-        className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-        title="ลบรายการนี้"
-      >
+      <button onClick={() => setShowConfirm(true)} title="ลบรายการนี้"
+        className="p-1.5 rounded-lg transition-colors"
+        style={{ color: 'var(--admin-ink-faint)' }}
+        onMouseEnter={e => { e.currentTarget.style.color = '#B14242'; e.currentTarget.style.background = '#FBE9E9' }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'var(--admin-ink-faint)'; e.currentTarget.style.background = 'transparent' }}>
         <Trash2 size={14} />
       </button>
 
       {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-red-900/50 rounded-2xl p-5 w-full max-w-sm shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(14,14,14,0.45)', backdropFilter: 'blur(6px)' }}>
+          <div className="admin-card p-5 w-full max-w-sm" style={{ borderColor: '#E8B4B4' }}>
             <div className="flex items-start gap-3 mb-4">
-              <div className="w-10 h-10 bg-red-900/30 rounded-xl flex items-center justify-center flex-shrink-0">
-                <AlertTriangle size={20} className="text-red-400" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: '#FBE9E9' }}>
+                <AlertTriangle size={20} style={{ color: '#B14242' }} />
               </div>
-              <div>
-                <h3 className="text-white font-bold text-sm">ยืนยันการลบ?</h3>
-                <p className="text-gray-400 text-xs mt-1">
-                  <span className="font-mono text-gray-300">{orderSn}</span>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-sm" style={{ color: 'var(--admin-ink)' }}>ยืนยันการลบ?</h3>
+                <p className="text-xs mt-1" style={{ color: 'var(--admin-ink-mute)' }}>
+                  <span className="font-mono" style={{ color: 'var(--admin-ink-soft)' }}>{orderSn}</span>
                   {modelName && <><br />{modelName}</>}
                 </p>
                 {Number(pointsAwarded) > 0 && (
-                  <div className="mt-2 bg-amber-900/20 border border-amber-800/30 rounded-lg px-3 py-1.5 text-xs text-amber-400">
+                  <div className="mt-2 rounded-lg px-3 py-1.5 text-xs"
+                    style={{ background: 'rgba(201,155,62,0.12)', border: '1px solid rgba(201,155,62,0.25)', color: '#B07823' }}>
                     ⚠️ แต้ม <strong>{pointsAwarded}</strong> แต้มที่เคยได้รับจะถูกหักคืน
                   </div>
                 )}
-                <p className="text-red-400/70 text-xs mt-2">การกระทำนี้ไม่สามารถยกเลิกได้</p>
+                <p className="text-xs mt-2" style={{ color: '#B14242', opacity: 0.7 }}>
+                  การกระทำนี้ไม่สามารถยกเลิกได้
+                </p>
               </div>
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={handleDelete}
-                disabled={loading}
-                className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
-              >
+              <button onClick={handleDelete} disabled={loading}
+                className="admin-btn admin-btn-danger flex-1"
+                style={{ background: '#B14242', color: '#fff', borderColor: '#B14242' }}>
                 {loading
-                  ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ? <div className="w-4 h-4 rounded-full animate-spin"
+                      style={{ border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff' }} />
                   : <><Trash2 size={14} /> ลบออก</>}
               </button>
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium py-2.5 rounded-xl text-sm transition-colors"
-              >
+              <button onClick={() => setShowConfirm(false)} className="admin-btn admin-btn-ghost flex-1">
                 ยกเลิก
               </button>
             </div>

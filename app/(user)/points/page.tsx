@@ -2,16 +2,20 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import {
   TrendingUp, TrendingDown, RefreshCw, Sparkles, Wand2,
-  ChevronRight, ArrowUpRight, Flame, Calendar,
+  Flame, Calendar, Gift, Package,
 } from 'lucide-react'
 import type { PointsLog, UserTier } from '@/types'
 import { formatDateTime } from '@/lib/utils'
 import { getNextTierInfo, normalizeTier } from '@/lib/tier'
-import dynamic from 'next/dynamic'
+import nextDynamic from 'next/dynamic'
 
-const MemberCard = dynamic(() => import('@/components/user/MemberCard'), { ssr: false })
+// ── Always fresh: หัก/คืน points จาก redeem ต้องสะท้อนทันที ──
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+const MemberCard = nextDynamic(() => import('@/components/user/MemberCard'), { ssr: false })
 // Warp uses WebGL — must mount client-side only or the build chokes on `window`.
-const WarpShader = dynamic(() => import('@/components/ui/warp-shader'), { ssr: false })
+const WarpShader = nextDynamic(() => import('@/components/ui/warp-shader'), { ssr: false })
 
 const TYPE_CFG = {
   EARNED:       { label: 'ได้รับ',         Icon: TrendingUp,   tone: 'green' as const },
@@ -103,10 +107,27 @@ export default async function PointsPage() {
   const hero = HERO[userTier]
   const grouped = groupByMonth((logs as PointsLog[]) || [])
 
-  // 30-day insight
+  // ── 30-day analytics — แยกตาม sign + type (robust กว่า) ──
   const since30 = Date.now() - 30 * 86400000
   const recent30 = (logs || []).filter(l => new Date(l.created_at).getTime() >= since30)
-  const earned30 = recent30.filter(l => l.type === 'EARNED').reduce((s, l) => s + l.points_delta, 0)
+  // ได้รับ = ทุก delta > 0 (รวม EARNED + ADMIN_ADJUST แบบบวก + refund)
+  const earned30   = recent30.filter(l => l.points_delta > 0)
+                              .reduce((s, l) => s + l.points_delta, 0)
+  // ใช้แลก = delta < 0 ที่ไม่ใช่ EXPIRED
+  const redeemed30 = recent30.filter(l => l.points_delta < 0 && l.type !== 'EXPIRED')
+                              .reduce((s, l) => s + Math.abs(l.points_delta), 0)
+  // หมดอายุ = type='EXPIRED'
+  const expired30  = recent30.filter(l => l.type === 'EXPIRED')
+                              .reduce((s, l) => s + Math.abs(l.points_delta), 0)
+  const net30      = earned30 - redeemed30 - expired30
+
+  // Daily activity bar chart (last 30 days)
+  const dailyBuckets: number[] = Array(30).fill(0)
+  for (const l of recent30) {
+    const day = Math.floor((Date.now() - new Date(l.created_at).getTime()) / 86400000)
+    if (day >= 0 && day < 30) dailyBuckets[29 - day] += Math.abs(l.points_delta)
+  }
+  const maxDaily = Math.max(1, ...dailyBuckets)
 
   return (
     <div className="page-enter" style={{ paddingTop: 0, paddingBottom: 32 }}>
@@ -379,41 +400,89 @@ export default async function PointsPage() {
       </section>
 
       {/* ============================================================
-          INSIGHT CHIPS
+          30-DAY ANALYTICS — Stats grid + daily activity bar chart
       ============================================================ */}
-      <section className="pop-in-d4" style={{ padding: '14px 16px 4px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <InsightTile
-            Icon={Calendar}
-            label="กิจกรรม 30 วัน"
-            value={`${recent30.length} รายการ`}
-            tone={{ bg: 'linear-gradient(135deg,#FFF8EB,#FCEDD0)', ink: '#8C5A14' }}
-          />
-          <InsightTile
-            Icon={ArrowUpRight}
-            label="ได้รับ 30 วัน"
-            value={`+${earned30.toLocaleString()} pts`}
-            tone={{ bg: 'linear-gradient(135deg,#EAF7EE,#D4ECDB)', ink: '#1F6B33' }}
-            featured
-          />
+      <section className="pop-in-d4" style={{ padding: '20px 16px 4px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '0 4px 12px' }}>
+          <h2 className="display" style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+            กิจกรรม <span className="serif-i" style={{ fontWeight: 400 }}>30 วัน</span>
+          </h2>
+          <span style={{ fontSize: 10.5, color: 'var(--ink-mute)', fontWeight: 700,
+            letterSpacing: '0.04em' }}>
+            {recent30.length} รายการ
+          </span>
         </div>
+
+        {/* 4 stat tiles in 2x2 grid */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8,
+          background: '#fff', border: '1px solid var(--hair)',
+          borderRadius: 'var(--r-lg)', padding: 12,
+          boxShadow: '0 4px 18px rgba(20,18,15,0.04)',
+        }}>
+          <StatTile Icon={TrendingUp} label="ได้รับ"
+            value={earned30} unit="pts" color="#1F6B33" bg="#E8F6EC" />
+          <StatTile Icon={TrendingDown} label="ใช้แลก"
+            value={redeemed30} unit="pts" color="#8B2F2F" bg="#FBE8E8" />
+          <StatTile Icon={RefreshCw} label="หมดอายุ"
+            value={expired30} unit="pts" color="#6E6E6E" bg="#F5F4F1" />
+          <StatTile Icon={Sparkles} label="สุทธิ"
+            value={Math.abs(net30)} unit="pts" prefix={net30 >= 0 ? '+' : '-'}
+            color={net30 >= 0 ? '#A0782B' : '#8B2F2F'}
+            bg={net30 >= 0 ? '#FFF8EB' : '#FBE8E8'} highlight />
+        </div>
+
+        {/* Daily activity bar chart */}
+        {recent30.length > 0 && (
+          <div style={{
+            marginTop: 10, padding: '14px 14px 12px',
+            background: '#fff', border: '1px solid var(--hair)',
+            borderRadius: 'var(--r-lg)',
+            boxShadow: '0 2px 10px rgba(20,18,15,0.03)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+              <p style={{ margin: 0, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.16em',
+                textTransform: 'uppercase', color: 'var(--ink-mute)' }}>
+                Daily Activity
+              </p>
+              <span style={{ fontSize: 9, color: 'var(--ink-faint)', fontFamily: 'var(--font-mono)' }}>
+                30 วันก่อน  →  วันนี้
+              </span>
+            </div>
+            <div style={{
+              display: 'flex', alignItems: 'flex-end', gap: 2,
+              height: 56,
+            }}>
+              {dailyBuckets.map((v, i) => {
+                const h = v > 0 ? Math.max(4, (v / maxDaily) * 50) : 2
+                const isToday = i === 29
+                return (
+                  <div key={i} style={{
+                    flex: 1, height: h, borderRadius: 2,
+                    background: v > 0
+                      ? (isToday
+                        ? 'linear-gradient(180deg,#C9A063 0%,#A0782B 100%)'
+                        : 'linear-gradient(180deg,#EADBB1 0%,#C9A063 100%)')
+                      : 'rgba(160,120,43,0.08)',
+                    transition: 'all 0.3s ease',
+                  }} title={v > 0 ? `${v} pts` : ''} />
+                )
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ============================================================
-          ACTIVITY TIMELINE
+          ACTIVITY TIMELINE — redesigned with cleaner layout
       ============================================================ */}
       <section className="pop-in-d5" style={{ padding: '20px 16px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '0 4px 14px' }}>
-          <h2 className="display" style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
+          <h2 className="display" style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
             ประวัติ <span className="serif-i" style={{ fontWeight: 400 }}>การสะสม</span>
           </h2>
           {logs && logs.length > 0 && (
-            <span style={{
-              fontSize: 10.5, color: 'var(--ink-mute)', fontWeight: 700,
-              padding: '3px 10px', borderRadius: 'var(--r-pill)',
-              background: 'var(--bg-soft)', border: '1px solid var(--hair)',
-              letterSpacing: '0.04em',
-            }}>
+            <span style={{ fontSize: 10.5, color: 'var(--ink-mute)', fontWeight: 700, letterSpacing: '0.04em' }}>
               {logs.length} รายการ
             </span>
           )}
@@ -423,16 +492,13 @@ export default async function PointsPage() {
           <div style={{
             padding: 44, textAlign: 'center',
             background: '#fff', border: '1px solid var(--hair)',
-            borderRadius: 'var(--r-lg)',
-            boxShadow: '0 2px 12px rgba(20,18,15,0.04)',
+            borderRadius: 'var(--r-lg)', boxShadow: '0 2px 12px rgba(20,18,15,0.04)',
           }}>
             <div style={{
-              width: 56, height: 56, margin: '0 auto 14px',
-              borderRadius: 16,
+              width: 56, height: 56, margin: '0 auto 14px', borderRadius: 16,
               background: 'linear-gradient(135deg,#FAF3DC,#EADBB1)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#A0782B',
-              boxShadow: '0 4px 14px rgba(160,120,43,0.18)',
+              color: '#A0782B', boxShadow: '0 4px 14px rgba(160,120,43,0.18)',
             }}>
               <Sparkles size={22} strokeWidth={1.7} />
             </div>
@@ -442,113 +508,121 @@ export default async function PointsPage() {
             </p>
           </div>
         ) : (
-          <div style={{
-            background: '#fff', border: '1px solid var(--hair)',
-            borderRadius: 'var(--r-lg)',
-            boxShadow: '0 2px 12px rgba(20,18,15,0.04)',
-            overflow: 'hidden',
-          }}>
-            {grouped.map((group, gi) => (
-              <div key={group.month}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: gi === 0 ? '14px 18px 8px' : '18px 18px 8px',
-                  background: gi === 0 ? 'transparent' : 'rgba(248,246,242,0.55)',
-                  borderTop: gi === 0 ? 'none' : '1px solid var(--hair)',
-                }}>
-                  <span style={{
-                    fontSize: 9.5, fontWeight: 800, letterSpacing: '0.16em',
-                    textTransform: 'uppercase', color: 'var(--gold-deep)',
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {grouped.map((group) => {
+              const groupEarn = group.entries.filter(l => l.points_delta > 0).reduce((s, l) => s + l.points_delta, 0)
+              const groupUse  = group.entries.filter(l => l.points_delta < 0).reduce((s, l) => s + Math.abs(l.points_delta), 0)
+              return (
+                <div key={group.month}>
+                  {/* Month divider */}
+                  <div style={{
+                    display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                    padding: '0 4px 8px',
                   }}>
-                    {group.month}
-                  </span>
-                  <span style={{ flex: 1, height: 1, background: 'var(--hair)' }} />
-                  <span style={{ fontSize: 10.5, color: 'var(--ink-mute)', fontWeight: 600 }}>
-                    {group.entries.length} รายการ
-                  </span>
-                </div>
+                    <span style={{
+                      fontSize: 10, fontWeight: 800, letterSpacing: '0.16em',
+                      textTransform: 'uppercase', color: 'var(--gold-deep)',
+                    }}>{group.month}</span>
+                    <div style={{ display: 'flex', gap: 6, fontSize: 10, fontWeight: 700 }}>
+                      {groupEarn > 0 && (
+                        <span style={{ color: '#1F6B33' }}>+{groupEarn.toLocaleString()}</span>
+                      )}
+                      {groupUse > 0 && (
+                        <span style={{ color: '#8B2F2F' }}>-{groupUse.toLocaleString()}</span>
+                      )}
+                    </div>
+                  </div>
 
-                <div style={{ position: 'relative' }}>
-                  {/* Gold rail behind the icon column */}
-                  <div aria-hidden style={{
-                    position: 'absolute',
-                    top: 22, bottom: 22, left: 37,
-                    width: 1.5,
-                    background: 'linear-gradient(180deg, transparent 0%, rgba(160,120,43,0.22) 12%, rgba(160,120,43,0.22) 88%, transparent 100%)',
-                  }} />
-
-                  {group.entries.map((log, idx) => {
-                    const cfg = TYPE_CFG[log.type] || TYPE_CFG.EARNED
-                    const tone = TONES[cfg.tone]
-                    const Icon = cfg.Icon
-                    const isPos = log.points_delta > 0
-                    const isLast = idx === group.entries.length - 1
-                    return (
-                      <article key={log.id} style={{
-                        position: 'relative',
-                        display: 'flex', alignItems: 'flex-start', gap: 14,
-                        padding: '14px 18px',
-                        borderBottom: isLast ? 'none' : '1px solid rgba(20,18,15,0.04)',
-                      }}>
-                        <div style={{
-                          position: 'relative', zIndex: 1,
-                          width: 38, height: 38, borderRadius: 12,
-                          background: tone.bg,
-                          border: `1px solid ${tone.border}`,
-                          color: tone.ink, flexShrink: 0,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55), 0 2px 6px rgba(20,18,15,0.05)',
+                  {/* Card list */}
+                  <div style={{
+                    background: '#fff', border: '1px solid var(--hair)',
+                    borderRadius: 'var(--r-lg)',
+                    boxShadow: '0 2px 10px rgba(20,18,15,0.03)',
+                    overflow: 'hidden',
+                  }}>
+                    {group.entries.map((log, idx) => {
+                      // ── ADMIN_ADJUST + แลกคืน → label เฉพาะ "แลกคืนคูปอง" ──
+                      const isSelfRefund = log.type === 'ADMIN_ADJUST'
+                        && (log.description || '').startsWith('แลกคืนคูปอง')
+                      const cfg = isSelfRefund
+                        ? { label: 'แลกคืนคูปอง', Icon: TYPE_CFG.EARNED.Icon, tone: 'green' as const }
+                        : TYPE_CFG[log.type] || TYPE_CFG.EARNED
+                      const tone = TONES[cfg.tone]
+                      const Icon = cfg.Icon
+                      const isPos = log.points_delta > 0
+                      const isLast = idx === group.entries.length - 1
+                      const dt = new Date(log.created_at)
+                      const dateLabel = dt.toLocaleDateString('th-TH', { day: '2-digit', month: 'short' })
+                      const timeLabel = dt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+                      return (
+                        <article key={log.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 12,
+                          padding: '11px 14px',
+                          borderBottom: isLast ? 'none' : '1px solid rgba(20,18,15,0.05)',
                         }}>
-                          <Icon size={15} strokeWidth={2.2} />
-                        </div>
+                          {/* Date column */}
+                          <div style={{ flexShrink: 0, textAlign: 'center', width: 36 }}>
+                            <p className="tnum" style={{
+                              margin: 0, fontSize: 11, fontWeight: 800,
+                              color: 'var(--ink-soft)', letterSpacing: '-0.01em', lineHeight: 1,
+                            }}>{dateLabel.split(' ')[0]}</p>
+                            <p style={{
+                              margin: '2px 0 0', fontSize: 9, fontWeight: 700,
+                              color: 'var(--ink-faint)', letterSpacing: '0.08em',
+                              textTransform: 'uppercase',
+                            }}>{dateLabel.split(' ')[1]}</p>
+                          </div>
 
-                        <div style={{ flex: 1, minWidth: 0, paddingTop: 3 }}>
-                          <p style={{
-                            fontSize: 13, fontWeight: 700, margin: 0, color: 'var(--ink)',
-                            lineHeight: 1.4, letterSpacing: '-0.005em',
-                            overflow: 'hidden', display: '-webkit-box',
-                            WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+                          {/* Icon */}
+                          <div style={{
+                            width: 32, height: 32, borderRadius: 10,
+                            background: tone.bg, border: `1px solid ${tone.border}`,
+                            color: tone.ink, flexShrink: 0,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
                           }}>
-                            {log.description || cfg.label}
-                          </p>
-                          <p style={{
-                            fontSize: 10.5, color: 'var(--ink-faint)', margin: '3px 0 0',
-                            letterSpacing: '0.02em',
-                          }}>
-                            {formatDateTime(log.created_at)}
-                          </p>
-                        </div>
+                            <Icon size={13} strokeWidth={2.2} />
+                          </div>
 
-                        <div style={{ textAlign: 'right', flexShrink: 0, paddingTop: 2 }}>
-                          {isPos ? (
-                            <span className="display tnum" style={{
-                              fontSize: 18, fontWeight: 800, letterSpacing: '-0.015em',
-                              color: '#A0782B',
-                              textShadow: '0 1px 0 rgba(255,250,235,0.4)',
+                          {/* Body */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{
+                              fontSize: 12.5, fontWeight: 700, margin: 0, color: 'var(--ink)',
+                              lineHeight: 1.35,
+                              overflow: 'hidden', display: '-webkit-box',
+                              WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' as const,
                             }}>
-                              +{log.points_delta.toLocaleString()}
-                            </span>
-                          ) : (
-                            <span className="display tnum" style={{
-                              fontSize: 18, fontWeight: 800, color: tone.ink,
+                              {log.description || cfg.label}
+                            </p>
+                            <p style={{
+                              fontSize: 9.5, color: 'var(--ink-faint)', margin: '2px 0 0',
+                              letterSpacing: '0.02em',
+                            }}>
+                              {cfg.label} · {timeLabel}
+                            </p>
+                          </div>
+
+                          {/* Delta + balance */}
+                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                            <span className="tnum" style={{
+                              fontSize: 15, fontWeight: 800,
+                              color: isPos ? '#A0782B' : tone.ink,
                               letterSpacing: '-0.015em',
                             }}>
-                              {log.points_delta.toLocaleString()}
+                              {isPos ? '+' : ''}{log.points_delta.toLocaleString()}
                             </span>
-                          )}
-                          <p className="tnum" style={{
-                            fontSize: 10, color: 'var(--ink-faint)',
-                            margin: '2px 0 0', fontWeight: 600, letterSpacing: '0.02em',
-                          }}>
-                            คงเหลือ {log.balance_after.toLocaleString()}
-                          </p>
-                        </div>
-                      </article>
-                    )
-                  })}
+                            <p className="tnum" style={{
+                              fontSize: 9, color: 'var(--ink-faint)', margin: '2px 0 0', fontWeight: 600,
+                            }}>
+                              ยอด {log.balance_after.toLocaleString()}
+                            </p>
+                          </div>
+                        </article>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </section>
@@ -576,59 +650,47 @@ function ladderProgressPct(lifetime: number): number {
   return 4 + (lifetime / 80) * 46
 }
 
-function InsightTile({
-  Icon, label, value, tone, featured,
+function StatTile({
+  Icon, label, value, unit, prefix, color, bg, highlight,
 }: {
   Icon: typeof Sparkles
   label: string
-  value: string
-  tone: { bg: string; ink: string }
-  featured?: boolean
+  value: number
+  unit: string
+  prefix?: string
+  color: string
+  bg: string
+  highlight?: boolean
 }) {
   return (
     <div style={{
-      position: 'relative', overflow: 'hidden',
-      padding: '14px 14px 16px',
-      background: '#fff',
-      border: '1px solid var(--hair)',
-      borderRadius: 16,
-      boxShadow: featured
-        ? '0 4px 14px rgba(31,107,51,0.08), 0 1px 2px rgba(20,18,15,0.03)'
-        : '0 2px 10px rgba(20,18,15,0.04)',
+      position: 'relative',
+      padding: '10px 12px',
+      background: highlight ? bg : 'var(--bg-soft)',
+      border: `1px solid ${highlight ? color : 'var(--hair)'}`,
+      borderRadius: 12,
+      overflow: 'hidden',
     }}>
-      {/* Soft gradient halo in the top-right — feels lit, not flat */}
-      <div aria-hidden style={{
-        position: 'absolute', top: -28, right: -28,
-        width: 90, height: 90, borderRadius: '50%',
-        background: tone.bg, opacity: 0.55,
-        filter: 'blur(6px)',
-      }} />
       <div style={{
-        position: 'relative',
-        width: 34, height: 34, borderRadius: 10,
-        background: tone.bg, color: tone.ink,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        marginBottom: 10,
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 3px rgba(20,18,15,0.06)',
-        border: '1px solid rgba(255,255,255,0.4)',
+        display: 'flex', alignItems: 'center', gap: 6,
+        color, marginBottom: 6,
       }}>
-        <Icon size={15} strokeWidth={2.2} />
+        <Icon size={12} strokeWidth={2.4} />
+        <span style={{
+          fontSize: 9.5, fontWeight: 800, letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+        }}>{label}</span>
       </div>
-      <p style={{
-        position: 'relative',
-        margin: '0 0 5px', fontSize: 9.5, fontWeight: 800,
-        letterSpacing: '0.16em', textTransform: 'uppercase',
-        color: 'var(--ink-mute)',
-      }}>
-        {label}
-      </p>
-      <p className="display tnum" style={{
-        position: 'relative',
-        margin: 0, fontSize: 19, fontWeight: 800, color: tone.ink, letterSpacing: '-0.015em',
-        lineHeight: 1.1,
-      }}>
-        {value}
-      </p>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+        <span className="tnum" style={{
+          fontSize: 22, fontWeight: 800, color, letterSpacing: '-0.02em', lineHeight: 1,
+        }}>
+          {prefix || ''}{value.toLocaleString()}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--ink-faint)', fontWeight: 600 }}>
+          {unit}
+        </span>
+      </div>
     </div>
   )
 }

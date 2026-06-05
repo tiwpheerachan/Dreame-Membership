@@ -1,0 +1,979 @@
+# Dreame Membership — User UI Design Specification
+_Generated 2026-05-27 from production code (Next.js 14 + Tailwind + custom CSS vars)._
+_All numbers below are extracted directly from `app/(user)/**`, `app/(auth)/**`, `app/terms/**`, `app/auth/**`, `components/user/**`, `components/ui/**`, and `app/globals.css`._
+
+---
+
+## 1. Design Tokens
+
+### 1.1 Colors
+
+All tokens are declared on `:root` in `/Users/tiw/Dreame-Membership/app/globals.css`. Tailwind only adds an unused `dreame.*` orange-yellow ramp; **the entire user-facing UI uses the CSS variables below — not the Tailwind ramp.**
+
+#### Surface
+| Token | Hex | Usage |
+|---|---|---|
+| `--bg` | `#FFFFFF` | App body background |
+| `--bg-soft` | `#F5F4F1` | Field background, neutral chip background, tile bg |
+| `--bg-deep` | `#ECEAE4` | Rarely used deeper neutral |
+| `--surface` | `#FFFFFF` | Card surfaces (`.card`, `.surface`) |
+| `--panel` | `#F8F7F4` | Secondary panels |
+
+#### Ink / Text
+| Token | Hex | Usage |
+|---|---|---|
+| `--black` | `#0E0E0E` | Buttons (.btn-ink), bottom bars on cards |
+| `--black-soft` | `#1F1F1F` | (legacy) |
+| `--ink` | `#0E0E0E` | Body text |
+| `--ink-soft` | `#2E2E2E` | Pill text |
+| `--ink-mute` | `#6E6E6E` | Subtitles / meta |
+| `--ink-faint` | `#A0A0A0` | Placeholders, deemphasized |
+| `--ink-ghost` | `#E0DED8` | Sheet handles, separators |
+
+#### Gold (Dreame Brand)
+| Token | Hex | Usage |
+|---|---|---|
+| `--gold` | `#A0782B` | Brand primary accent, decorative rules |
+| `--gold-deep` | `#7A5A1F` | Strong accent text, points headings |
+| `--gold-soft` | `#C9A85A` | Text on dark surfaces (e.g. nav active glyph fallback, coupon code) |
+| `--gold-pale` | `#EADBB1` | Light gold backgrounds |
+| `--gold-glow` | `#F5EBD0` | Soft gold halos (empty-state icon bg) |
+| `--gold-line` | `rgba(160,120,43,0.22)` | Gold-tinted border |
+
+The "Dreame coin" gradient used on member card, nav active pill, tier coins, primary CTAs on dark surfaces:
+`linear-gradient(135deg, #FAF3DC 0%, #EADBB1 35%, #C9A063 70%, #A0782B 100%)` (or `linear-gradient(180deg, …)` for the navbar active pill).
+
+#### Tier Colors
+| Tier | Gradient `from` | Gradient `to` |
+|---|---|---|
+| Silver | `#C9D9E8` | `#8DA9BC` |
+| Gold | `#F4C28A` | `#C46B3A` |
+| Platinum | `#5EEAD4` | `#14B8A6` |
+
+Tier hero backgrounds (radial-gradient at top):
+
+| Tier | Background | Ink color |
+|---|---|---|
+| Silver | `radial-gradient(ellipse at top, #F1F5FA 0%, #E2E8F2 45%, #DDD0E5 100%)` | `#1B2333` |
+| Gold | `radial-gradient(ellipse at top, #FFF1DD 0%, #FFE0C2 45%, #F8D2A5 100%)` | `#3A2410` |
+| Platinum | `radial-gradient(ellipse at top, #DCFAF3 0%, #B5F0E2 45%, #7DD8C5 100%)` | `#053C36` |
+
+#### Status (semantic)
+| Token | Hex | Soft | Usage |
+|---|---|---|---|
+| `--green` | `#2E7A3D` | `--green-soft` `#E6F1E8` | Verified / success |
+| `--red` | `#B43A3A` | `--red-soft` `#FAE8E8` | Errors / expired / destructive |
+| `--amber` | `#B07823` | `--amber-soft` `#FBF1DC` | Pending / warning |
+| `--blue` | `#1F6FB4` | `--blue-soft` `#E5EFF8` | Info |
+
+Local status palette used by **purchases & points pages** (overrides the global pills):
+- Green: `bg #E8F6EC · ink #1F6B33 · border #B8DFC2`
+- Red:   `bg #FBE8E8 · ink #8B2F2F · border #E8B7B7`
+- Amber: `bg #FFF1DD · ink #8C5A14 · border #F0D7A4`
+
+#### Borders
+| Token | Value | Usage |
+|---|---|---|
+| `--hair` | `rgba(14,14,14,0.06)` | Card 1px outline |
+| `--line` | `rgba(14,14,14,0.10)` | Input border, button ghost |
+| `--line-strong` | `rgba(14,14,14,0.18)` | Emphasis border |
+
+### 1.2 Typography
+
+```
+--font-display: 'Sora', 'Inter', system-ui, sans-serif;   /* H1/H2/H3, .display */
+--font-sans:    'Inter', 'IBM Plex Sans Thai', system-ui; /* default body */
+--font-thai:    'IBM Plex Sans Thai', 'Inter', …;
+--font-mono:    'SF Mono', 'JetBrains Mono', ui-monospace, monospace;
+```
+
+Font loading: `@import` of Google Fonts `Inter (300–900)`, `IBM Plex Sans Thai (300–700)`, `Sora (400–800)` from globals.css. Auth + Terms pages additionally import **Prompt (300–800)**.
+
+Body defaults: `font-family: var(--font-sans); font-feature-settings: 'cv11','ss01','tnum','liga'; -webkit-font-smoothing: antialiased`.
+
+Headings: `letter-spacing: -0.025em; line-height: 1.15`.
+
+Typography utility classes:
+| Class | Definition |
+|---|---|
+| `.display` | Sora, weight 800, tracking -0.025em |
+| `.tnum` | tabular-nums |
+| `.smcp` | 11px, 600, uppercase, tracking 0.12em, color ink-mute |
+| `.kicker` | 10px, 700, uppercase, tracking 0.16em, color ink-mute |
+| `.gold-text` | Gradient text `linear-gradient(135deg, gold-deep, gold, gold-soft)` clipped |
+| `.balance-display` | Animated shimmer gradient `#FAF3DC → #EADBB1 → #C9A063 → #EADBB1 → #FAF3DC`, 5s loop |
+
+#### Real font sizes seen across pages
+| Size | Where |
+|---|---|
+| 64 px | Available Balance on `/points` |
+| 32 px | Page titles on `/coupons` & `/purchases` ("คูปองของฉัน", "สินค้าของฉัน") |
+| 30 px | Page title on `/promotions` |
+| 28 px | Hero `<h1>` on `/points`, Profile name, Registration "ลงทะเบียนสำเร็จ" |
+| 26 px | Greeting headline (firstName) on `/home`, "Tiers and Perks" |
+| 24 px | Hero title on `/terms`, Notifications page title |
+| 22 px | "Your VIP Treatments", Phone OTP title, Reward detail title, Purchase detail title |
+| 20 px | Section h2 ("ข้อเสนอพิเศษ", "สินค้าล่าสุด", "ประวัติการสะสม") |
+| 19 px | Purchase detail hero name, EmptyState heading |
+| 18 px | Coupon empty heading, Sec title fallback |
+| 17 px | Profile Stat fallback |
+| 16 px | Bottom-sheet title ("ที่อยู่จัดส่ง") |
+| 15 px | Promo hero/feed title text, Primary CTA on auth |
+| 14 px | Field input text, .btn font, generic card title |
+| 13.5 px | Purchase card title, "ดูบัตรสมาชิก" CTA |
+| 13 px | Body text on reward detail description |
+| 12.5 px | Toast text, secondary CTA text |
+| 12 px | Body small / sub label |
+| 11.5 px | Field label `.lbl`, meta on cards |
+| 11 px | Pill text, kicker, eyebrow secondary |
+| 10.5 px | Status pill text, small meta |
+| 10 px | Eyebrow, kicker, Sora uppercase smallcaps |
+| 9.5 px | Tier label sub-meta (Start/80+/400+) |
+| 9 px | Bottom nav label, "Your Tier" superscript |
+
+### 1.3 Radii
+
+```
+--r-xs:  6px
+--r-sm:  10px
+--r-md:  14px
+--r-lg:  20px
+--r-xl:  28px
+--r-2xl: 36px
+--r-pill: 999px
+```
+
+Notable per-page deviations (hard-coded):
+- Tier-card aspect ratio uses `--r-xl` (28px).
+- Profile hero card: `borderRadius: 28` (matches `--r-xl`).
+- Light-sheet curl on home: `borderRadius: '28px 28px 0 0'`.
+- Insight tiles on /points: `borderRadius: 16`.
+- Notification announcement image avatar: `borderRadius: 12`.
+- Reward modal bottom sheet: `borderTopLeftRadius: 20, borderTopRightRadius: 20`.
+- Phone OTP inputs: `borderRadius: 14`.
+- Terms section card: `border-radius: 18`.
+
+### 1.4 Shadows
+
+```
+--shadow-1: 0 1px 2px rgba(14,14,14,0.04), 0 4px 16px rgba(14,14,14,0.04)
+--shadow-2: 0 2px 8px rgba(14,14,14,0.06), 0 16px 40px rgba(14,14,14,0.06)
+--shadow-3: 0 8px 24px rgba(14,14,14,0.10), 0 32px 80px rgba(14,14,14,0.12)
+--shadow-gold: 0 8px 32px rgba(160,120,43,0.22)
+```
+
+Page-specific shadows (hard-coded):
+- Light-sheet top edge (home): `0 -8px 32px rgba(14,14,14,0.08)`
+- Profile hero photo card: `0 12px 36px rgba(20,18,15,0.18), 0 2px 6px rgba(20,18,15,0.08)`
+- Tier-ladder card: `0 4px 20px rgba(20,18,15,0.05)`
+- Notification cards & timeline: `0 2px 12px rgba(20,18,15,0.04)`
+- Purchase card hover lift: `0 8px 24px rgba(20,18,15,0.08), 0 1px 4px rgba(20,18,15,0.04)`
+- Nav "coin" pill active: `inset 0 1px 0 rgba(255,250,235,0.95), inset 0 -1px 0 rgba(120,80,20,0.35), 0 4px 14px rgba(160,120,43,0.35), 0 1px 2px rgba(120,80,20,0.20)`
+- GlassEffect wrapper: `0 6px 6px rgba(0,0,0,0.18), 0 0 20px rgba(0,0,0,0.10)`
+
+### 1.5 Breakpoints / Frame
+
+There are **no Tailwind responsive prefixes used in the user-facing layout** — the app is purely mobile-first with a fixed `max-width: 480px` content frame and a `max-width: 430px` frame on auth screens.
+
+| Frame | Max width |
+|---|---|
+| `(user)/layout.tsx` main | 480 px |
+| Bottom navbar wrapper | 480 px |
+| Auth `lg-root` and `rp-root` background image | 430 px |
+| Auth `lg-inner` and `rp-inner` form | 430 px |
+| Terms `trm` wrapper | 520 px |
+| Phone OTP form column | 380 px |
+
+---
+
+## 2. Layout Shell
+
+**Source:** `app/layout.tsx`, `app/(user)/layout.tsx`.
+
+```tsx
+// (user)/layout.tsx
+<div style={{ minHeight: '100vh', background: '#fff' }}>
+  <main style={{
+    maxWidth: 480,
+    margin: '0 auto',
+    paddingBottom: 'calc(96px + env(safe-area-inset-bottom))',
+    minHeight: '100vh',
+    position: 'relative',
+  }}>{children}</main>
+  <Navbar />
+</div>
+```
+
+- **Max content width:** 480 px (mobile-first).
+- **Bottom padding reserved for nav:** `96px + env(safe-area-inset-bottom)`.
+- **Body background:** `#fff` (white).
+- **Theme color (PWA):** `#f59e0b` (set in viewport meta — note: amber, not brand gold).
+- **HTML lang:** `th`.
+- **Default font on body:** Next Inter font + `globals.css` defaults (CSS vars take precedence).
+
+Root layout (`app/layout.tsx`) only mounts `<body className={inter.className}>`; no decorative chrome.
+
+---
+
+## 3. Bottom Navigation (Glass-effect Navbar)
+
+**Source:** `components/user/Navbar.tsx` + `components/ui/liquid-glass.tsx`.
+
+| Property | Value |
+|---|---|
+| Position | `fixed; bottom: 0; left: 0; right: 0` |
+| Padding-bottom | `env(safe-area-inset-bottom)` |
+| z-index | 50 |
+| Pointer events | wrapper: `none`; inner: `auto` |
+| Outer wrapper max-width | 480 px |
+| Outer wrapper padding | `0 14px 14px` |
+| Pill border-radius | 9999 px (full) |
+| Pill inner padding | 5 px (around the row of items) |
+| Item count | 6 (Home, Points, Rewards, Coupons, Purchases, Profile) |
+| Item padding | `10px 2px` |
+| Item gap (icon ↔ label) | 3 px |
+| Item flex | `flex: 1; min-width: 0` |
+| Item icon size | 17 px (lucide), strokeWidth `2.4` active / `1.7` inactive |
+| Item label font-size | 9 px |
+| Item label weight | 800 active / 600 inactive |
+| Item label tracking | `0.02em` active / `0.01em` inactive |
+| Active background | `linear-gradient(180deg,#FAF3DC 0%,#EADBB1 35%,#C9A063 75%,#A0782B 100%)` |
+| Active text color | `#1A1815` |
+| Inactive text color | `rgba(40,38,32,0.65)` |
+| Active shadow | `inset 0 1px 0 rgba(255,250,235,0.95), inset 0 -1px 0 rgba(120,80,20,0.35), 0 4px 14px rgba(160,120,43,0.35), 0 1px 2px rgba(120,80,20,0.20)` |
+| Active text-shadow | `0 1px 0 rgba(255,250,235,0.6)` (engraved metal) |
+| Transition | `all 0.32s cubic-bezier(0.34,1.1,0.64,1)` |
+| Top gold-shimmer rim | 1px linear gradient `transparent → rgba(234,219,177,0.85) → rgba(160,120,43,0.95) → rgba(234,219,177,0.85) → transparent` |
+
+### 3.1 GlassEffect (liquid-glass wrapper)
+Used by Navbar and Login tabs.
+
+| Layer | Style |
+|---|---|
+| Wrapper shadow | `0 6px 6px rgba(0,0,0,0.18), 0 0 20px rgba(0,0,0,0.10)` |
+| Transition timing | `cubic-bezier(0.175,0.885,0.32,2.2)` |
+| Layer 1: distorted blur | `backdrop-filter: blur(3px); filter: url(#glass-distortion)` |
+| Layer 2: tint | `background: rgba(255,255,255,0.25)` |
+| Layer 3: inner rim | `inset 2px 2px 1px 0 rgba(255,255,255,0.5), inset -1px -1px 1px 1px rgba(255,255,255,0.5)` |
+| Default radius | `24px` |
+
+### 3.2 SVG Glass Distortion Filter
+Defined in `GlassFilter` (mounted once per page). Hidden `<svg>` containing `filter#glass-distortion` with:
+- `feTurbulence`: `type=fractalNoise; baseFrequency="0.001 0.005"; numOctaves=1; seed=17`
+- `feGaussianBlur stdDeviation=3` on the turbulence
+- `feSpecularLighting`: `surfaceScale=5; specularConstant=1; specularExponent=100; lightingColor=white`, point light at `(-200, -200, 300)`
+- `feDisplacementMap scale=200; xChannelSelector=R; yChannelSelector=G`
+
+Design team should preserve this exact SVG when re-implementing the navbar in Figma (export as raster or document as a named effect).
+
+---
+
+## 4. Per-page Specs
+
+### 4.1 Login `/login`
+**Source:** `app/(auth)/login/page.tsx`.
+
+| Element | Value |
+|---|---|
+| Root background | `#ECE0CC` (cream) |
+| BG image | `/images/login-bg.png`, max-width 430 px, anchored top, `object-fit: cover; object-position: center top` |
+| Backdrop blur veil | `backdrop-filter: blur(28px) saturate(1.2)`, masked `0% transparent → 38% transparent → 52% 0.5 → 70% black` |
+| Cream tint over blur | linear-gradient bottom: `rgba(255,250,240,0) 35% → 0.40 58% → 0.70 78% → 0.88 100%` |
+| Form padding | `14px 22px 32px` |
+| Form max-height | `72vh` |
+| Form animation | `slideUp 0.45s cubic-bezier(0.34,1.1,0.64,1)` |
+| Eyebrow | 11 px, 600, color `#9ca3af`, tracking 0.08em, uppercase |
+| Title `<h2>` | 22 px, 800, color `#111` |
+| Tabs (login/register) | inside GlassEffect, pill 9999, item padding `10px 12px`, font-size 13 px, weight 600/800 active |
+| Tab active pill | same gold gradient as Navbar; same coin shadow |
+| Label `.lbl` | 10 px, 700, color `#8a7f6a`, uppercase, tracking 0.10em |
+| Input `.inp` | width 100%, bg `rgba(255,255,255,0.28)`, blur 20px saturate 1.4, 1px `rgba(255,255,255,0.55)` border, pill 9999, padding `14px 18px 14px 48px`, font 14 px, ink `#1a1815`. Inset highlight rim mirrors GlassEffect. Focus ring `0 0 0 3px rgba(212,175,55,0.20)` plus border `rgba(212,175,55,0.55)` |
+| Input icon | absolute left 18, size 15 px, color `rgba(40,38,32,0.55)` |
+| Strength bar | 4 segments, 3px tall, 4px gap |
+| Primary CTA `.btn-g` | full-width, padding 14, gradient `#14120F → #0d0d0d → #050505`, text `#EADBB1`, pill 9999, font 15 px / 800 / tracking 0.02em. Shadow: `inset 0 1px 0 rgba(234,219,177,0.18), inset 0 -1px 0 rgba(0,0,0,0.4), 0 6px 20px rgba(20,18,15,0.32), 0 2px 4px rgba(0,0,0,0.20)` |
+| Spinner | 15×15 px, 2px border, top color `#EADBB1`, 0.8s linear loop |
+| Remember-me checkbox | 18×18, radius 5, border 1.5px `#d1d5db` off / fill `#0d0d0d` on, checkmark color `#d4af37` |
+| Alerts (.a-ok/.a-err) | padding `11px 14px`, radius 12, with blur 6px. OK = green pastel `rgba(220,252,231,0.85)` border `rgba(167,243,208,0.7)`, text `#15803d`. Err = `rgba(254,226,226,0.85)` border `rgba(252,165,165,0.6)`, text `#dc2626` |
+| Verify-sent icon disc | 64×64, radius 20, gradient `#d4af37 → #f5d060`, shadow `0 8px 24px rgba(212,175,55,0.3)`, icon `Mail 28 px #0d0d0d` |
+| Pending-verify banner | bg `#fffaf0`, border `1px solid #fde68a`, radius 12, inner btn bg `#fde68a` border `#fbbf24` |
+
+Font for auth pages: **'Prompt', system-ui, sans-serif** (imported from Google Fonts inside the page's inline `<style>`).
+
+### 4.2 Phone OTP `/login/phone`
+**Source:** `app/(auth)/login/phone/page.tsx`.
+
+| Element | Value |
+|---|---|
+| Root | `min-height:100vh; background:#ECE0CC; padding:32px 22px` |
+| Font | Prompt, system-ui |
+| Inner column max-width | 380 px |
+| Icon disc | 64×64 circle, bg `#0F0F0F`, icon 26 px `#E8C58C` strokeWidth 1.5 |
+| Title `<h1>` | 22 px, 700, color `#1A1A1A`, margin 0 0 6 |
+| Subtitle | 13 px, color `#7A6B5B`, margin 0 0 28 |
+| Field label | 11.5 px, color `#6B5A48`, uppercase, tracking 0.4px, margin-bottom 6 |
+| Text input | padding `14px 16px` (phone) / `14px 16px 14px 38px` (name with icon), font-size 16 (phone) / 15 (name), border `1px solid #D7C5A6`, radius 14, bg `#FFFAF1` |
+| OTP input | letter-spacing 8, font-size 22, text-align center, max 6 chars |
+| Primary CTA | width 100%, padding `14px 18px`, bg `#0F0F0F`, color `#E8C58C`, radius 14, font 14 px / 600 |
+| Resend countdown text | active color `#3F2A1A`, disabled `#A0907A`, font 12.5 px |
+| Error box | padding 12, bg `#FBE9E9`, border `1px solid #E8B4B4`, radius 12, icon 16 px `#B14242`, text 12.5 px `#7A2E2E` |
+
+### 4.3 Home `/home`
+**Source:** `app/(user)/home/page.tsx`.
+
+#### Hero stage
+| Element | Value |
+|---|---|
+| Background | Tier-specific radial gradient (see 1.1) |
+| Padding | `paddingTop: 18; paddingBottom: 60` |
+| WarpShader props | `speed:0.7, swirl:0.85, swirlIterations:9, proportion:0.45, softness:1, distortion:0.28, shapeScale:0.1` |
+| White veil overlay | `linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.20) 100%)` |
+| Topbar padding | `14px 20px 24px` |
+| Greet eyebrow | 10 px, 700, tracking 0.18em, uppercase, color tier-sub, margin `0 0 6px` |
+| First-name h1 | `.display` 26 px, line-height 1.05, tier-ink |
+| Bell / Avatar wrapper | 42×42 circle, bg `rgba(255,255,255,0.55)`, border `1px solid rgba(255,255,255,0.7)`, blur 8px, shadow `0 2px 8px rgba(0,0,0,0.06)` |
+| Bell icon | 16 px, strokeWidth 1.7 |
+| Pulse dot on bell | 6×6 circle, color = tier star color, top 10 right 10 |
+| Avatar fallback gradient | `linear-gradient(135deg,#C9A85A,#A0782B)`, initials 12 px / 800 |
+
+#### Light sheet
+| Element | Value |
+|---|---|
+| Background | `#fff` |
+| Radius | `28px 28px 0 0` |
+| Top overlap | `marginTop: -32` (over hero) |
+| Padding-top | 18 |
+| z-index | 3 |
+| Box-shadow | `0 -8px 32px rgba(14,14,14,0.08)` |
+| Sheet handle | 36×4, bg `var(--ink-ghost)`, pill, margin `0 auto 10px` |
+
+#### Sections inside light sheet
+| Section | Padding |
+|---|---|
+| Dashboard card wrapper | `8px 16px 12px` |
+| Quick actions bar | `6px 16px 10px` |
+| Brand banners | `14px 16px 4px`, internal gap 10, marquee aspect `12/5`, speed `50` (row 1) / `55` (row 2) |
+| Hero promotion | `20px 16px 8px` |
+| Tiers and Perks | `28px 16px 16px`; centered text wrapper `0 4px 14px`. h2 26 px / 800. Image full-width radius `--r-lg` |
+| Your VIP Treatments | `12px 16px 8px`; h2 22 px / 800 |
+| "Your Tier" pill | `.pill .pill-ink`, gold-soft tier label 11 px |
+| Card promos carousel | `24px 0 8px 16px`; gap 10; scroll-snap x mandatory |
+| Recent purchases (small card) | `24px 16px 8px`; card has padding 14, gap 14; image tile 52×52 radius `--r-md`, model name 13.5 px / 700, date 11.5 px |
+| Feed promos | `24px 16px 8px`; column gap 12 |
+| Footer | `24px 0 28px`, 24×1 px gold line, "Dreame · Membership" 11 px / 700 |
+| Section "ดูทั้งหมด" link | font 11 px / 700, tracking 0.06em, uppercase, ChevronRight 13 px |
+| Empty-state recent purchases card | inside `.card-product`, body padding `32px 24px`, icon disc 60×60 gold-glow bg, gold-deep color, icon 24 px / strokeWidth 1.5. Bottom-bar bg `var(--black)`, "Plus" 14 px gold-soft + label 13 px / 700 / tracking 0.04em |
+
+### 4.4 Coupons `/coupons` (+ `CouponsClient` + `CouponCard`)
+**Sources:** `app/(user)/coupons/page.tsx`, `components/user/CouponsClient.tsx`, `components/user/CouponCard.tsx`.
+
+| Element | Value |
+|---|---|
+| Page padding-top | 18 |
+| Header padding | `14px 20px 22px` |
+| Eyebrow margin-bottom | 10 |
+| H1 | 32 px / line-height 1.1 / tracking -0.02em; mixes 800 weight + italic 400 (serif-i) |
+| Body padding | `0 16px 24px`, vertical gap 24 between sections |
+| Section header | gap 10, padding `4px 4px 12px`, dot 6×6 round, label 11 px / 700 tracking 0.16em uppercase ink-mute, count 11 px ink-faint mono right-aligned (`String.padStart(2,'0')`) |
+| Card row gap | 10 |
+| History toggle button | padding `12px 16px`, radius 12, bg surface, hair border, label same as section header style, chevron 14 px |
+| Empty state inside .card-product | padding `52px 24px`; icon disc 64×64 gold-glow bg; Ticket 26 px strokeWidth 1.4; heading 18 px; body 12.5 px ink-mute line-height 1.6 |
+
+See component spec **5.1 Coupon card** for the per-card dimensions.
+
+### 4.5 Points `/points`
+**Source:** `app/(user)/points/page.tsx`.
+
+| Element | Value |
+|---|---|
+| Page padding | `paddingTop: 0; paddingBottom: 32` |
+| Hero | same WarpShader treatment as Home, padding `18px ⋯ 40px` |
+| Header padding | `6px 22px 22px`; flex `end / space-between` |
+| Eyebrow "Dreame Rewards" | 10 px / 700 tracking 0.22em uppercase tier-sub |
+| H1 "คะแนนสะสม" | `.display` 28 px line-height 1.0 tracking -0.015em; mixed 800/400 italic |
+| Tier chip (top right) | padding `5px 12px`, radius pill, bg `rgba(255,255,255,0.55)`, border `1px solid rgba(255,255,255,0.7)`, blur 8 px, shadow `0 2px 8px rgba(0,0,0,0.05)`, Sparkles 11 px |
+| MemberCard container | padding `0 22px`, wrapped in `.card-mount` (wake + sway anim) |
+| Balance label | "Available Balance" 10 px / 700 tracking 0.20em uppercase |
+| Balance value | `.display .tnum .balance-display` 64 px / 800 / tracking -0.03em, filter `drop-shadow(0 4px 20px rgba(160,120,43,0.20))` |
+| Lifetime pill | padding `4px 11px`, bg `rgba(255,255,255,0.55)`, border + blur as above, font 10.5 px / 700 |
+| +30d earned pill | bg `rgba(31,107,51,0.12)`, border `1px solid rgba(31,107,51,0.24)`, color `#1F6B33` |
+
+#### Tier ladder card
+| Element | Value |
+|---|---|
+| Section padding | `20px 16px 4px` |
+| Card | bg `#fff`, 1px hair border, radius `--r-lg`, shadow `0 4px 20px rgba(20,18,15,0.05)` |
+| Top accent | 2px gradient `transparent → #EADBB1 25% → #A0782B 50% → #EADBB1 75% → transparent` |
+| Inner padding | `20px 22px 22px` |
+| "Tier Ladder" label | 11 px / 800 tracking 0.18em uppercase ink-mute |
+| "อีก X แต้ม" pill | padding `4px 12px`, radius 999, bg `linear-gradient(135deg,#FAF3DC,#EADBB1)`, border `1px solid rgba(160,120,43,0.30)`, font 11 px / 700 color `#5B3417` |
+| Track | height 4, radius 100, bg `rgba(160,120,43,0.10)`, fill gradient `#A0782B → #EADBB1 → #A0782B`, glow `0 0 10px rgba(160,120,43,0.45)`, transition 0.6s |
+| Tier coin | 28×28 circle, gradient (active) `linear-gradient(135deg,#FAF3DC 0%,#EADBB1 35%,#C9A063 70%,#A0782B 100%)`, scale 1.18 when current |
+| Tier labels | font 12.5 px (current 800 / others 600), threshold meta 9.5 px tabular-num |
+| Next-tier hint box | padding `10px 14px`, bg `rgba(160,120,43,0.06)`, border `1px solid rgba(160,120,43,0.14)`, radius 12 |
+
+#### Insight tiles (2-col)
+- Section padding `14px 16px 4px`, grid gap 10
+- Tile: padding `14px 14px 16px`, bg `#fff`, hair border, radius 16, shadow `0 2px 10px rgba(20,18,15,0.04)` (featured: `0 4px 14px rgba(31,107,51,0.08)`)
+- Icon chip 34×34 radius 10 inside `inset 0 1px 0 rgba(255,255,255,0.55)` highlight
+- Halo blob 90×90 absolute top-right `-28/-28`, blur 6, opacity 0.55
+- Label 9.5 px / 800 tracking 0.16em uppercase; value `.display .tnum` 19 px / 800 line-height 1.1
+
+#### Activity timeline
+- Section padding `20px 16px 24px`
+- Card border + radius `--r-lg`, shadow `0 2px 12px rgba(20,18,15,0.04)`
+- Month header padding `14px 18px 8px` (first) / `18px 18px 8px` (subsequent), separator hair border, faint cream bg `rgba(248,246,242,0.55)` on subsequent months
+- Month label 9.5 px / 800 tracking 0.16em uppercase, color `var(--gold-deep)`
+- Entry row padding `14px 18px`, gap 14, separator `1px solid rgba(20,18,15,0.04)`
+- Icon disc 38×38 radius 12 inside tone bg + 1px tone border
+- Gold rail: 1.5px vertical line at x=37, fade top/bottom 12%/88%
+- Entry title 13 px / 700 line-height 1.4, clamp 2 lines
+- Date 10.5 px ink-faint tracking 0.02em
+- Delta `.display .tnum` 18 px / 800 tracking -0.015em; positive gold `#A0782B` with text-shadow `0 1px 0 rgba(255,250,235,0.4)`
+- Balance after 10 px tabular-num, weight 600
+
+### 4.6 Profile `/profile`
+**Source:** `app/(user)/profile/page.tsx`.
+
+#### Hero photo card
+| Element | Value |
+|---|---|
+| Section padding | `12px 16px 14px` |
+| Card | aspect `3/4`, radius 28, bg tier-bg, shadow `0 12px 36px rgba(20,18,15,0.18), 0 2px 6px rgba(20,18,15,0.08)` |
+| Photo | `object-fit: cover; object-position: top center` |
+| No-photo fallback initials | font 92 px / 800 tracking 0.02em |
+| Back button | top-left 16/16, 40×40 circle, bg `rgba(20,18,15,0.55)`, blur 10 px, border `1px solid rgba(255,255,255,0.18)`, "×" 18 px / 600 |
+| Camera button | mirror of back btn on right; icon 15 px |
+| Backdrop blur ramp | `backdrop-filter: blur(28px) saturate(1.2)`; mask `transparent 0% → transparent 42% → 0.5 56% → black 72%` |
+| Dark vignette | `linear-gradient(180deg, transparent 38%, rgba(20,18,15,0.18) 55%, rgba(20,18,15,0.55) 100%)` |
+| Content padding | `20px 22px 24px` |
+| Name | 28 px / 700 line-height 1.15 tracking -0.015em, centered, text-shadow `0 2px 12px rgba(0,0,0,0.45)` |
+| Handle | 13 px mono tracking 0.06em, color `rgba(255,255,255,0.72)` |
+| Primary CTA "ดูบัตรสมาชิก" | flex 1, padding `13px 18px`, radius 999, bg `#fff` ink `#1A1815`, font 14 px / 700, shadow `0 4px 14px rgba(0,0,0,0.20)` |
+| Message disc | 44×44 circle, bg `rgba(255,255,255,0.14)`, blur 8 px, border `1px solid rgba(255,255,255,0.22)`, icon 17 px |
+| Stats row | grid 3 cols, gap 4 |
+| GlassStat value | 22 px / 700 tracking -0.005em white |
+| GlassStat label | 10.5 px / 500 tracking 0.04em color `rgba(255,255,255,0.62)` |
+| Bio text | 12 px line-height 1.55 color `rgba(255,255,255,0.78)` centered |
+
+#### Personal Information card (`SectionCard`)
+| Element | Value |
+|---|---|
+| Outer padding | `0 16px 14px` |
+| Card | bg `#fff`, 1px hair border, radius `--r-lg`, shadow `0 2px 12px rgba(20,18,15,0.04)`, padding `18px` |
+| Kicker | 10 px / 700 tracking 0.16em uppercase ink-mute, margin 0 0 14 |
+| Field column gap | 12 |
+| Field label | 9 px / 700 tracking 0.18em uppercase ink-mute |
+| Field icon | absolute left 14, top 14 (multi-line) / 50% (single), color ink-faint |
+| Input | `.field` (see 5.6) with `paddingLeft: 42` to clear icon |
+| Email change pill | absolute right 6 top 50%, padding `6px 14px`, radius pill, font 11 px / 700 tracking 0.04em, bg `var(--black)` gold-soft text (open: `var(--bg-soft)` ink) |
+| Save CTA | `.btn .btn-ink` full-width, shadow `0 4px 14px rgba(20,18,15,0.18)` |
+
+#### Security card
+| Element | Value |
+|---|---|
+| Lock icon container | 44×44 radius 12, gradient `#FAFAF8 → #F0EFEB`, hair border |
+| Title 14 px / 700, subtitle 11.5 px serif-i ink-mute |
+| Change pill | padding `7px 14px`, pill radius. Open: red-soft / red. Closed: ink / gold-soft |
+| Strength bar | 4 segments, 3px tall, 4px gap |
+| Strength colors | `[ink-ghost, red, amber, #3D6CC4, green]` |
+
+#### Logout
+- Container padding `4px 16px 24px`
+- Button: full-width, padding 14, bg `#fff`, border `1px solid rgba(180,58,58,0.20)`, color red, radius `--r-lg`, font 13.5 px / 700, gap 8
+
+#### Footer
+- Padding `8px 0 16px`. Gold rule 18×1 + Sparkles 9. Caption `Maison Dreame · v2.0` 11.5 px serif-i ink-faint tracking 0.10em.
+
+#### Toast
+- Position fixed top 24, pill `10px 22px`, bg black (ok) / red (err), text gold-soft / white, 12.5 px / 600, shadow `--shadow-3`, animation `fade-up 0.3s`.
+
+### 4.7 Purchases `/purchases`
+**Source:** `app/(user)/purchases/page.tsx`. See component spec **5.3 Purchase card**.
+
+| Element | Value |
+|---|---|
+| Page padding | `paddingTop: 18` |
+| Header padding | `14px 20px 22px`, flex space-between end |
+| Eyebrow | margin-bottom 10 |
+| H1 | 32 px / 1.1 / -0.02em (800 + italic 400) |
+| Counter | 12 px italic ink-mute |
+| Header CTA "ลงทะเบียน" | `.btn .btn-ink` padding `10px 16px`, font 12, shadow `0 4px 16px rgba(20,18,15,0.18)`, Plus 13 |
+| Card column padding | `0 16px 32px`, gap 14 |
+| Empty state | card padding `56px 28px`; icon disc 72×72 radius 22 gold gradient with shadow `0 8px 24px rgba(160,120,43,0.30), inset 0 1px 0 rgba(255,250,235,0.7)`; Package 28 / 1.6. Heading 19 px / 800; body 12.5 px serif-i line-height 1.7 max-width 280; CTA `.btn .btn-ink` padding `10px 22px` font 13 shadow `0 6px 20px rgba(20,18,15,0.20)` |
+
+### 4.8 Purchase Detail `/purchases/[id]`
+**Source:** `app/(user)/purchases/[id]/page.tsx`.
+
+| Element | Value |
+|---|---|
+| Page padding | `paddingTop: 18; paddingBottom: 32` |
+| Header padding | `14px 20px 14px`; back-circle 38×38 with 1px line border |
+| Eyebrow margin-bottom 6 |
+| H1 | 22 px / 1.1 (800 + italic 400) |
+| Content padding | `0 16px`, column gap 12 |
+| Each card | `.surface` (radius `--r-lg`, hair border) padding 18 |
+| Product card title | 19 px / 700 line-height 1.35 |
+| SKU label | 11.5 px ink-mute mono tracking 0.05em |
+| Pills row | wrap, gap 6 (uses `.pill` 11 px / 600) |
+| Points hero card | Gold disc 30×30 with gold-line border, Coins 14 px gold-deep / 2.2 weight |
+| Points number | `.display .tnum` 32 px / 800 gradient gold-deep → gold → gold-soft clipped |
+| Calc breakdown box | 11.5 px ink-mute, padding `8px 10px`, bg-soft, radius `--r-sm`, line-height 1.65 |
+| Order info Row | label 11.5 px ink-mute, value 12.5 px ink 500/700 (mono if mono) |
+| BQ items list | card padding 12, bg `var(--bg-soft)`, radius `--r-sm`, gap 12. Image 64×64 radius sm. Item name 13 px / 600 |
+| Warranty card | ShieldCheck 18 px green/faint, text 13 / 700 + 11.5 ink-mute |
+| Pending notice | padding 14, bg amber-soft, border `rgba(154,110,31,0.20)`, radius `--r-md`. AlertCircle 16 |
+| Receipt image | max-height 400, `object-fit: contain`, bg-soft, radius sm |
+| Admin note | card padding 14, body 12.5 px / 1.55 ink-soft |
+
+### 4.9 Purchase Register `/purchases/register`
+**Source:** `app/(user)/purchases/register/page.tsx`.
+
+| Element | Value |
+|---|---|
+| Page padding-top | 18 |
+| Header layout | back circle 38×38 + h1 22 px |
+| Progress | `01` ↔ track 2px ↔ `02`; track turns gold when active; "Order" / "Receipt" kicker labels |
+| Step cards | `.surface` padding 18 |
+| Channel chips | grid 2-col, padding `12px 14px`, radius `--r-md`, active: black bg / gold-soft text, inactive: white / ink, font 13 / 600 |
+| PlatformLogo size | 18 px |
+| Order field row | `.field` + `.btn .btn-ink` padding `0 18px` (square) |
+| Verified result box | bg green-soft, border `rgba(64,107,63,0.18)`, radius `--r-md`, padding 14. Stats grid 2-col gap `6px 14px`, font 12 |
+| Verified item row | padding `8px 10px`, bg `rgba(255,255,255,0.6)`, radius sm. Image 48×48 radius sm bg-soft hair border |
+| Pending box | bg amber-soft, border `rgba(154,110,31,0.20)`, radius md |
+| Error box | bg red-soft, border `rgba(139,58,58,0.18)`, radius md |
+| Upload dropzone | dashed border `2px dashed var(--line)`, padding 40, radius md, bg `var(--bg-soft)`. Icon disc 56×56 white, hair border, Upload 22 px gold-deep. Title 13.5 px / 700, sub 11 px serif-i |
+| Preview wrapper | radius md overflow hidden, max-height 300 contain. Remove btn 30×30 circle `rgba(10,9,7,0.85)` blur 8px |
+| Done screen | wrapper centered padding 32. Success disc 96×96 black with shadow `--shadow-3`, CheckCircle 42 gold-soft 1.5. Title 28 px (800+400). Description 13 px serif-i ink-mute max-width 280 |
+
+### 4.10 Promotions `/promotions`
+**Source:** `app/(user)/promotions/page.tsx`.
+
+| Element | Value |
+|---|---|
+| Page padding | `paddingTop: 18; background:#fff; min-height:100vh` |
+| Header padding | `14px 20px 24px`; kicker margin-bottom 8 |
+| H1 `.display` | 30 px / 1.05 / -0.02em |
+| Sub | 12 px serif-i ink-mute |
+| Empty card | inside `.card-product`, padding `60px 28px`. Icon disc 72×72 gradient `gold-glow → gold-pale`, shadow `0 8px 24px rgba(160,120,43,0.15)`. Tag 28 / 1.4. Heading 19 px |
+| Sections column gap | 28 |
+| Section header | padding `0 4px 12px`. Kicker margin-bottom 6. H2 `.display` 20 px / 800 / -0.01em, italic 400 gold-deep accent |
+| Card grid | `repeat(2, 1fr)` gap 10, padding `0 16px` |
+
+#### `GridCard` (used on promotions page)
+| Element | Value |
+|---|---|
+| Aspect | 1:1 |
+| Background fallback | `linear-gradient(135deg,#1A1815,#3A2E18,#A0782B)` |
+| Box-shadow | `0 6px 20px rgba(20,18,15,0.08), 0 1px 2px rgba(20,18,15,0.05)` |
+| Badge | top 10 left 10, padding `3px 9px`, radius pill, gradient `#EADBB1 → #A0782B`, color `#1A1815`, font 9 / 800 / 0.14em uppercase |
+| Bottom gradient + masked blur (8 px) at 60% height |
+| Title text | 12.5 px / 700 / 1.3 line-clamp 2, text-shadow `0 1px 4px rgba(0,0,0,0.45)` |
+| Price | original 10 px strike `rgba(255,255,255,0.5)`; discounted `.display .tnum` 14 px / 800 gold gradient clipped |
+
+### 4.11 Notifications `/notifications`
+**Source:** `app/(user)/notifications/page.tsx`.
+
+| Element | Value |
+|---|---|
+| Page padding | `paddingTop: 18; paddingBottom: 32; min-height: 100vh` |
+| Header padding | `14px 20px 18px`; back-circle 38×38 hair border |
+| H1 | 24 px / 1.1 / -0.02em (800 + italic 400) |
+| Preferences card | bg #fff, hair border, radius `--r-lg`, shadow `0 2px 12px rgba(20,18,15,0.04)` |
+| Kicker block padding | `14px 18px 10px` |
+| Toggle row | padding `14px 18px`, gap 14. Icon chip 38×38 radius 11 with tone bg/color (Email: `#FFEDD5 / #9A6E1F`; SMS: `#E8F6EC / #1F6B33`). Title 13.5 / 700, subtitle 11.5 serif-i ink-mute |
+| iOS toggle | 44×26 radius 100; checked gradient `#1A1815 → #2A2419` w/ inset shadow `inset 0 1px 2px rgba(0,0,0,0.25)`. Knob 22×22 circle: off white / on `linear-gradient(135deg,#FAF3DC,#EADBB1,#A0782B)`, shadow `0 2px 6px rgba(20,18,15,0.20)`, transition `0.22s cubic-bezier(0.34,1.1,0.64,1)` |
+| Separator | `1px var(--hair)` margin `0 18px` |
+| Fine print | 11 px serif-i ink-mute line-height 1.55 |
+
+#### Announcement feed
+| Element | Value |
+|---|---|
+| Empty state card | padding `40px 24px`. Icon block 56×56 radius 16 gold gradient with shadow `0 4px 14px rgba(160,120,43,0.18)`. Megaphone 22 / 1.7 |
+| Announcement card | bg #fff, hair border, radius `--r-lg`, shadow `0 2px 12px rgba(20,18,15,0.04)`. Top accent rule 2 px shimmer gold |
+| Card body padding | 14, gap 12 |
+| Avatar | 56×56 radius 12; image with hair border or gold gradient + Sparkles 22 / 1.7 |
+| Title | 14 / 700 / 1.35 |
+| Body | 12 ink-mute / 1.55, line-clamp 2 |
+| Badge | `2px 8px` pill, gold gradient text `#1A1815`, font 9 / 800 / 0.14em |
+| Date | 10.5 ink-faint |
+
+Toast: same spec as Profile (see 4.6).
+
+### 4.12 Rewards `/rewards`
+**Source:** `app/(user)/rewards/page.tsx`.
+
+| Element | Value |
+|---|---|
+| Page padding-top | 18 |
+| Header padding | `14px 20px 22px` |
+| Eyebrow margin-bottom 10. H1 32 / 1.1 / -0.02em |
+| Points summary card | margin-top 14, padding `12px 14px`, bg `linear-gradient(135deg, var(--gold-glow), transparent)`, hair border, radius `--r-lg`, flex justify space-between |
+| Tier label | 10 px tracking 0.16em uppercase |
+| Points value | `.numerals` 26 px / 800 gold-deep |
+| History link | padding `8px 12px`, pill, bg surface, hair border, font 11 / 600 ink-mute, History 12 |
+| Model tabs | overflow-x auto, gap 6, padding `0 16px 12px`. Tab: padding `7px 14px`, pill, active ink / white, inactive surface / ink-mute / hair, font 11.5 / 600 |
+| Grid | column gap 10, padding `0 16px 24px` |
+| Empty card | inside `.card-product` padding `52px 24px`. Icon disc 64×64 gold-glow / gold-deep. Gift 26 / 1.4 |
+
+See **5.2 Reward card** for per-card spec.
+
+### 4.13 Reward Detail `/rewards/[id]`
+**Source:** `app/(user)/rewards/[id]/page.tsx`.
+
+| Element | Value |
+|---|---|
+| Top bar back link | padding `14px 16px 0`, ChevronLeft 14 / "กลับ" 13 ink-mute |
+| Hero image | margin `14px 16px 0`, aspect `4/3`, bg `var(--bg-soft)`, radius `--r-lg` |
+| Title | 22 px / 1.25 / 800 |
+| Short description | 13.5 px ink-mute, margin-top 6 |
+| Points pill card | margin-top 16, padding `14px 16px`, bg `linear-gradient(135deg, var(--gold-glow), transparent)`, hair border, radius `--r-lg`. "ใช้แต้ม" 10 px / 700 tracking 0.16em uppercase. Value `.numerals` 28 px / 800 gold-deep |
+| User points | text-align right; "คุณมี" 10 px ink-mute, value `.numerals` 16 / 700 green/red |
+| Tier badges row | font 11 ink-mute; chip `2px 8px` pill bg-soft ink 600 / 10 px |
+| Stock line | 11 px ink-mute, low stock 600 red |
+| Description / Terms blocks | label `11 px / 700 / 0.16em uppercase`; body 13/1.6 (desc) or 12/1.65 (terms) |
+| Shipping note | padding 12, radius md, bg-soft, gap 10. Truck 18 gold-deep. Title 12/700 + sub 11 ink-mute |
+| Sticky CTA padding | `14px 16px`, surface + top hair border |
+| Disabled state | padding `12px 14px`, radius md, bg-soft, Lock 16 ink-faint, text 12.5 ink-mute |
+| Active CTA | full-width, padding `14px 16px`, bg ink, color `#E8C58C`, pill 999, font 14/700, gap 8, Sparkles 14 |
+
+#### Bottom-sheet form (shipping address)
+| Element | Value |
+|---|---|
+| Overlay | `position: fixed; inset: 0; z-index: 50; background: rgba(14,14,14,0.40); backdrop-filter: blur(4px)` |
+| Sheet | bg surface, full width, `border-top-left-radius: 20; border-top-right-radius: 20`, `max-height: 92vh`, scrollable |
+| Sheet header | sticky, padding `14px 20px`, hair border bottom |
+| Sheet handle | 36×4, ink-ghost, radius 2, margin auto + 12 below |
+| Title | 16 px / 800 |
+| Sub | 11 ink-mute |
+| Form padding | 16, column gap 12 |
+| Form field label | 10.5 px / 700 / 0.14em uppercase ink-mute, margin-bottom 6 |
+| Form input | width 100%, padding `10px 12px`, border `1px solid var(--hair)`, radius 8, font 13, bg surface |
+| Province dropdown | full TH provinces list inline |
+| Postal | 5-digit maxLength, inputMode numeric |
+| Error inline | padding 10, radius 8, bg `#FBE9E9`, color `#B14242`, font 12 |
+| Action buttons | gap 10; "ยกเลิก" `btnGhost` flex 1; "ยืนยัน" `btnInk` flex 1.5 |
+
+`btnGhost` and `btnInk` definitions:
+```
+btnGhost: padding 12px 18px; radius pill; transparent / ink-mute / hair border; 13/600
+btnInk:   padding 12px 18px; radius pill; ink bg; color #E8C58C; ink border; 13/700
+```
+
+#### Success screen
+- Padding `40px 20px`, centered, min-height 100vh
+- Success disc 72×72, bg `rgba(94,142,62,0.10)`, CheckCircle 36 `#3A8E5A` / 1.5
+- Title 24 / 800
+- Body 13.5 ink-mute
+- Card-product max-width 320, padding 16. "แต้มคงเหลือ" `.numerals` 24 / 800 gold-deep
+- Id mono 10 ink-faint
+
+### 4.14 Redemptions `/redemptions`
+**Source:** `app/(user)/redemptions/page.tsx`.
+
+| Element | Value |
+|---|---|
+| Top back link | "ของรางวัล" 13 ink-mute |
+| Header padding | `14px 20px 22px` |
+| H1 | 28 / 1.1 / -0.02em |
+| Card | `.card-product` padding 14, flex gap 12 |
+| Thumbnail | 72×72 radius `--r-md` bg-soft; Gift 24 ink-faint fallback |
+| Title 13 / 700, status pill 10 px `2px 8px` pill `${color}1A` background with status `color` text; icon 9 |
+| Status palette: pending `#C99B3E`, confirmed/shipping `#4A7BC1`, delivered `#3A8E5A`, cancelled `#B14242` |
+| Points used | `.numerals` 13 / 700 gold-deep |
+| Address line | 10.5 ink-mute / 1.4 |
+| Tracking | 10 ink-faint mono |
+| Refund reason | 10 `#B14242` |
+| Created at | 9.5 ink-faint |
+| Empty state | inside `.card-product` padding `52px 24px`. Icon disc 64×64 gold-glow / gold-deep. Package 26 / 1.4. CTA: padding `10px 20px`, pill, ink bg, color `#E8C58C`, font 13/700 |
+
+### 4.15 Terms `/terms`
+**Source:** `app/terms/page.tsx`.
+
+| Element | Value |
+|---|---|
+| Wrapper bg | `radial-gradient(ellipse at top, rgba(234,219,177,0.45) 0%, transparent 55%), radial-gradient(ellipse at bottom, rgba(160,120,43,0.10) 0%, transparent 55%), #FAF7F2` |
+| Font | Prompt |
+| Inner column | max-width 520 px |
+| Hero | padding `36px 22px 30px`, gradient `#1A1815 → #2A2419 → #3A2E18`, color `#FAF3DC`, radius `0 0 28px 28px`, shadow `0 8px 32px rgba(20,18,15,0.20)` |
+| Hero halo | top -60 right -40, 220×220 circle, `radial-gradient(circle, rgba(234,219,177,0.30) 0%, transparent 65%)` |
+| Hero rule | 32×1.5 gradient `#FAF3DC → #A0782B → transparent`, margin 0 0 14 |
+| Eyebrow | 10 / 700 / 0.22em uppercase, color `rgba(234,219,177,0.65)` |
+| Title | 24 / 800 / -0.01em |
+| Meta chip | padding `5px 12px`, radius 100, bg `rgba(255,255,255,0.08)`, border `rgba(234,219,177,0.18)`, color `rgba(234,219,177,0.78)`, blur 6 |
+| Hero logo | top 22 right 22, height 18, inverted brightness |
+| Body padding | `18px 16px 0` |
+| Section card | margin-bottom 14, bg #fff, radius 18, border `rgba(20,18,15,0.06)`, shadow `0 1px 4px rgba(20,18,15,0.04)` |
+| Section header | padding `14px 18px`, gap 12. Icon container 36×36 radius 11 + inset highlight. Section number 9 / 800 / 0.14em with `gold-pale → gold-glow` gradient pill (padding `2px 8px` radius 6). Title 14 / 800 |
+| Section body | padding `0 18px 16px`, font 13 color `#4A4337` line-height 1.7. li margin-left 18 with gold marker `#A0782B` |
+| Highlight box | padding `12px 14px` radius 12 bg gold tint `rgba(234,219,177,0.18) → 0.06`, border `1px solid rgba(160,120,43,0.18)`, font 13 color `#3A2E18` |
+| Tier item | padding `12px 14px` radius 12, bg per-tier (`#F4F6FB / #FFF8EE / #EBFCF7`), badge 38×38 radius 10 with tier gradient and inset highlight |
+| Footer wrap | sticky bottom; padding `16px 16px 28px`; bg fade `#FAF7F2 60% → rgba(250,247,242,0.80)` |
+| Footer card | bg #fff, radius 20, border `rgba(20,18,15,0.06)`, shadow `0 8px 28px rgba(20,18,15,0.10)`, padding 16 |
+| Checkbox | 22×22 radius 7; checked: gradient `#1A1815 → #0E0E0E`, knob "✓" 12 `#EADBB1` weight 900 |
+| Accept button | width 100%, padding 14, gradient `#1A1815 → #0E0E0E`, color `#EADBB1`, radius 14, font 14.5 / 700; shadow `inset 0 1px 0 rgba(255,250,235,0.10), 0 6px 20px rgba(20,18,15,0.20)` |
+| Scroll hint | gap 6, color `#A0782B`, font 11 / 600, ChevronDown 14 |
+
+### 4.16 Reset Password `/auth/reset-password`
+**Source:** `app/auth/reset-password/page.tsx`.
+
+| Element | Value |
+|---|---|
+| Root | fixed inset 0, bg `#ECE0CC`, font Prompt |
+| BG image | top 0 left 50% translateX(-50%), max-width 430, height 100%, `object-fit: contain; object-position: center top` |
+| Overlay | bottom fade `rgba(255,255,255,0) 55% → 0.20 80% → 0.55 100%` |
+| Logo area | `64px 24px 20px` (spacer) |
+| Sheet | bg #fff, radius `24px 24px 0 0`, padding `26px 22px max(env(safe-area-inset-bottom,32px),32px)`, shadow `0 -8px 40px rgba(0,0,0,0.3)`, animation `slideUp 0.4s` |
+| Title | 20 / 800 / `#111` |
+| Sub | 12 `#9ca3af` |
+| Label `.lbl` | 10 / 700 / 0.07em uppercase `#9ca3af` |
+| Input `.inp` | width 100%, bg `#f7f7f5`, border `1.5px solid #ebebeb`, radius 12, padding `12px 14px 12px 42px`, font 14, ink `#111`. Focus: border `#d4af37` bg `#fff` ring `0 0 0 3px rgba(212,175,55,0.1)` |
+| Icon left/right | left 13 / right 12, vertically centered |
+| Strength bar | 4 × 3 px, gap 3 px |
+| Strength colors | `[#e5e7eb, #ef4444, #f59e0b, #3b82f6, #16a34a]` |
+| Primary CTA `.btn-main` | width 100%, padding 15, bg `#0d0d0d`, color `#d4af37`, radius 14, font 15 / 700 |
+| Alert pastel | OK `#f0fdf4 / #dcfce7 / #15803d`; Err `#fef2f2 / #fecaca / #dc2626`. Padding `10px 13px`, radius 11, font 12 |
+
+---
+
+## 5. Component Primitives
+
+### 5.1 Coupon Card
+**Source:** `components/user/CouponCard.tsx`.
+
+| Element | Value |
+|---|---|
+| Container | flex, bg surface, hair border, radius `--r-lg`, overflow hidden, shadow `--shadow-1` |
+| Opacity (used/expired) | 0.55 |
+| Stamp side width | 110 px (fixed) |
+| Stamp padding | `14px 8px` |
+| Stamp border-right | `1px dashed rgba(255,255,255,0.20)` active / `1px dashed var(--line)` else |
+| Notches | 16×16 circles at corners, bg #fff border line |
+| OFF/BAHT label | 9 px / 700 / 0.20em uppercase |
+| Value `.numerals` | 32 px / line-height 1 / tracking -0.02em |
+| Currency note `.serif-i` | 11 px italic |
+| Body padding | `14px 16px 10px` |
+| EXCLUSIVE OFFER kicker | `.kicker` (10/700/0.16em) |
+| Title | 14 / 700 / 1.3 |
+| Description | 11 italic ink-mute / 1.5, clamp 2 lines |
+| Min purchase | 10.5 ink-faint |
+| Bottom bar | bg `var(--black)`, text white, padding `10px 14px` |
+| EXP label | 8 px / `rgba(255,255,255,0.55)` / 0.18em uppercase |
+| Code | mono 12 / 700 gold-soft / 0.12em |
+| Apply button | padding `6px 12px`, pill, bg `#5E8E3E` (green), color #fff, font 11/700, ExternalLink 11 |
+| Copy button | padding `6px 12px`, pill, bg gold-soft (idle) / gold (copied), font 11/700, Copy/Check 11 |
+
+Themed stamp colors come from `lib/coupon-themes` (theme key `coupon.theme`, falls back to `'black'` when used/expired).
+
+### 5.2 Reward Card
+**Source:** `app/(user)/rewards/page.tsx` — `RewardCard` inline.
+
+| Element | Value |
+|---|---|
+| Container | `.card-product .tap`, flex, overflow hidden. Opacity 0.7 when `!can_redeem` |
+| Image side | width 110, bg `var(--bg-soft)`. Image cover; Gift fallback 28 / 1.4 ink-faint |
+| Body | flex 1, padding `12px 14px`, column gap 4 |
+| Featured eyebrow | 9 / 700 / 0.18em uppercase gold-deep ("⭐ Featured") |
+| Name | 14 / 700 / 1.3 single-line |
+| Description | 11 ink-mute / 1.4 clamp 2 |
+| Points | `.numerals` 18 / 800 gold-deep; "แต้ม" 11 ink-mute |
+| Stock warning | 10 / 600 red ("เหลือ X") |
+| Lock notice | 10 ink-faint with Lock 9 |
+
+### 5.3 Purchase Card
+**Source:** `app/(user)/purchases/page.tsx` (inline link).
+
+| Element | Value |
+|---|---|
+| Container | `.tap-down .purchase-card`, flex gap 12, padding 12, bg #fff, hair border, radius 14, shadow `0 1px 2px rgba(20,18,15,0.04)`, transition `box-shadow 0.18s, transform 0.18s`. Hover (CSS): `box-shadow: 0 8px 24px rgba(20,18,15,0.08), 0 1px 4px rgba(20,18,15,0.04); transform: translateY(-1px)` |
+| Image tile | 76×76 radius 12, overflow hidden, bg `linear-gradient(160deg, #FAFAF8 0%, #F0EFEB 100%)`, hair border |
+| Channel badge | absolute bottom 3 right 3, 18×18 circle, bg `rgba(255,255,255,0.92)`, blur 4 px, border `rgba(20,18,15,0.08)`, icon 9 / 2 |
+| Title | 13.5 / 700 / 1.35 clamp 2 |
+| Order SN | 10 ink-faint mono tracking 0.04em ellipsis |
+| Meta line | 11 ink-mute, dots `·` colored ink-ghost. Amount 11 ink 700 |
+| Awarded points pill | `2px 8px` radius 999, gradient `#FAF3DC → #EADBB1 → #A0782B`, color `#1A1815`, font 10 / 800 / 0.02em, shadow `0 1px 4px rgba(160,120,43,0.25), inset 0 1px 0 rgba(255,250,235,0.6)` |
+| Projected points pill | `2px 8px` radius 999, bg `#FFF1DD`, color `#8C5A14`, border `1px solid #F0D7A4`, font 9.5 / 700 |
+| Warranty bar | ShieldCheck 11 / 2.2 (green / amber-warning / faint), track 4 px radius 100 with 12% tone bg, fill gradient `#2E8B47 → #4FAA68` (ok) or `#C58726 → #E0A847` (≤30d). Days text 10 / 800 |
+| Status pill (custom for purchases) | padding `4px 10px` radius pill; per-status tone (see 1.1) |
+
+### 5.4 Promotion / Banner Cards
+**Source:** `components/user/PromoCard.tsx`.
+
+#### `PromoHero` (large)
+- Container: radius `--r-lg`, overflow hidden, bg `#000`, shadow `0 10px 32px rgba(20,18,15,0.10), 0 1px 3px rgba(20,18,15,0.06)`.
+- Media: natural aspect (`object-fit: contain`), or fallback gradient block aspect 16:10 with Sparkles 48/1.2.
+- Badge text: top 12 left 12, padding `5px 11px`, pill, gradient `#EADBB1 → #A0782B`, color `#1A1815`, font 9.5 / 800 / 0.16em uppercase, shadow `0 4px 14px rgba(160,120,43,0.45), inset 0 1px 0 rgba(255,250,235,0.6)`.
+- Discount label: top 12 right 12, `.label-glass`, padding `5px 11px`, pill, color #fff, font 10 / 700 / 0.06em, border `1px solid rgba(255,255,255,0.22)`.
+- Bottom fade: two layers — gradient darken (55%) + `backdrop-filter blur(10px)` masked to fade in.
+- Footer content: bottom/left/right 14, gap 10. Title 15/700/1.3 clamp 1 (with price) or 2, text-shadow `0 1px 4px rgba(0,0,0,0.45)`. Original 11.5 strike `rgba(255,255,255,0.55)`. Discounted `.display .tnum` 19/800 gold gradient clipped, `drop-shadow(0 1px 2px rgba(0,0,0,0.35))`.
+- Arrow chip: 30×30 circle gradient `#FAF3DC → #A0782B`, ArrowUpRight 15 / 2.4 `#1A1815`, shadow `0 3px 10px rgba(160,120,43,0.45), inset 0 1px 0 rgba(255,250,235,0.7)`.
+
+#### `PromoSmall` (carousel)
+- min/max width 220, aspect 4/5, scroll-snap start.
+- Media `object-fit: cover; aspect 4/5`.
+- Badge: top 10 left 10, padding `3px 9px`, font 9/800/0.14em, shadow `0 2px 8px rgba(160,120,43,0.35)`.
+- Bottom fade height 60%.
+- Title 12.5/700/1.3 clamp 2. Original 10 strike. Discounted `.display .tnum` 14/800 gold gradient.
+
+#### `PromoFeed` (vertical IG-style)
+- Same as PromoHero but with badge padding `5px 12px` and slightly larger arrow chip placement.
+
+### 5.5 Bottom Sheet Modal
+**Reference:** Reward detail address sheet (`app/(user)/rewards/[id]/page.tsx`).
+
+| Element | Value |
+|---|---|
+| Overlay | fixed inset 0, z 50, bg `rgba(14,14,14,0.40)`, `backdrop-filter: blur(4px)` |
+| Sheet | bg surface, width 100%, `border-top-left-radius: 20; border-top-right-radius: 20`, `max-height: 92vh`, overflowY auto, `padding-bottom: 24` |
+| Sticky header | padding `14px 20px`, hair border bottom, bg surface |
+| Drag handle | 36×4, bg ink-ghost, radius 2, margin `0 auto 12px` |
+| Body padding | 16 |
+
+### 5.6 Form Input (.field)
+Defined in globals.css:
+
+| Property | Value |
+|---|---|
+| width | 100% |
+| background | `var(--bg-soft)` (`#F5F4F1`) |
+| border | `1px solid var(--line)` |
+| border-radius | `var(--r-md)` (14 px) |
+| padding | `14px 16px` |
+| font-family | inherit |
+| font-size | 14 px |
+| color | `var(--ink)` |
+| transition | `all 0.15s ease` |
+| Placeholder color | `var(--ink-faint)` |
+| Focus | bg `#fff`, border `var(--ink)`, ring `0 0 0 4px rgba(14,14,14,0.06)` |
+| Disabled | opacity 0.55 |
+
+Variants seen:
+- Login & reset-password use **liquid-glass `.inp`** (see 4.1 / 4.16) — different surface.
+- Phone OTP uses bespoke cream input (border `#D7C5A6` bg `#FFFAF1` radius 14).
+- Reward sheet input is smaller (`10px 12px`, radius 8, font 13).
+
+### 5.7 Buttons
+
+Defined in globals.css:
+
+| Class | Style |
+|---|---|
+| `.btn` | inline-flex center, gap 8, padding `14px 22px`, radius pill, font inherit 14/700/-0.005em, transition `all 0.18s cubic-bezier(0.34,1.1,0.64,1)`, white-space nowrap |
+| `.btn-ink` | bg `var(--black)`, color #fff. Hover `translateY(-1px) + var(--shadow-2)`. Disabled 0.4 opacity |
+| `.btn-gold` | bg `var(--gold)`, color #fff. Hover bg `var(--gold-deep) + var(--shadow-gold)` |
+| `.btn-ghost` | transparent, color ink, border line. Hover bg-soft + ink border |
+
+Hard-coded sizes encountered:
+- Tab-row in Login: padding `10px 12px`, font 13.
+- Auth primary CTA `.btn-g`: width 100%, padding 14, font 15 / 800.
+- "ดูบัตรสมาชิก" (profile): padding `13px 18px`, font 14.
+- Phone OTP CTA: padding `14px 18px`, font 14 / 600.
+- Reward detail sticky CTA: padding `14px 16px`, font 14/700.
+- Header "ลงทะเบียน" on Purchases: padding `10px 16px`, font 12.
+- "ดูทั้งหมด" link: font 11/700 tracking 0.06em uppercase.
+
+### 5.8 Empty States
+Pattern: `.card-product` (radius `--r-lg`, hair border, overflow hidden) with centered content.
+
+| Variant | Padding | Icon disc | Icon size |
+|---|---|---|---|
+| Coupons | `52px 24px` | 64×64 gold-glow | 26 / 1.4 |
+| Rewards (no items) | `52px 24px` | 64×64 gold-glow | 26 / 1.4 |
+| Redemptions | `52px 24px` | 64×64 gold-glow | 26 / 1.4 |
+| Promotions | `60px 28px` | 72×72 `gold-glow → gold-pale` w/ shadow `0 8px 24px rgba(160,120,43,0.15)` | 28 / 1.4 |
+| Purchases | `56px 28px` | 72×72 radius 22 gold gradient w/ shadow `0 8px 24px rgba(160,120,43,0.30), inset 0 1px 0 rgba(255,250,235,0.7)` | 28 / 1.6 |
+| Home (no purchases) | `32px 24px` inside .card-product, with bottom-bar CTA | 60×60 gold-glow | 24 / 1.5 |
+| Notifications | `40px 24px` | 56×56 radius 16 gold gradient + shadow `0 4px 14px rgba(160,120,43,0.18)` | 22 / 1.7 |
+| Points (empty history) | `44 padding` | 56×56 radius 16 gold gradient + shadow | 22 / 1.7 |
+
+Headings: 18 px / 800 (with italic 400 second word, `.serif-i`).
+Body: 12.5–13 px ink-mute, line-height 1.6–1.7.
+CTA: `.btn .btn-ink` (typical padding `10px 22px`, font 13).
+
+### 5.9 Tier Badge / Avatar
+- **MemberCard** (loaded dynamically) is the central avatar — animated with `card-mount` class. See `card-wake` (0.95s) + `card-sway` (4.4s infinite).
+- **Tier coin** (used on `/points` ladder): 28×28 circle, gradient `#FAF3DC → #EADBB1 → #C9A063 → #A0782B`, border `1.5px #A0782B` (current); `1.5px rgba(160,120,43,0.28)` if not yet reached. Letter glyph 11 / 800. Current: `scale(1.18)`.
+- **Tier hero pill** (on Points / Home): `5px 12px` pill, `rgba(255,255,255,0.55)` with white border + blur 8, gold sparkle icon 11.
+- **Tier badge in Terms list**: 38×38 radius 10 with per-tier gradient + inset highlight + drop shadow `0 2px 6px rgba(20,18,15,0.10)`; Award icon 16 / 2.
+- **Profile avatar fallback** (initials): font 92 px / 800, color tier accent.
+- **Home topbar avatar**: 42×42 circle, gradient `#C9A85A → #A0782B`, initials 12 px / 800. Image variant uses 1px `rgba(212,185,120,0.4)` border.
+
+---
+
+## 6. Iconography
+
+- **Library:** `lucide-react` (only icon set in use; verified across all pages).
+- **Common sizes:**
+  - **9–11 px:** inside pills, sparkles, status dots
+  - **13–14 px:** inline button icons, link chevrons (ChevronRight 13)
+  - **15–17 px:** field icons (15) and toggle / form section icons (16/17)
+  - **17 px:** bottom-nav icons (`Navbar`)
+  - **18 px:** purchase-detail Warranty / Receipt icons
+  - **22 px:** large empty-state icons (Megaphone, Sparkles)
+  - **24–28 px:** empty-state Gift/Ticket/Package/Upload icons
+  - **42 px:** Success disc icon on registration done screen
+- **Stroke widths:** active = `2.2` / `2.4`; default = `1.5`–`1.9`; thin display variants = `1.2`–`1.5`.
+- **Icon containers:** rounded squares (radius 10–22) for tile chips; circles (24–96 px) for empty-state hero.
+
+---
+
+## 7. Animation / Motion
+
+All keyframes live in `globals.css`. The design team should preserve names so devs and design speak the same language.
+
+| Keyframe | Duration / easing | Where |
+|---|---|---|
+| `fade-up` | 0.45s cubic-bezier(0.34,1.1,0.64,1) | `.fade-up`, `.page-enter > *` (staggered 0.04s, 0.10s … 0.40s) |
+| `fade-in` | 0.5s ease | `.fade-in` |
+| `spin` | 0.8s linear infinite | `.spinner` |
+| `pulse-dot` | 1.6s ease-in-out infinite | Notification dot on Bell |
+| `card-wake` | 0.95s cubic-bezier(0.34,1.5,0.64,1) | MemberCard mount |
+| `card-sway` | 4.4s ease-in-out 1.0s infinite | MemberCard idle sway |
+| `pop-in` | 0.55s cubic-bezier(0.34,1.2,0.64,1) | Stat tiles below hero (`.pop-in`, `.pop-in-d1…d5` w/ delays 0.10 → 0.50s) |
+| `balance-shimmer` | 5s linear infinite | Big balance numeral on /points |
+| `tier-dot-pulse` | 2.2s ease-out infinite | (defined, used selectively) |
+| `marquee-x` | linear infinite, JS speed prop | Banner marquees |
+| `card-sweep` | 5s ease-in-out infinite | `.shimmer-sweep::before` decorative pass |
+| `glow-pulse` | 3.2s ease-in-out infinite | `.glow-breath` |
+| `float-soft` | (defined) | Optional float on tiles |
+| `sparkle-spin` | 2.4s ease-in-out infinite | `.sparkle` dots |
+| `shooting-star` | 6s linear infinite | hero decorative |
+| `twinkle` | 3s ease-in-out infinite | `.twinkle` |
+| `drift-up` | 7s ease-in-out infinite | `.drift` particles |
+| `pulse-ring` | 4.5s ease-out infinite | `.pulse-ring` halo |
+| `spark-flash` | 3.2s ease-in-out infinite | `.spark-cross` |
+| `aurora` | 12s ease-in-out infinite | `.aurora` blob |
+| `star-btn` / `hue-cycle` | infinite | `<StarButton />` perimeter trail |
+
+Tap interactions:
+- `.tap` → `transition: transform 0.1s ease; .tap:active → scale(0.97)`
+- `.tap-down` (used heavily) is defined elsewhere but conventionally behaves the same.
+- Navbar active pill: transition `all 0.32s cubic-bezier(0.34,1.1,0.64,1)`.
+- Toggle knob: `0.22s cubic-bezier(0.34,1.1,0.64,1)`.
+- Tier-coin scale + ladder progress: 0.3–0.6s ease.
+
+Page-enter:
+- Apply `.page-enter` to outer wrapper → children fade-up staggered (4–40 ms increments). Used on every user page.
+
+---
+
+## 8. Notes for the Design Team
+
+1. **Mobile-first only.** The product never widens past 480 px even on desktop. Auth screens cap at 430 px. Design canvases should be 390 × 844 (iPhone 14) or 414 × 896. The desktop view is a centered 480 px column on white.
+2. **Bottom safe area is mandatory.** Reserve `env(safe-area-inset-bottom)` under the navbar and on every bottom-anchored CTA. Total bottom inset = 96 px nav + safe area.
+3. **Glass effect is SVG-powered.** The Navbar and Login tabs use a `<filter id="glass-distortion">` with `feTurbulence + feDisplacementMap`. Cannot be reproduced with only CSS `backdrop-filter`. If recreating in Figma, document as a custom raster export or hand-tune Frost effect to match.
+4. **Thai typography first.** Default font stack always includes IBM Plex Sans Thai. Auth + Terms screens additionally load **Prompt** (a Thai-optimized display face). Headings on the rest of the app use Sora (Latin) — Thai still falls back to IBM Plex Sans Thai. Body line-heights are 1.4–1.7 to give Thai diacritics room.
+5. **Gold gradient is canonical.** Three established gold gradients you should treat as immutable brand assets:
+   - Coin/nav active: `linear-gradient(180deg, #FAF3DC 0%, #EADBB1 35%, #C9A063 75%, #A0782B 100%)`
+   - 135deg variant: `linear-gradient(135deg, #FAF3DC, #EADBB1, #A0782B)`
+   - Balance shimmer: `linear-gradient(120deg, #FAF3DC 0%, #EADBB1 25%, #C9A063 50%, #EADBB1 75%, #FAF3DC 100%)` with 200% bg-size and 5s linear shift.
+6. **Tier color logic.** Always treat tier as one of three (`SILVER / GOLD / PLATINUM`). Legacy aliases (`PLUS / PRO / ULTRA / MASTER`) still exist in CSS variables for back-compat, do NOT introduce new ones.
+7. **Two label styles for headings.** Each section H1 typically pairs a 800-weight Thai word with a 400-weight italic (`.serif-i`) qualifier — e.g. "**คูปอง** *ของฉัน*" or "**ยังไม่มี** *สินค้า*". Preserve this rhythm.
+8. **Card kit.** Almost all surfaces fit one of: `.card` (white surface + hair border + shadow-1), `.surface` (the same minus shadow), `.surface-soft` (cream tile, no border), `.card-product` (overflow hidden — meant to host imagery and a bottom-bar). Use these as the design system base.
+9. **Per-status palettes overlap.** Tailwind-style soft colors (`green-soft`, `red-soft` etc.) live in CSS variables. Purchase + Points pages use a slightly richer in-page palette (e.g. `#1F6B33 / #E8F6EC / #B8DFC2`) for finer contrast on the new white sheets. Keep both.
+10. **Lucide icons are the only icon set.** Don't introduce a different family — strokes and weights have been tuned (most icons are `1.7`/`1.9` stroke for neutral elements, `2.2`/`2.4` for active or status icons).
+11. **Always-on animations are intentional.** MemberCard sways, balance shimmers, top-rim gold catches light, marquee never stops. They establish the "luxe" tone — don't propose static replacements without flagging.
+12. **PWA theme color is amber `#f59e0b`** (from `app/layout.tsx` viewport). This is the only place that color appears and is purely for browser chrome — treat it as a separate "splash" color, not part of the design system.
+
+---
+
+_End of specification. For any number not captured here, search the relevant page file under `app/(user)/`. All inline `style={{ … }}` props are the source of truth; CSS classes resolve to the tokens listed in §1._

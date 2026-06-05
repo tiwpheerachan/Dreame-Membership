@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 
 async function requireAdmin() {
   const supabase = createClient()
@@ -22,6 +23,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
   const { error } = await auth.service.from('announcements').update(updates).eq('id', params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  revalidatePath('/admin/announcements')
   return NextResponse.json({ success: true })
 }
 
@@ -30,5 +32,6 @@ export async function DELETE(_: Request, { params }: { params: { id: string } })
   if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
   const { error } = await auth.service.from('announcements').delete().eq('id', params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  revalidatePath('/admin/announcements')
   return NextResponse.json({ success: true })
 }

@@ -10,6 +10,8 @@ import {
 import { channelLabel, formatDate, formatDateTime } from '@/lib/utils'
 import type { BQOrderData } from '@/types'
 import Drawer from './Drawer'
+import PlatformLogo from './PlatformLogo'
+import ProductThumb from './ProductThumb'
 
 export type OrderRow = {
   id: string
@@ -126,56 +128,68 @@ export default function OrdersTable({ initialItems, totalCount, statusCounts, pa
   ]
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 1400 }}>
-      <div style={{ marginBottom: 18, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-        <div>
-          <h1 className="admin-h1">สินค้าทั้งหมด</h1>
-          <p className="admin-sub">
-            {totalCount.toLocaleString()} รายการ
-            {lastUpdated && (
-              <>
-                {' · '}
-                <span suppressHydrationWarning style={{ color: 'var(--ink-faint)', fontSize: 11 }}>
-                  อัปเดตล่าสุด {formatTime(lastUpdated)}
-                </span>
-              </>
-            )}
-          </p>
+    <div className="flex flex-col h-full" style={{ background: 'var(--admin-bg)' }}>
+
+      {/* Sticky header */}
+      <header className="border-b flex-shrink-0"
+        style={{ background: 'var(--admin-card)', borderColor: 'var(--admin-border)' }}>
+        <div className="px-6 lg:px-8 py-5 flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <p style={{ color: 'var(--admin-gold)', fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 500, marginBottom: 4 }}>
+              Operations
+            </p>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--admin-ink)' }}>สินค้าทั้งหมด</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--admin-ink-mute)' }}>
+              {totalCount.toLocaleString()} รายการ
+              {lastUpdated && (
+                <>
+                  {' · '}
+                  <span suppressHydrationWarning style={{ color: 'var(--admin-ink-faint)', fontSize: 11 }}>
+                    อัปเดตล่าสุด {formatTime(lastUpdated)}
+                  </span>
+                </>
+              )}
+            </p>
+          </div>
+          <button onClick={manualRefresh} disabled={refreshing}
+            className="admin-btn admin-btn-ghost flex-shrink-0">
+            {refreshing ? <Loader2 size={12} className="spinner" /> : <RefreshCw size={12} />}
+            รีเฟรช
+          </button>
         </div>
-        <button
-          onClick={manualRefresh}
-          disabled={refreshing}
-          className="admin-btn admin-btn-ghost"
-          style={{ padding: '6px 12px', fontSize: 12, gap: 6 }}
-        >
-          {refreshing ? <Loader2 size={12} className="spinner" /> : <RefreshCw size={12} />}
-          รีเฟรช
-        </button>
+      </header>
+
+      {/* Sticky filters/status */}
+      <div className="border-b flex-shrink-0"
+        style={{ background: 'var(--admin-card)', borderColor: 'var(--admin-border)' }}>
+        <div className="px-6 lg:px-8 py-3 space-y-2.5">
+          <div className="flex gap-1.5 flex-wrap">
+            {statusChips.map(c => {
+              const active = currentStatus === c.key
+              return (
+                <button
+                  key={c.key || 'all'}
+                  onClick={() => setQS({ status: c.key || null })}
+                  className={`admin-btn ${active ? 'admin-btn-ink' : 'admin-btn-ghost'}`}
+                  style={{ padding: '6px 12px', fontSize: 12, gap: 6 }}
+                >
+                  {c.label}
+                  <span style={{
+                    fontSize: 10.5, padding: '1px 7px', borderRadius: 100,
+                    background: active ? 'rgba(232,197,140,0.20)' : 'var(--admin-bg)',
+                    color: active ? '#E8C58C' : 'var(--admin-ink-mute)',
+                    fontWeight: 700,
+                  }}>{c.count}</span>
+                </button>
+              )
+            })}
+          </div>
+          <FilterForm initialQS={searchParams.toString()} />
+        </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-        {statusChips.map(c => {
-          const active = currentStatus === c.key
-          return (
-            <button
-              key={c.key || 'all'}
-              onClick={() => setQS({ status: c.key || null })}
-              className={`admin-btn ${active ? 'admin-btn-ink' : 'admin-btn-ghost'}`}
-              style={{ padding: '6px 12px', fontSize: 12, gap: 6 }}
-            >
-              {c.label}
-              <span style={{
-                fontSize: 10.5, padding: '1px 7px', borderRadius: 100,
-                background: active ? 'rgba(255,255,255,0.18)' : 'var(--bg-soft)',
-                color: active ? '#fff' : 'var(--ink-mute)',
-                fontWeight: 700,
-              }}>{c.count}</span>
-            </button>
-          )
-        })}
-      </div>
-
-      <FilterForm initialQS={searchParams.toString()} />
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto px-6 lg:px-8 py-5">
 
       <div className="admin-card" style={{ overflow: 'hidden' }}>
         <table className="admin-table">
@@ -227,6 +241,7 @@ export default function OrdersTable({ initialItems, totalCount, statusCounts, pa
             ))}
         </div>
       )}
+      </div>
 
       {/* ── Detail drawer ── */}
       <Drawer
@@ -254,7 +269,6 @@ export default function OrdersTable({ initialItems, totalCount, statusCounts, pa
 
 function Row({ row, active, onSelect }: { row: OrderRow; active: boolean; onSelect: () => void }) {
   const u = row.users
-  const thumbUrl = row.bq_raw_data?.items?.[0]?.image_url || null
   return (
     <tr
       onClick={onSelect}
@@ -269,20 +283,10 @@ function Row({ row, active, onSelect }: { row: OrderRow; active: boolean; onSele
         <p className="num muted" style={{ margin: 0, fontSize: 10.5 }}>{u?.member_id || '-'}</p>
       </td>
       <td>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {thumbUrl && (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={thumbUrl} alt={row.model_name || 'product'}
-              style={{
-                width: 32, height: 32, flexShrink: 0,
-                objectFit: 'cover',
-                borderRadius: 'var(--r-sm)',
-                background: 'var(--bg-soft)',
-                border: '1px solid var(--hair)',
-              }} />
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ProductThumb bqRaw={row.bq_raw_data as Record<string, unknown> | null} channel={row.channel} size={40} />
           <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 12.5, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <p style={{ margin: 0, fontSize: 12.5, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {row.model_name || '-'}
             </p>
             {row.serial_number && (
@@ -291,7 +295,12 @@ function Row({ row, active, onSelect }: { row: OrderRow; active: boolean; onSele
           </div>
         </div>
       </td>
-      <td className="muted" style={{ fontSize: 11 }}>{channelLabel(row.channel)}</td>
+      <td className="muted" style={{ fontSize: 11 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <PlatformLogo channel={row.channel} size={16} />
+          <span>{channelLabel(row.channel).replace(/^[^\s]+\s/, '')}</span>
+        </div>
+      </td>
       <td>
         <span className={STATUS_PILL[row.status] || 'admin-pill'}>
           {STATUS_LABEL[row.status] || row.status}

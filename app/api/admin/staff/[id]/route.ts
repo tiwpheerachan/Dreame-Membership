@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 
 async function requireSuperAdmin() {
   const supabase = createClient()
@@ -23,6 +24,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const { error } = await auth.service.from('admin_staff').update(updates).eq('id', params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  revalidatePath('/admin/staff')
   return NextResponse.json({ success: true })
 }
 
@@ -33,5 +35,6 @@ export async function DELETE(_: Request, { params }: { params: { id: string } })
   // Soft-disable instead of delete (preserve audit_log FKs)
   const { error } = await auth.service.from('admin_staff').update({ is_active: false }).eq('id', params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  revalidatePath('/admin/staff')
   return NextResponse.json({ success: true })
 }

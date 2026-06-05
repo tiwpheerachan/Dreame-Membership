@@ -89,18 +89,27 @@ export default function AdminStaffPage() {
   }
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 1100 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 18 }}>
-        <div>
-          <h1 className="admin-h1">พนักงาน</h1>
-          <p className="admin-sub">{list.length} คน · เฉพาะ SUPER_ADMIN จัดการได้</p>
+    <div className="flex flex-col h-full" style={{ background: 'var(--admin-bg)' }}>
+      <header className="border-b flex-shrink-0"
+        style={{ background: 'var(--admin-card)', borderColor: 'var(--admin-border)' }}>
+        <div className="px-6 lg:px-8 py-5 flex items-start justify-between gap-4">
+          <div>
+            <p style={{ color: 'var(--admin-gold)', fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 500, marginBottom: 4 }}>
+              Settings
+            </p>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--admin-ink)' }}>พนักงาน</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--admin-ink-mute)' }}>
+              {list.length} คน · เฉพาะ SUPER_ADMIN จัดการได้
+            </p>
+          </div>
+          <button onClick={openCreate} className="admin-btn admin-btn-ink flex-shrink-0">
+            <Plus size={14} /> เพิ่มพนักงาน
+          </button>
         </div>
-        <button onClick={openCreate} className="admin-btn admin-btn-ink">
-          <Plus size={14} /> เพิ่มพนักงาน
-        </button>
-      </div>
+      </header>
 
-      <div className="admin-card" style={{ overflow: 'hidden' }}>
+      <div className="flex-1 overflow-y-auto px-6 lg:px-8 py-5">
+      <div className="admin-card overflow-hidden">
         <table className="admin-table">
           <thead>
             <tr>
@@ -218,6 +227,7 @@ export default function AdminStaffPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

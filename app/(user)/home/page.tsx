@@ -8,6 +8,7 @@ import {
 import type { User, PurchaseRegistration, Promotion, UserTier, BQOrderData } from '@/types'
 import dynamic from 'next/dynamic'
 const MemberCard = dynamic(() => import('@/components/user/MemberCard'), { ssr: false })
+const TrackOrderBanner = dynamic(() => import('@/components/user/TrackOrderBanner'), { ssr: false })
 // Warp uses WebGL — must mount client-side only or the build chokes on `window`.
 const WarpShader = dynamic(() => import('@/components/ui/warp-shader'), { ssr: false })
 // 'use client' already makes this a Client Component — direct import is the
@@ -227,6 +228,11 @@ export default async function HomePage() {
             <MemberCard user={user as User} />
           </div>
         </div>
+      </div>
+
+      {/* Active order tracking banner — เด้งอัตโนมัติเมื่อมี order กำลังส่ง */}
+      <div style={{ paddingTop: 16 }}>
+        <TrackOrderBanner variant="banner" />
       </div>
 
       {/* ============================================================

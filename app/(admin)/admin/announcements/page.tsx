@@ -116,14 +116,24 @@ export default function AnnouncementsPage() {
   }
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 1100 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 18 }}>
-        <div>
-          <h1 className="admin-h1"><Bell size={18} style={{ verticalAlign: 'baseline' }} /> ประกาศ</h1>
-          <p className="admin-sub">{list.length} announcements</p>
+    <div className="flex flex-col h-full" style={{ background: 'var(--admin-bg)' }}>
+      <header className="border-b flex-shrink-0"
+        style={{ background: 'var(--admin-card)', borderColor: 'var(--admin-border)' }}>
+        <div className="px-6 lg:px-8 py-5 flex items-start justify-between gap-4">
+          <div>
+            <p style={{ color: 'var(--admin-gold)', fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 500, marginBottom: 4 }}>
+              Marketing
+            </p>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--admin-ink)' }}>ประกาศ</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--admin-ink-mute)' }}>{list.length} announcements</p>
+          </div>
+          <button onClick={openCreate} className="admin-btn admin-btn-ink flex-shrink-0">
+            <Plus size={14} /> สร้างประกาศ
+          </button>
         </div>
-        <button onClick={openCreate} className="admin-btn admin-btn-ink"><Plus size={14} /> สร้างประกาศ</button>
-      </div>
+      </header>
+
+      <div className="flex-1 overflow-y-auto px-6 lg:px-8 py-5">
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
         {loading ? <p style={{ color: 'var(--ink-mute)', fontSize: 13 }}>กำลังโหลด...</p>
@@ -235,6 +245,7 @@ export default function AnnouncementsPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

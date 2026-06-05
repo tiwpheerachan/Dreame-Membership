@@ -14,6 +14,7 @@ import type { PurchaseRegistration, BQOrderData, BQOrderItem } from '@/types'
 import { formatDate, warrantyDaysLeft } from '@/lib/utils'
 import { calculatePoints, normalizeTier } from '@/lib/points'
 import { EARN_DIVISOR_BY_CHANNEL, TIER_MULTIPLIER } from '@/types'
+import InlineShippingStatus from '@/components/user/InlineShippingStatus'
 
 const CHANNEL: Record<string, { Icon: typeof ShoppingBag; label: string }> = {
   SHOPEE:  { Icon: ShoppingBag, label: 'Shopee'   },
@@ -180,6 +181,12 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
             {p.serial_number && <Row label="Serial" value={p.serial_number} mono />}
             <Row label="ลงทะเบียนเมื่อ" value={formatDate(p.created_at)} />
           </div>
+        </div>
+
+        {/* ── Shipping status (BQ realtime) ── */}
+        <div className="surface" style={{ padding: 18 }}>
+          <p className="kicker" style={{ margin: '0 0 12px' }}>การจัดส่ง</p>
+          <InlineShippingStatus orderSn={p.order_sn} />
         </div>
 
         {/* ── BQ items (if available) ── */}

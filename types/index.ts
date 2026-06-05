@@ -92,6 +92,21 @@ export interface Coupon {
   used_at: string | null
   theme?: string | null
   created_at: string
+  // Shopify Discount API linkage (optional — set when coupon is backed by Shopify)
+  shopify_shop_id?: string | null
+  shopify_price_rule_id?: number | null
+  shopify_code_id?: number | null
+  apply_url?: string | null
+  shopify_synced_at?: string | null
+  auto_issue_key?: string | null
+  status?: 'active' | 'paused' | 'archived' | 'draft'
+  image_url?: string | null   // โชว์รูปสินค้า (สำหรับ reward coupons)
+  reward_meta?: {
+    redemption_id: string
+    redeem_type: 'POINTS_CASH' | 'VOUCHER' | 'PREMIUM' | string
+    cash_top_up_thb: number | null
+    shopify_product_url: string | null
+  } | null
 }
 
 export interface AdminStaff {

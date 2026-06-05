@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Clock, Package, Tag, Megaphone,
   History, LogOut, UserCog, BarChart3, Search, Heart, Activity,
-  CalendarHeart, Bell, AlertTriangle,
+  CalendarHeart, Bell, AlertTriangle, Gift, Truck, TrendingUp,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -23,8 +23,11 @@ const NAV: Array<{ href: string; icon: typeof Users; label: string; group?: stri
   { href: '/admin/promotions',         icon: Megaphone,       label: 'โปรโมชั่น' },
   { href: '/admin/announcements',      icon: Bell,            label: 'ประกาศ' },
   { href: '/admin/campaigns',          icon: CalendarHeart,   label: 'แคมเปญ' },
+  { href: '/admin/insights/tier-up',   icon: TrendingUp,      label: 'Tier-up forecast' },
 
-  { href: '/admin/points/expiring',    icon: AlertTriangle,   label: 'แต้มจะหมดอายุ',     group: 'LOYALTY' },
+  { href: '/admin/rewards',            icon: Gift,            label: 'ของรางวัล',        group: 'LOYALTY' },
+  { href: '/admin/redemptions',        icon: Truck,           label: 'การจัดส่ง' },
+  { href: '/admin/points/expiring',    icon: AlertTriangle,   label: 'แต้มจะหมดอายุ' },
 
   { href: '/admin/staff',              icon: UserCog,         label: 'พนักงาน',         group: 'SETTINGS' },
   { href: '/admin/audit',              icon: History,         label: 'Audit log' },
@@ -51,38 +54,42 @@ export default function AdminSidebar({ staff }: { staff: Staff }) {
   return (
     <aside className="admin-side">
       {/* Logo */}
-      <div style={{ padding: 16, borderBottom: '1px solid var(--hair)' }}>
+      <div style={{ padding: 18, borderBottom: '1px solid var(--admin-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
-            width: 32, height: 32, borderRadius: 9,
-            background: 'var(--black)',
+            width: 38, height: 38, borderRadius: 11,
+            background: '#1F1F1F',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--gold-soft)', fontWeight: 800, fontSize: 14, letterSpacing: '-0.02em',
-          }}>D</div>
-          <div>
-            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: 'var(--ink)' }}>
+            padding: 7, flexShrink: 0,
+          }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/dreame-logo.png" alt="Dreame"
+              style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: 'var(--admin-ink)', letterSpacing: '-0.01em' }}>
               Dreame Admin
             </p>
-            <p style={{ margin: 0, fontSize: 10, color: 'var(--ink-mute)', fontWeight: 600, letterSpacing: '0.06em' }}>
+            <p style={{ margin: 0, fontSize: 9.5, color: 'var(--admin-ink-mute)', fontWeight: 600, letterSpacing: '0.10em', textTransform: 'uppercase' }}>
               {staff.role.replace('_', ' ')}
             </p>
           </div>
         </div>
         {/* Search trigger */}
         <button onClick={openCmdK} style={{
-          marginTop: 12, width: '100%',
-          background: 'var(--bg-soft)', border: '1px solid var(--hair)',
-          borderRadius: 'var(--r-md)', padding: '8px 10px',
+          marginTop: 14, width: '100%',
+          background: 'var(--admin-bg)', border: '1px solid var(--admin-border)',
+          borderRadius: 11, padding: '9px 11px',
           display: 'flex', alignItems: 'center', gap: 8,
-          fontSize: 12, color: 'var(--ink-mute)', fontFamily: 'inherit',
+          fontSize: 12, color: 'var(--admin-ink-mute)', fontFamily: 'inherit',
           cursor: 'pointer',
         }}>
           <Search size={13} />
-          <span>ค้นหา...</span>
+          <span>ค้นหา…</span>
           <kbd style={{
             marginLeft: 'auto', fontSize: 10, padding: '2px 6px',
-            background: '#fff', border: '1px solid var(--hair)',
-            borderRadius: 4, fontFamily: 'var(--font-mono)', color: 'var(--ink-mute)',
+            background: '#fff', border: '1px solid var(--admin-border)',
+            borderRadius: 4, fontFamily: 'var(--font-mono)', color: 'var(--admin-ink-mute)',
           }}>⌘K</kbd>
         </button>
       </div>
@@ -113,18 +120,37 @@ export default function AdminSidebar({ staff }: { staff: Staff }) {
         })}
       </nav>
 
-      {/* Footer: staff + logout */}
-      <div style={{ padding: 12, borderTop: '1px solid var(--hair)' }}>
-        <div style={{ padding: '8px 12px 4px' }}>
-          <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {staff.name}
-          </p>
+      {/* Footer: staff card + logout */}
+      <div style={{ padding: 12, borderTop: '1px solid var(--admin-border)' }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 12px',
+          background: 'var(--admin-bg)',
+          borderRadius: 11,
+          marginBottom: 6,
+        }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 9,
+            background: 'linear-gradient(135deg, #C99B3E, #7A5A1F)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontSize: 12, fontWeight: 700, flexShrink: 0,
+          }}>
+            {(staff.name || '?').split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase()}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--admin-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {staff.name}
+            </p>
+            <p style={{ margin: 0, fontSize: 9.5, color: 'var(--admin-ink-mute)', textTransform: 'uppercase', letterSpacing: '0.10em', fontWeight: 600 }}>
+              {staff.role.replace('_', ' ')}
+            </p>
+          </div>
         </div>
         <button onClick={logout} style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-          padding: '8px 14px', borderRadius: 'var(--r-md)',
+          padding: '8px 14px', borderRadius: 11,
           background: 'transparent', border: 'none',
-          color: 'var(--red)', fontSize: 12.5, fontWeight: 600,
+          color: '#B14242', fontSize: 12.5, fontWeight: 600,
           cursor: 'pointer', fontFamily: 'inherit',
         }}>
           <LogOut size={13} /> ออกจากระบบ

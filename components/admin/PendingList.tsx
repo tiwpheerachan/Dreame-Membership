@@ -8,6 +8,8 @@ import {
   Package, ChevronRight,
 } from 'lucide-react'
 import { channelLabel, formatDate, formatDateTime } from '@/lib/utils'
+import PlatformLogo from '@/components/admin/PlatformLogo'
+import ProductThumb from '@/components/admin/ProductThumb'
 import Drawer from './Drawer'
 
 export type PendingPurchase = {
@@ -25,6 +27,7 @@ export type PendingPurchase = {
   purchase_date?: string | null
   receipt_image_url: string | null
   admin_note?: string | null
+  bq_raw_data?: Record<string, unknown> | null
   users: {
     full_name: string | null
     phone: string | null
@@ -115,38 +118,41 @@ export default function PendingList({ initialItems }: { initialItems: PendingPur
   const selected = useMemo(() => items.find(i => i.id === selectedId) || null, [items, selectedId])
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 1400 }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--admin-bg)' }}>
+
       {/* Header */}
-      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <h1 className="admin-h1">รอตรวจสอบ</h1>
-          <p className="admin-sub">
-            {items.length > 0 ? `${items.length} รายการรอดำเนินการ` : 'ไม่มีรายการรอดำเนินการ'}
-            {lastUpdated && (
-              <>
-                {' · '}
-                <span suppressHydrationWarning style={{ color: 'var(--ink-faint)', fontSize: 11 }}>
-                  อัปเดตล่าสุด {formatTime(lastUpdated)}
-                </span>
-              </>
-            )}
-          </p>
+      <header className="border-b flex-shrink-0"
+        style={{ background: 'var(--admin-card)', borderColor: 'var(--admin-border)' }}>
+        <div className="px-6 lg:px-8 py-5 flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <p style={{ color: 'var(--admin-gold)', fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 500, marginBottom: 4 }}>
+              Operations
+            </p>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--admin-ink)' }}>รอตรวจสอบ</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--admin-ink-mute)' }}>
+              {items.length > 0 ? `${items.length} รายการรอดำเนินการ` : 'ไม่มีรายการรอดำเนินการ'}
+              {lastUpdated && (
+                <>
+                  {' · '}
+                  <span suppressHydrationWarning style={{ color: 'var(--admin-ink-faint)', fontSize: 11 }}>
+                    อัปเดตล่าสุด {formatTime(lastUpdated)}
+                  </span>
+                </>
+              )}
+            </p>
+          </div>
+          <button onClick={manualRefresh} disabled={refreshing}
+            className="admin-btn admin-btn-ghost flex-shrink-0">
+            {refreshing ? <Loader2 size={12} className="spinner" /> : <RefreshCw size={12} />}
+            รีเฟรช
+          </button>
         </div>
-        <button
-          onClick={manualRefresh}
-          disabled={refreshing}
-          className="admin-btn admin-btn-ghost"
-          style={{ padding: '6px 12px', fontSize: 12, gap: 6 }}
-        >
-          {refreshing ? <Loader2 size={12} className="spinner" /> : <RefreshCw size={12} />}
-          รีเฟรช
-        </button>
-      </div>
+      </header>
 
-      <BQLookup />
-
-      {/* Filter bar */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+      {/* Filters strip */}
+      <div className="border-b flex-shrink-0"
+        style={{ background: 'var(--admin-card)', borderColor: 'var(--admin-border)' }}>
+        <div className="px-6 lg:px-8 py-3 flex gap-2 items-center flex-wrap">
         {/* Channel chips */}
         <div style={{ display: 'flex', gap: 4 }}>
           {([
@@ -174,12 +180,17 @@ export default function PendingList({ initialItems }: { initialItems: PendingPur
         </div>
         {/* Search */}
         <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 200 }}>
-          <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-faint)' }} />
+          <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--admin-ink-faint)' }} />
           <input className="admin-field" placeholder="ค้นหา order_sn, ชื่อ, member_id..."
             value={q} onChange={e => setQ(e.target.value)}
             style={{ paddingLeft: 34, fontSize: 12, width: '100%' }} />
         </div>
+        </div>
       </div>
+
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto px-6 lg:px-8 py-5">
+      <BQLookup />
 
       {/* List */}
       {filtered.length === 0 ? (
@@ -244,6 +255,7 @@ export default function PendingList({ initialItems }: { initialItems: PendingPur
           />
         )}
       </Drawer>
+      </div>
     </div>
   )
 }
@@ -335,16 +347,21 @@ function PendingRow({
         </p>
       </td>
       <td>
-        <p style={{ margin: 0, fontSize: 12, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {item.model_name || '-'}
-        </p>
-        {item.serial_number && (
-          <p className="muted" style={{ margin: 0, fontSize: 10 }}>SN: {item.serial_number}</p>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ProductThumb bqRaw={item.bq_raw_data} channel={item.channel} size={40} />
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {item.model_name || '-'}
+            </p>
+            {item.serial_number && (
+              <p className="muted" style={{ margin: 0, fontSize: 10 }}>SN: {item.serial_number}</p>
+            )}
+          </div>
+        </div>
       </td>
       <td className="muted" style={{ fontSize: 11 }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <ChannelIcon size={11} /> {channelLabel(item.channel)}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <PlatformLogo channel={item.channel} size={16} /> {channelLabel(item.channel).replace(/^[^\s]+\s/, '')}
         </div>
       </td>
       <td className="num" style={{ fontWeight: 700, fontSize: 12 }}>

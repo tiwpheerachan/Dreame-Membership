@@ -9,13 +9,16 @@ export type AuditAction =
   | 'PURCHASE_BQ_RECHECKED'
   | 'BQ_LOOKUP'
   | 'POINTS_ADJUSTED'
+  | 'TIER_OVERRIDDEN'
   | 'COUPON_CREATED'
+  | 'COUPON_SHOPIFY_BATCH_CREATED'
+  | 'COUPON_SHOPIFY_REDEEMED'
   | 'MEMBER_VIEWED'
 
 interface LogParams {
   staffId:     string
   action:      AuditAction
-  targetType:  'purchase' | 'user' | 'points' | 'coupon'
+  targetType:  'purchase' | 'user' | 'points' | 'coupon' | 'reward' | 'redemption'
   targetId?:   string  // UUID; omit for actions that target a non-UUID identifier (e.g. an order_sn)
   userId?:     string
   detail?:     Record<string, unknown>

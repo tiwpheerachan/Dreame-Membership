@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { adjustPoints } from '@/lib/points'
 import { logAdminAction } from '@/lib/audit'
 
@@ -38,6 +39,12 @@ export async function POST(req: Request) {
       description,
     },
   })
+
+  // Invalidate dashboard + member views so they reflect new points/tier
+  revalidatePath('/admin')
+  revalidatePath('/admin/members')
+  revalidatePath(`/admin/members/${user_id}`)
+  revalidatePath('/admin/points/expiring')
 
   return NextResponse.json({ success: true, staff_name: staff.name })
 }

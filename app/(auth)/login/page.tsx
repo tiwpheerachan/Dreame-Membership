@@ -681,15 +681,29 @@ function LoginForm() {
               )}
 
               {mode === 'login' && (
-                <button className="btn-g" onClick={handleLogin} disabled={!canLogin}>
-                  {loading ? <><Spin /> กำลังเข้าสู่ระบบ...</> : <><LogIn size={15} /> เข้าสู่ระบบ</>}
-                </button>
+                <>
+                  <button className="btn-g" onClick={handleLogin} disabled={!canLogin}>
+                    {loading ? <><Spin /> กำลังเข้าสู่ระบบ...</> : <><LogIn size={15} /> เข้าสู่ระบบ</>}
+                  </button>
+                  <a href="/login/phone" className="btn-plain"
+                    style={{ fontSize: 12.5, color: '#6b7280', textAlign: 'center',
+                      padding: '4px 0', textDecoration: 'none' }}>
+                    หรือ <strong style={{ color: '#0d0d0d' }}>เข้าสู่ระบบด้วยเบอร์โทร</strong>
+                  </a>
+                </>
               )}
 
               {mode === 'register' && (
-                <button className="btn-g" onClick={handleRegister} disabled={!canReg}>
-                  {loading ? <><Spin /> กำลังสมัคร...</> : <><UserPlus size={15} /> สมัครสมาชิก</>}
-                </button>
+                <>
+                  <button className="btn-g" onClick={handleRegister} disabled={!canReg}>
+                    {loading ? <><Spin /> กำลังสมัคร...</> : <><UserPlus size={15} /> สมัครสมาชิก</>}
+                  </button>
+                  <a href="/login/phone?intent=signup" className="btn-plain"
+                    style={{ fontSize: 12.5, color: '#6b7280', textAlign: 'center',
+                      padding: '4px 0', textDecoration: 'none' }}>
+                    หรือ <strong style={{ color: '#0d0d0d' }}>สมัครด้วยเบอร์โทร</strong>
+                  </a>
+                </>
               )}
 
               {mode === 'forgot' && (

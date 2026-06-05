@@ -3,10 +3,12 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   Tag, Plus, X, Search, ChevronRight, Loader2, Trash2,
   CheckCircle, Clock, Users, AlertTriangle, Ticket,
-  RotateCcw, Edit3, CalendarPlus, Save,
+  RotateCcw, Edit3, CalendarPlus, Save, Sparkles,
 } from 'lucide-react'
 import { formatDate, formatDateTime } from '@/lib/utils'
+import Link from 'next/link'
 import Drawer from '@/components/admin/Drawer'
+import ShopifyBatchModal from '@/components/admin/ShopifyBatchModal'
 
 // ────────────────────────────────────────────────────────────────
 // Types
@@ -25,11 +27,15 @@ interface CouponRow {
   valid_until: string
   used_at: string | null
   theme: string | null
+  status?: 'active' | 'paused' | 'archived' | 'draft'
+  auto_issue_key?: string | null
+  shopify_price_rule_id?: number | null
+  shopify_shop_id?: string | null
   created_at: string
   users: { full_name: string | null; member_id: string | null } | null
 }
 
-type CampaignStatus = 'active' | 'fully_used' | 'expired'
+type CampaignStatus = 'active' | 'fully_used' | 'expired' | 'paused' | 'archived'
 
 interface Campaign {
   key: string
@@ -45,11 +51,12 @@ interface Campaign {
   used: number
   available: number
   expired: number
+  paused_count: number   // จำนวน row ที่ status = 'paused'
   status: CampaignStatus
   redemptionPct: number
 }
 
-type StatusFilter = 'all' | 'active' | 'fully_used' | 'expired'
+type StatusFilter = 'all' | 'active' | 'fully_used' | 'expired' | 'paused'
 
 // ────────────────────────────────────────────────────────────────
 // Page
@@ -59,6 +66,7 @@ export default function AdminCouponsPage() {
   const [coupons, setCoupons] = useState<CouponRow[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [showShopify, setShowShopify] = useState(false)
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
@@ -82,6 +90,42 @@ export default function AdminCouponsPage() {
   }
   useEffect(() => { loadCoupons() }, [])
 
+  async function toggleCampaignStatus(camp: Campaign, status: 'active' | 'paused') {
+    // ระบุกลุ่มจาก auto_issue_key ถ้ามี (ทุก code ใน group share key เดียวกัน)
+    // ไม่งั้น fallback ใช้ title+valid_until+discount → match กับ key
+    const first = camp.coupons[0]
+    const payload: Record<string, unknown> = {
+      status,
+      reason: status === 'paused' ? 'admin manual pause' : 'admin resume',
+    }
+    if (first?.auto_issue_key) {
+      payload.auto_issue_key = first.auto_issue_key
+    } else if (first?.shopify_price_rule_id) {
+      payload.shopify_price_rule_id = first.shopify_price_rule_id
+      if (first.shopify_shop_id) payload.shop_id = first.shopify_shop_id
+    } else {
+      payload.title = camp.title
+      payload.valid_until = camp.valid_until
+      payload.discount_value = camp.discount_value
+      payload.discount_type = camp.discount_type
+    }
+
+    const r = await fetch('/api/admin/coupons/campaigns/status', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const d = await r.json()
+    if (!r.ok) {
+      setMsg(d.error || 'อัปเดตไม่สำเร็จ')
+      setTimeout(() => setMsg(''), 4000)
+      return
+    }
+    setMsg(`${status === 'paused' ? 'ปิดใช้งาน' : 'เปิดใช้งาน'} ${d.affected} โค้ดแล้ว`)
+    setTimeout(() => setMsg(''), 3000)
+    await loadCoupons()
+  }
+
   // ── Group coupons by campaign key ──
   const campaigns: Campaign[] = useMemo(() => {
     const map = new Map<string, Campaign>()
@@ -101,7 +145,7 @@ export default function AdminCouponsPage() {
           created_at: c.created_at,
           theme: c.theme,
           coupons: [],
-          total: 0, used: 0, available: 0, expired: 0,
+          total: 0, used: 0, available: 0, expired: 0, paused_count: 0,
           status: 'active', redemptionPct: 0,
         }
         map.set(key, camp)
@@ -115,6 +159,7 @@ export default function AdminCouponsPage() {
       } else {
         camp.available++
       }
+      if (c.status === 'paused') camp.paused_count++
       // earliest created_at
       if (c.created_at < camp.created_at) camp.created_at = c.created_at
     }
@@ -122,8 +167,10 @@ export default function AdminCouponsPage() {
     const list = Array.from(map.values())
     for (const c of list) {
       c.redemptionPct = c.total > 0 ? Math.round((c.used / c.total) * 100) : 0
-      // Status priority: active (still has unused & unexpired), then fully_used, else expired
-      if (c.available > 0) c.status = 'active'
+      // Status priority: paused (ทั้งหมดถูกหยุด) → active/fully_used/expired
+      const unusedCount = c.available + c.expired
+      if (unusedCount > 0 && c.paused_count >= unusedCount) c.status = 'paused'
+      else if (c.available > 0) c.status = 'active'
       else if (c.used === c.total) c.status = 'fully_used'
       else c.status = 'expired'
     }
@@ -134,6 +181,7 @@ export default function AdminCouponsPage() {
   const counts = useMemo(() => ({
     all:        campaigns.length,
     active:     campaigns.filter(c => c.status === 'active').length,
+    paused:     campaigns.filter(c => c.status === 'paused').length,
     fully_used: campaigns.filter(c => c.status === 'fully_used').length,
     expired:    campaigns.filter(c => c.status === 'expired').length,
   }), [campaigns])
@@ -262,17 +310,49 @@ export default function AdminCouponsPage() {
   // ────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 1400 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 18 }}>
-        <div>
-          <h1 className="admin-h1"><Tag size={18} style={{ verticalAlign: 'baseline' }} /> คูปอง</h1>
-          <p className="admin-sub">{campaigns.length} แคมเปญ · {summary.total} คูปองรวม</p>
+    <div className="flex flex-col h-full" style={{ background: 'var(--admin-bg)' }}>
+      <header className="border-b flex-shrink-0"
+        style={{ background: 'var(--admin-card)', borderColor: 'var(--admin-border)' }}>
+        <div className="px-6 lg:px-8 py-5 flex items-start justify-between gap-4">
+          <div>
+            <p style={{ color: 'var(--admin-gold)', fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 500, marginBottom: 4 }}>
+              Marketing
+            </p>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--admin-ink)' }}>คูปอง</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--admin-ink-mute)' }}>
+              {campaigns.length} แคมเปญ · {summary.total} คูปองรวม
+            </p>
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <Link href="/admin/coupons/shopify" className="admin-btn admin-btn-ghost">
+              <Sparkles size={13} style={{ color: '#5E8E3E' }} /> Shopify mirror
+            </Link>
+            <button onClick={() => setShowShopify(true)} className="admin-btn admin-btn-ghost">
+              <Sparkles size={13} /> Shopify batch
+            </button>
+            <button onClick={() => setShowForm(true)} className="admin-btn admin-btn-ink">
+              <Plus size={14} /> สร้างคูปอง
+            </button>
+          </div>
         </div>
-        <button onClick={() => setShowForm(true)} className="admin-btn admin-btn-ink">
-          <Plus size={14} /> สร้างคูปอง
-        </button>
-      </div>
+      </header>
+
+      <ShopifyBatchModal open={showShopify} onClose={() => { setShowShopify(false); loadCoupons() }} />
+
+      {msg && !showForm && (
+        <div className="px-6 lg:px-8 pt-3 flex-shrink-0">
+          <div className="admin-card p-3 flex items-start gap-2"
+            style={{
+              background: msg.includes('ไม่สำเร็จ') ? '#FBE9E9' : 'rgba(58,142,90,0.06)',
+              borderColor: msg.includes('ไม่สำเร็จ') ? '#E8B4B4' : 'rgba(58,142,90,0.25)',
+              color: msg.includes('ไม่สำเร็จ') ? '#B14242' : '#3A8E5A',
+            }}>
+            <p className="text-xs">{msg}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto px-6 lg:px-8 py-5">
 
       {/* Summary stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
@@ -296,6 +376,7 @@ export default function AdminCouponsPage() {
         {([
           { key: 'all',        label: 'ทั้งหมด',     count: counts.all },
           { key: 'active',     label: 'ใช้งานได้',   count: counts.active },
+          { key: 'paused',     label: 'หยุดชั่วคราว', count: counts.paused },
           { key: 'fully_used', label: 'ใช้หมดแล้ว',  count: counts.fully_used },
           { key: 'expired',    label: 'หมดอายุ',     count: counts.expired },
         ] as Array<{ key: StatusFilter; label: string; count: number }>).map(c => {
@@ -342,6 +423,7 @@ export default function AdminCouponsPage() {
             <CampaignCard
               key={c.key} camp={c}
               onClick={() => setSelectedKey(c.key)}
+              onToggleStatus={toggleCampaignStatus}
             />
           ))}
         </div>
@@ -377,6 +459,7 @@ export default function AdminCouponsPage() {
           onSubmit={createCoupon}
         />
       )}
+      </div>
     </div>
   )
 }
@@ -387,6 +470,8 @@ export default function AdminCouponsPage() {
 
 function statusPillProps(s: CampaignStatus): { label: string; cls: string; Icon: typeof Clock } {
   if (s === 'active')      return { label: 'ใช้งานได้',  cls: 'admin-pill admin-pill-green',  Icon: CheckCircle }
+  if (s === 'paused')      return { label: 'หยุดชั่วคราว', cls: 'admin-pill',                  Icon: Clock }
+  if (s === 'archived')    return { label: 'ถูกเก็บ',     cls: 'admin-pill',                   Icon: Clock }
   if (s === 'fully_used')  return { label: 'ใช้หมดแล้ว', cls: 'admin-pill admin-pill-amber', Icon: Ticket }
   return { label: 'หมดอายุ', cls: 'admin-pill admin-pill-red', Icon: AlertTriangle }
 }
@@ -395,10 +480,14 @@ function formatDiscount(type: 'PERCENT' | 'FIXED', value: number) {
   return type === 'PERCENT' ? `${value}%` : `฿${value.toLocaleString()}`
 }
 
-function CampaignCard({ camp, onClick }: { camp: Campaign; onClick: () => void }) {
+function CampaignCard({ camp, onClick, onToggleStatus }: {
+  camp: Campaign; onClick: () => void
+  onToggleStatus: (camp: Campaign, status: 'active' | 'paused') => void
+}) {
   const { label: statusLabel, cls: statusCls, Icon: StatusIcon } = statusPillProps(camp.status)
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const daysToExpire = Math.ceil((new Date(camp.valid_until).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  const canToggle = camp.status === 'active' || camp.status === 'paused'
 
   return (
     <button
@@ -472,6 +561,26 @@ function CampaignCard({ camp, onClick }: { camp: Campaign; onClick: () => void }
           }} />
         </div>
       </div>
+
+      {/* Pause/Resume action */}
+      {canToggle && (
+        <div onClick={e => e.stopPropagation()}
+          style={{ paddingTop: 8, borderTop: '1px solid var(--admin-border-2)' }}>
+          <button
+            onClick={e => {
+              e.stopPropagation()
+              onToggleStatus(camp, camp.status === 'active' ? 'paused' : 'active')
+            }}
+            className="admin-btn admin-btn-ghost"
+            style={{ width: '100%', fontSize: 11, padding: '6px 10px', gap: 6 }}>
+            {camp.status === 'active' ? (
+              <>⏸ ปิดการใช้งานชั่วคราว</>
+            ) : (
+              <>▶ เปิดใช้งานอีกครั้ง</>
+            )}
+          </button>
+        </div>
+      )}
     </button>
   )
 }

@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 
 async function requireAdmin() {
   const supabase = createClient()
@@ -24,5 +25,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const { error } = await auth.service.from('users').update(updates).eq('id', params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  revalidatePath('/admin/members')
+  revalidatePath(`/admin/members/${params.id}`)
+  revalidatePath('/admin/segments')
+
   return NextResponse.json({ success: true })
 }

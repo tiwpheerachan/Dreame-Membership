@@ -1,16 +1,31 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { generateCouponCode } from '@/lib/utils'
 
-export async function GET() {
+export async function GET(req: Request) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const url = new URL(req.url)
+  const page = Math.max(1, Number(url.searchParams.get('page') || 1))
+  // Cap page size 500 — กัน admin โหลดทั้ง table โดยบังเอิญ
+  const pageSize = Math.min(500, Math.max(20, Number(url.searchParams.get('pageSize') || 200)))
+  const offset = (page - 1) * pageSize
+
   const service = createServiceClient()
-  const { data: coupons } = await service
-    .from('coupons').select('*, users(full_name, member_id)').order('created_at', { ascending: false })
-  return NextResponse.json({ coupons })
+  const { data: coupons, count } = await service
+    .from('coupons')
+    .select('*, users(full_name, member_id)', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + pageSize - 1)
+  return NextResponse.json({
+    coupons: coupons || [],
+    page, pageSize,
+    total: count ?? 0,
+    has_more: (count ?? 0) > offset + pageSize,
+  })
 }
 
 // Generate code that's not already in DB. Retries up to 8 times before giving up.
@@ -69,6 +84,8 @@ export async function POST(req: Request) {
     }
     const { error } = await service.from('coupons').insert(inserts)
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    revalidatePath('/admin/coupons')
+    revalidatePath('/admin/members')
     return NextResponse.json({ success: true, count: inserts.length })
   }
 
@@ -77,5 +94,7 @@ export async function POST(req: Request) {
   if (!code) return NextResponse.json({ error: 'Failed to generate unique code' }, { status: 500 })
   const { error } = await service.from('coupons').insert({ ...base, user_id, code })
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  revalidatePath('/admin/coupons')
+  revalidatePath(`/admin/members/${user_id}`)
   return NextResponse.json({ success: true })
 }

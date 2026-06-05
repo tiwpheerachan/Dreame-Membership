@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 
 async function requireStaff() {
   const supabase = createClient()
@@ -41,5 +42,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  revalidatePath(`/admin/members/${params.id}`)
   return NextResponse.json({ success: true, note: data })
 }

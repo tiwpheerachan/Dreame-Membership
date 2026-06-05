@@ -149,25 +149,33 @@ export default function AdminPromotionsPage() {
   }
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 1400 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 18, gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <h1 className="admin-h1">โปรโมชั่น & โฆษณา</h1>
-          <p className="admin-sub">{items.length} รายการ · {counts.active} เปิดใช้ · {counts.on_home} แสดงในหน้า home</p>
+    <div className="flex flex-col h-full" style={{ background: 'var(--admin-bg)' }}>
+      <header className="border-b flex-shrink-0"
+        style={{ background: 'var(--admin-card)', borderColor: 'var(--admin-border)' }}>
+        <div className="px-6 lg:px-8 py-5 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p style={{ color: 'var(--admin-gold)', fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 500, marginBottom: 4 }}>
+              Marketing
+            </p>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--admin-ink)' }}>โปรโมชั่น &amp; โฆษณา</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--admin-ink-mute)' }}>
+              {items.length} รายการ · {counts.active} เปิดใช้ · {counts.on_home} แสดงในหน้า home
+            </p>
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <button onClick={manualRefresh} disabled={refreshing}
+              className="admin-btn admin-btn-ghost">
+              {refreshing ? <Loader2 size={12} className="spinner" /> : <RefreshCw size={12} />}
+              รีเฟรช
+            </button>
+            <button onClick={openCreate} className="admin-btn admin-btn-ink">
+              <Plus size={13} /> สร้างโปรโมชั่น
+            </button>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={manualRefresh} disabled={refreshing}
-            className="admin-btn admin-btn-ghost" style={{ padding: '7px 12px', fontSize: 12, gap: 6 }}>
-            {refreshing ? <Loader2 size={12} className="spinner" /> : <RefreshCw size={12} />}
-            รีเฟรช
-          </button>
-          <button onClick={openCreate} className="admin-btn admin-btn-ink"
-            style={{ padding: '8px 14px', fontSize: 12.5, gap: 6 }}>
-            <Plus size={13} /> สร้างโปรโมชั่น
-          </button>
-        </div>
-      </div>
+      </header>
+
+      <div className="flex-1 overflow-y-auto px-6 lg:px-8 py-5">
 
       {/* Stats grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
@@ -301,6 +309,7 @@ export default function AdminPromotionsPage() {
           />
         )}
       </Drawer>
+      </div>
     </div>
   )
 }

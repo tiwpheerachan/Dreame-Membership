@@ -1,10 +1,10 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { ChevronRight, BarChart3 } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
+import PageShell from '@/components/admin/PageShell'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
-
 
 const SEGMENTS = [
   { key: 'champions', label: 'Champions', desc: 'ซื้อล่าสุด · บ่อย · ยอดสูง', cls: 'admin-pill-gold',  rec: [1,2], freq: [1,2], mon: [1,2] },
@@ -35,30 +35,33 @@ export default async function SegmentsPage() {
   })
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 1400 }}>
-      <div style={{ marginBottom: 18 }}>
-        <h1 className="admin-h1"><BarChart3 size={18} style={{ verticalAlign: 'baseline' }} /> Customer Segments</h1>
-        <p className="admin-sub">RFM segmentation — Recency · Frequency · Monetary</p>
-      </div>
+    <PageShell
+      eyebrow="Customers"
+      title="Customer Segments"
+      subtitle={`RFM segmentation — Recency · Frequency · Monetary · ${list.length} members`}>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+      <div className="grid gap-3 mb-5"
+        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
         {stats.map(s => (
-          <div key={s.key} className="admin-card" style={{ padding: 18 }}>
+          <div key={s.key} className="admin-card p-5">
             <span className={`admin-pill ${s.cls}`}>{s.label}</span>
-            <p className="num" style={{ fontSize: 28, fontWeight: 800, margin: '12px 0 4px' }}>{s.count.toLocaleString()}</p>
-            <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '0 0 8px' }}>{s.desc}</p>
-            <p className="num" style={{ fontSize: 11, color: 'var(--gold-deep)', margin: 0, fontWeight: 600 }}>
+            <p className="text-2xl font-bold tabular-nums mt-3 mb-1" style={{ color: 'var(--admin-ink)' }}>
+              {s.count.toLocaleString()}
+            </p>
+            <p className="text-[11px] mb-2" style={{ color: 'var(--admin-ink-mute)' }}>{s.desc}</p>
+            <p className="text-[11px] font-semibold tabular-nums" style={{ color: 'var(--admin-gold-deep)' }}>
               ฿{Math.round(s.revenue).toLocaleString()} lifetime
             </p>
           </div>
         ))}
       </div>
 
-      {/* All members RFM table */}
-      <div className="admin-card" style={{ marginTop: 20, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--hair)' }}>
-          <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>All members · RFM Detail</p>
-          <p style={{ margin: 0, fontSize: 11, color: 'var(--ink-mute)' }}>Recency / Frequency / Monetary scores (1=best, 5=worst)</p>
+      <div className="admin-card overflow-hidden">
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--admin-border-2)' }}>
+          <p className="font-bold text-sm" style={{ color: 'var(--admin-ink)' }}>All members · RFM Detail</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--admin-ink-mute)' }}>
+            Recency / Frequency / Monetary scores (1=best, 5=worst)
+          </p>
         </div>
         <table className="admin-table">
           <thead>
@@ -83,10 +86,12 @@ export default async function SegmentsPage() {
                 <td className="num">{m.recency_score as number}</td>
                 <td className="num">{m.frequency_score as number}</td>
                 <td className="num">{m.monetary_score as number}</td>
-                <td className="muted" style={{ fontSize: 11 }}>{m.last_purchase ? new Date(m.last_purchase as string).toLocaleDateString('th-TH') : '-'}</td>
-                <td className="num" style={{ fontWeight: 700 }}>฿{Number(m.monetary || 0).toLocaleString()}</td>
+                <td className="muted" style={{ fontSize: 11 }}>
+                  {m.last_purchase ? new Date(m.last_purchase as string).toLocaleDateString('th-TH') : '-'}
+                </td>
+                <td className="num font-bold">฿{Number(m.monetary || 0).toLocaleString()}</td>
                 <td>
-                  <Link href={`/admin/members/${m.id}`} style={{ color: 'var(--ink-mute)' }}>
+                  <Link href={`/admin/members/${m.id}`} style={{ color: 'var(--admin-ink-mute)' }}>
                     <ChevronRight size={14} />
                   </Link>
                 </td>
@@ -95,11 +100,11 @@ export default async function SegmentsPage() {
           </tbody>
         </table>
         {list.length > 100 && (
-          <p style={{ padding: 12, fontSize: 11, color: 'var(--ink-mute)', textAlign: 'center' }}>
+          <p className="p-3 text-center text-[11px]" style={{ color: 'var(--admin-ink-mute)' }}>
             แสดง 100 แถวแรก · ทั้งหมด {list.length} คน
           </p>
         )}
       </div>
-    </div>
+    </PageShell>
   )
 }

@@ -1,26 +1,43 @@
 /* ============================================================
-   ADMIN LIGHT THEME — same palette as user side
-   White background, ink text, gold accents, dreame branding
+   ADMIN LIGHT THEME — unified with dashboard cream palette
+   #FAF7F2 cream bg · white cards · #EDE3D2 borders · gold accents
 ============================================================ */
 
+:root {
+  /* Admin-specific palette overrides (warm cream, brand-matching) */
+  --admin-bg:        #FAF7F2;
+  --admin-card:      #FFFFFF;
+  --admin-border:    #EDE3D2;
+  --admin-border-2:  #F3EBDB;
+  --admin-ink:       #1A1A1A;
+  --admin-ink-soft:  #3F2A1A;
+  --admin-ink-mute:  #6B5A48;
+  --admin-ink-faint: #A0907A;
+  --admin-ink-ghost: #C4B7A3;
+  --admin-gold:      #A0782B;
+  --admin-gold-deep: #7A5A1F;
+  --admin-gold-glow: rgba(160,120,43,0.08);
+}
+
 .admin-shell {
-  min-height: 100vh;
-  background: var(--bg-soft);
-  color: var(--ink);
+  height: 100vh;
+  background: var(--admin-bg);
+  color: var(--admin-ink);
   font-family: var(--font-sans);
 }
 
 .admin-card {
-  background: #fff;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-1);
+  background: var(--admin-card);
+  border: 1px solid var(--admin-border);
+  border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(154,110,31,0.04);
 }
 .admin-card-flat {
-  background: #fff;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-md);
+  background: var(--admin-card);
+  border: 1px solid var(--admin-border);
+  border-radius: 16px;
 }
+.admin-card:hover { box-shadow: 0 4px 18px rgba(154,110,31,0.08); transition: box-shadow 0.2s; }
 
 .admin-h1 {
   font-family: var(--font-display);
@@ -39,113 +56,115 @@
 .admin-table {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
+  background: var(--admin-card);
   font-size: 13px;
 }
 .admin-table thead th {
-  background: var(--bg-soft);
-  border-bottom: 1px solid var(--hair);
-  padding: 10px 14px;
+  background: var(--admin-bg);
+  border-bottom: 1px solid var(--admin-border);
+  padding: 12px 14px;
   text-align: left;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ink-mute);
+  color: var(--admin-ink-mute);
 }
 .admin-table tbody tr {
-  border-bottom: 1px solid var(--hair);
+  border-bottom: 1px solid var(--admin-border-2);
 }
+.admin-table tbody tr:last-child { border-bottom: 0; }
 .admin-table tbody tr:hover {
-  background: var(--bg-soft);
+  background: var(--admin-bg);
 }
 .admin-table tbody td {
   padding: 12px 14px;
-  color: var(--ink);
+  color: var(--admin-ink);
   vertical-align: middle;
 }
-.admin-table tbody td.muted { color: var(--ink-mute); }
+.admin-table tbody td.muted { color: var(--admin-ink-mute); }
 .admin-table .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
 /* admin field — re-uses .field but inverted defaults */
 .admin-field {
   width: 100%;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  padding: 10px 12px;
+  background: var(--admin-card);
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  padding: 10px 14px;
   font-family: inherit;
   font-size: 13px;
-  color: var(--ink);
+  color: var(--admin-ink);
   outline: none;
   transition: all 0.15s ease;
 }
-.admin-field::placeholder { color: var(--ink-faint); }
+.admin-field::placeholder { color: var(--admin-ink-faint); }
 .admin-field:focus {
-  border-color: var(--ink);
-  box-shadow: 0 0 0 3px rgba(14,14,14,0.06);
+  border-color: var(--admin-gold);
+  box-shadow: 0 0 0 3px var(--admin-gold-glow);
 }
 
 .admin-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 9px 16px; border-radius: var(--r-md);
-  font-family: inherit; font-size: 13px; font-weight: 700;
+  padding: 10px 16px; border-radius: 12px;
+  font-family: inherit; font-size: 13px; font-weight: 600;
   cursor: pointer; transition: all 0.15s ease; border: 1px solid transparent;
   white-space: nowrap;
 }
-.admin-btn-ink   { background: var(--black); color: #fff; }
-.admin-btn-ink:hover { box-shadow: var(--shadow-2); }
+.admin-btn-ink   { background: #1F1F1F; color: #E8C58C; }
+.admin-btn-ink:hover { background: #000; }
 .admin-btn-ink:disabled { opacity: 0.4; cursor: not-allowed; }
-.admin-btn-gold  { background: var(--gold); color: #fff; }
-.admin-btn-gold:hover { background: var(--gold-deep); }
-.admin-btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
-.admin-btn-ghost:hover { background: var(--bg-soft); }
-.admin-btn-danger { background: var(--red-soft); color: var(--red); border-color: rgba(180,58,58,0.25); }
-.admin-btn-danger:hover { background: rgba(180,58,58,0.10); }
+.admin-btn-gold  { background: var(--admin-gold); color: #fff; }
+.admin-btn-gold:hover { background: var(--admin-gold-deep); }
+.admin-btn-ghost { background: var(--admin-card); color: var(--admin-ink-soft); border-color: var(--admin-border); }
+.admin-btn-ghost:hover { background: var(--admin-bg); border-color: var(--admin-ink-faint); }
+.admin-btn-danger { background: #FBE9E9; color: #B14242; border-color: #E8B4B4; }
+.admin-btn-danger:hover { background: #F5D8D8; }
 
 /* Pills used across admin */
 .admin-pill {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 9px; border-radius: var(--r-pill);
+  padding: 3px 9px; border-radius: 999px;
   font-size: 10.5px; font-weight: 600;
-  background: var(--bg-soft); color: var(--ink-soft);
-  border: 1px solid var(--hair);
+  background: var(--admin-bg); color: var(--admin-ink-soft);
+  border: 1px solid var(--admin-border);
 }
-.admin-pill-gold  { background: var(--gold-glow); color: var(--gold-deep); border-color: var(--gold-line); }
-.admin-pill-green { background: var(--green-soft); color: var(--green); border-color: rgba(46,122,61,0.18); }
-.admin-pill-red   { background: var(--red-soft); color: var(--red); border-color: rgba(180,58,58,0.18); }
-.admin-pill-amber { background: var(--amber-soft); color: var(--amber); border-color: rgba(176,120,35,0.20); }
-.admin-pill-blue  { background: var(--blue-soft); color: var(--blue); border-color: rgba(31,111,180,0.20); }
-.admin-pill-ink   { background: var(--black); color: #fff; }
+.admin-pill-gold  { background: rgba(201,155,62,0.10);  color: #7A5A1F; border-color: rgba(201,155,62,0.25); }
+.admin-pill-green { background: rgba(58,142,90,0.10);   color: #2E7A3D; border-color: rgba(58,142,90,0.25); }
+.admin-pill-red   { background: rgba(177,66,66,0.10);   color: #B14242; border-color: rgba(177,66,66,0.22); }
+.admin-pill-amber { background: rgba(201,155,62,0.12);  color: #B07823; border-color: rgba(201,155,62,0.25); }
+.admin-pill-blue  { background: rgba(74,123,193,0.10);  color: #4A7BC1; border-color: rgba(74,123,193,0.22); }
+.admin-pill-ink   { background: #1F1F1F; color: #E8C58C; border-color: #1F1F1F; }
 
 /* admin sidebar */
 .admin-side {
   width: 240px;
   flex-shrink: 0;
-  background: #fff;
-  border-right: 1px solid var(--hair);
+  background: var(--admin-card);
+  border-right: 1px solid var(--admin-border);
   display: flex; flex-direction: column;
   position: sticky; top: 0; height: 100vh;
 }
 .admin-side-link {
   display: flex; align-items: center; gap: 10px;
   padding: 9px 14px;
-  border-radius: var(--r-md);
-  font-size: 13px; font-weight: 600;
-  color: var(--ink-mute);
+  border-radius: 10px;
+  font-size: 13px; font-weight: 500;
+  color: var(--admin-ink-mute);
   text-decoration: none;
   transition: all 0.15s ease;
 }
 .admin-side-link:hover {
-  background: var(--bg-soft);
-  color: var(--ink);
+  background: var(--admin-bg);
+  color: var(--admin-ink);
 }
 .admin-side-link-active {
-  background: var(--ink);
-  color: var(--gold-soft);
+  background: #1F1F1F;
+  color: #E8C58C;
+  font-weight: 600;
 }
 .admin-side-link-active:hover {
-  background: var(--ink); color: var(--gold-soft);
+  background: #1F1F1F; color: #E8C58C;
 }
 
 /* command palette (Cmd+K) */

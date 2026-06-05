@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import type { User as UserType, UserTier } from '@/types'
 import { normalizeTier } from '@/lib/tier'
+import TrackOrderBanner from '@/components/user/TrackOrderBanner'
 
 // Tier-specific palette so the hero card matches the rest of the app's
 // tier-aware aesthetic (home stage uses the same hues).
@@ -357,6 +358,9 @@ export default function ProfilePage() {
           </div>
         </div>
       </section>
+
+      {/* ── Track order banner (เด้งถ้ามี active order) ── */}
+      <TrackOrderBanner variant="banner" />
 
       {/* ── Personal information ── */}
       <SectionCard title="Personal Information">
