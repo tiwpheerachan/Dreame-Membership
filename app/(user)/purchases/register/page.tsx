@@ -22,6 +22,7 @@ export default function RegisterPage() {
   const router = useRouter()
   const [step, setStep] = useState<Step>('order')
   const [orderSn, setOrderSn] = useState('')
+  const [serialNumber, setSerialNumber] = useState('')
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>('idle')
   const [verifiedData, setVerifiedData] = useState<Record<string, unknown> | null>(null)
   const [channel, setChannel] = useState('SHOPEE')
@@ -64,6 +65,7 @@ export default function RegisterPage() {
       fd.append('order_sn', orderSn)
       fd.append('channel', channel)
       fd.append('channel_type', selectedChannel?.type || 'ONLINE')
+      if (serialNumber.trim()) fd.append('serial_number', serialNumber.trim())
       if (verifiedData) fd.append('bq_data', JSON.stringify(verifiedData))
       if (receipt) fd.append('receipt', receipt)
       const res = await fetch('/api/purchases/register', { method: 'POST', body: fd })
@@ -319,6 +321,39 @@ export default function RegisterPage() {
                 </div>
               )}
             </div>
+
+            {/* Serial Number — โผล่หลัง verify สำเร็จ */}
+            {(verifyStatus === 'verified' || verifyStatus === 'pending' || verifyStatus === 'bq_error') && (
+              <div className="surface" style={{ padding: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <p className="kicker" style={{ margin: 0 }}>Serial Number (SN)</p>
+                  <span style={{
+                    fontSize: 10, color: 'var(--ink-faint)',
+                    letterSpacing: '0.04em', fontWeight: 600,
+                  }}>
+                    ไม่จำเป็น
+                  </span>
+                </div>
+                <input
+                  className="field"
+                  type="text"
+                  placeholder="เช่น SN-ABCD1234567"
+                  value={serialNumber}
+                  onChange={e => setSerialNumber(e.target.value.toUpperCase())}
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  spellCheck={false}
+                  maxLength={50}
+                  style={{ width: '100%', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}
+                />
+                <p style={{
+                  fontSize: 10.5, color: 'var(--ink-mute)',
+                  margin: '8px 0 0', lineHeight: 1.5,
+                }}>
+                  เลขเครื่องด้านล่าง/หลังกล่องสินค้า — ใช้สำหรับ <strong>การรับประกัน</strong> และ service
+                </p>
+              </div>
+            )}
 
             {(verifyStatus === 'verified' || verifyStatus === 'pending' || verifyStatus === 'bq_error') && (
               <button className="btn btn-ink tap-down" onClick={() => setStep('upload')}>

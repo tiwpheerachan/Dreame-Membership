@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Gift, Sparkles, Lock, AlertCircle, History, ChevronDown, ChevronUp, Info } from 'lucide-react'
 
 interface Reward {
@@ -95,6 +96,9 @@ export default function RewardsPage() {
           </div>
         )}
       </header>
+
+      {/* What You Get — VIP Treatments showcase */}
+      <VIPTreatments />
 
       {/* How rewards work — collapsible info card */}
       <HowRewardsWorkBanner />
@@ -352,5 +356,33 @@ function ModeRow({ emoji, color, bg, border, title, desc }: {
         </p>
       </div>
     </div>
+  )
+}
+
+// ============================================================
+// VIP Treatments — What You Get showcase
+// ใช้รูป /images/benefits/vip-treatments.png ที่ upload ไว้แล้ว
+// ============================================================
+function VIPTreatments() {
+  // ratio = 3230 / 882 ≈ 3.66
+  return (
+    <section style={{ padding: '0 16px 18px' }}>
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        aspectRatio: '3230 / 882',
+        borderRadius: 'var(--r-lg)',
+        overflow: 'hidden',
+      }}>
+        <Image
+          src="/images/benefits/vip-treatments.png"
+          alt="What You Get — Your VIP Treatments"
+          fill
+          sizes="(max-width: 480px) 100vw, 480px"
+          priority={false}
+          style={{ objectFit: 'contain' }}
+        />
+      </div>
+    </section>
   )
 }
