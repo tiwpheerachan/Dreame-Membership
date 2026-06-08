@@ -32,23 +32,41 @@ export default function TrackOrderBanner({ variant = 'banner' }: Props) {
 
   if (!loaded) return null
 
-  // Compact button version (header / nav)
+  // Compact button version (header / nav) — gold gradient เด่นเสมอ
   if (variant === 'button') {
+    const hasActive = orders.length > 0
     return (
       <Link href="/track" className="tap" style={{
+        position: 'relative',
         display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '8px 12px', borderRadius: 'var(--r-pill)',
-        background: orders.length > 0
-          ? 'linear-gradient(135deg, #FAF3DC 0%, #EADBB1 100%)'
-          : 'var(--surface)',
-        border: orders.length > 0 ? '1px solid var(--gold)' : '1px solid var(--hair)',
-        color: orders.length > 0 ? 'var(--gold-deep)' : 'var(--ink-mute)',
-        textDecoration: 'none', fontSize: 11.5, fontWeight: 700,
-        boxShadow: orders.length > 0 ? '0 2px 8px rgba(160,120,43,0.18)' : 'none',
+        padding: '8px 14px', borderRadius: 'var(--r-pill)',
+        background: 'linear-gradient(180deg, #FAF3DC 0%, #EADBB1 35%, #C9A063 75%, #A0782B 100%)',
+        boxShadow:
+          'inset 0 1px 0 rgba(255,250,235,0.95), inset 0 -1px 0 rgba(120,80,20,0.35), 0 4px 12px rgba(160,120,43,0.30)',
+        color: '#1A1815',
+        textDecoration: 'none', fontSize: 11.5, fontWeight: 800,
+        textShadow: '0 1px 0 rgba(255,250,235,0.55)',
+        letterSpacing: '0.01em',
+        overflow: 'hidden',
       }}>
-        {orders.length > 0
-          ? <><Truck size={12}/> กำลังส่ง {orders.length}</>
-          : <><Package size={12}/> ติดตามออเดอร์</>}
+        {hasActive
+          ? <><Truck size={13} strokeWidth={2.4}/> กำลังส่ง {orders.length}</>
+          : <><Package size={13} strokeWidth={2.4}/> ติดตามออเดอร์</>}
+        {hasActive && (
+          <span aria-hidden style={{
+            position: 'absolute', top: 4, right: 4,
+            width: 6, height: 6, borderRadius: '50%',
+            background: '#3A8E5A',
+            boxShadow: '0 0 0 3px rgba(58,142,90,0.30)',
+            animation: 'tob-pulse 2s ease-in-out infinite',
+          }} />
+        )}
+        <style suppressHydrationWarning>{`
+          @keyframes tob-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50%      { opacity: 0.5; transform: scale(1.35); }
+          }
+        `}</style>
       </Link>
     )
   }

@@ -105,6 +105,8 @@ export default function TrackPage() {
   const [lookupError, setLookupError] = useState('')
   const [searching, setSearching] = useState(false)
 
+  const [lastSync, setLastSync] = useState<number>(Date.now())
+
   // โหลด list ของ user — แยกเป็นฟังก์ชันให้ refresh ได้
   function loadOrders() {
     return Promise.all([
@@ -113,7 +115,18 @@ export default function TrackPage() {
     ]).then(([bq, sh]) => {
       setBqItems(bq.items || [])
       setShopifyOrders(sh.active || [])
+      setLastSync(Date.now())
     })
+  }
+
+  // Refresh lookup result silently (ใช้กับ auto-refresh)
+  function refreshLookup(sn: string) {
+    fetch(`/api/orders/track-bq?order_sn=${encodeURIComponent(sn.replace(/^#/, ''))}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (d.shipments) setLookupBQ({ shipments: d.shipments, order_sn: sn })
+      })
+      .catch(() => { /* silent fail */ })
   }
 
   useEffect(() => {
@@ -123,7 +136,7 @@ export default function TrackPage() {
     if (presetSn) {
       setNumber(presetSn)
       setSearching(true)
-      fetch(`/api/orders/track-bq?order_sn=${encodeURIComponent(presetSn.replace(/^#/, ''))}`)
+      fetch(`/api/orders/track-bq?order_sn=${encodeURIComponent(presetSn.replace(/^#/, ''))}`, { cache: 'no-store' })
         .then(r => r.json())
         .then(d => {
           if (d.shipments) setLookupBQ({ shipments: d.shipments, order_sn: presetSn })
@@ -135,11 +148,25 @@ export default function TrackPage() {
     loadOrders().finally(() => setLoading(false))
 
     // ── Auto-refresh ทุก 60 วินาที (เมื่อแท็บ active) ──
-    const interval = setInterval(() => {
-      if (!document.hidden) loadOrders()
-    }, 60_000)
-    return () => clearInterval(interval)
-  }, [])
+    function refreshAll() {
+      if (document.hidden) return
+      loadOrders()
+      // ถ้าอยู่ในหน้า lookup result → refresh ด้วย
+      const currentSn = lookupBQ?.order_sn
+      if (currentSn) refreshLookup(currentSn)
+    }
+    const interval = setInterval(refreshAll, 60_000)
+    // Refresh เมื่อกลับมาที่แท็บ / focus หน้าต่าง
+    function onVisible() { if (!document.hidden) refreshAll() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', refreshAll)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', refreshAll)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lookupBQ?.order_sn])
 
   async function track(e: React.FormEvent) {
     e.preventDefault()
@@ -225,11 +252,14 @@ export default function TrackPage() {
           <h2 className="display" style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>
             ออเดอร์ของคุณ
           </h2>
-          {bqItems.length > 0 && (
-            <span style={{ fontSize: 10.5, color: 'var(--ink-mute)', fontWeight: 700 }}>
-              {bqItems.length} รายการ
-            </span>
-          )}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <LiveUpdateIndicator lastSync={lastSync} />
+            {bqItems.length > 0 && (
+              <span style={{ fontSize: 10.5, color: 'var(--ink-mute)', fontWeight: 700 }}>
+                · {bqItems.length} รายการ
+              </span>
+            )}
+          </div>
         </div>
 
         {loading ? (
@@ -263,6 +293,46 @@ export default function TrackPage() {
         )}
       </section>
     </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────
+// LiveUpdateIndicator — แสดง live dot + "X วินาทีก่อน"
+// ────────────────────────────────────────────────────────────
+function LiveUpdateIndicator({ lastSync }: { lastSync: number }) {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 15_000)
+    return () => clearInterval(id)
+  }, [])
+  const secs = Math.floor((Date.now() - lastSync) / 1000)
+  const label = secs < 5
+    ? 'just now'
+    : secs < 60
+      ? `${secs}s ago`
+      : secs < 3600
+        ? `${Math.floor(secs / 60)}m ago`
+        : 'auto-sync'
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      fontSize: 10, color: 'var(--ink-mute)', fontWeight: 700,
+      letterSpacing: '0.04em',
+    }}>
+      <span style={{
+        width: 6, height: 6, borderRadius: '50%',
+        background: '#3A8E5A',
+        boxShadow: '0 0 0 3px rgba(58,142,90,0.25)',
+        animation: 'pulse-dot 2s ease-in-out infinite',
+      }} />
+      LIVE · {label}
+      <style suppressHydrationWarning>{`
+        @keyframes pulse-dot {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50%      { opacity: 0.5; transform: scale(1.35); }
+        }
+      `}</style>
+    </span>
   )
 }
 

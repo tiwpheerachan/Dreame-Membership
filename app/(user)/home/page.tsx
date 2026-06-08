@@ -17,6 +17,7 @@ const WarpShader = dynamic(() => import('@/components/ui/warp-shader'), { ssr: f
 // ("…#MembershipDashboardCard#default").
 import { MembershipDashboardCard } from '@/components/ui/animated-dashboard-card'
 import QuickActionsBar from '@/components/user/QuickActionsBar'
+const TrackCTA = dynamic(() => import('@/components/user/TrackCTA'), { ssr: false })
 import { PromoHero, PromoSmall, PromoFeed } from '@/components/user/PromoCard'
 import BannerMarquee from '@/components/user/BannerMarquee'
 import { formatDate } from '@/lib/utils'
@@ -273,6 +274,11 @@ export default async function HomePage() {
       {/* ─── Quick Actions: gradient-pill bar that slides between buttons ─── */}
       <section style={{ padding: '6px 16px 10px' }}>
         <QuickActionsBar />
+      </section>
+
+      {/* ─── Prominent Gold CTA — ติดตามสถานะการจัดส่ง ─── */}
+      <section style={{ padding: '4px 16px 10px' }}>
+        <TrackCTA />
       </section>
 
       {/* ─── BRAND BANNERS — 2 horizontally-scrolling marquee rows ─── */}

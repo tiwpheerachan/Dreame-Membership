@@ -404,17 +404,17 @@ export default function RewardDetailPage() {
         {/* How-it-works section — โชว์ flow ของ type นี้ */}
         <HowItWorks reward={reward} />
 
-        {/* Shipping note — POINTS_CASH + PREMIUM เท่านั้น */}
+        {/* Shipping note — POINTS_CASH + PREMIUM */}
         {reward.redeem_type !== 'VOUCHER' && (
           <div style={{ marginTop: 22, padding: 12, borderRadius: 'var(--r-md)',
             background: 'var(--bg-soft)', display: 'flex', gap: 10 }}>
             <Truck size={18} color="var(--gold-deep)" />
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, margin: 0 }}>จัดส่งฟรีในประเทศไทย</p>
+              <p style={{ fontSize: 12, fontWeight: 700, margin: 0 }}>จัดส่งตามระบบ Shopify</p>
               <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '2px 0 0' }}>
-                {reward.redeem_type === 'POINTS_CASH'
-                  ? 'หลัง user จ่ายค่าส่วนเพิ่มที่ Shopify ระบบจะจัดส่งตามที่อยู่ในเว็บ Shopify'
-                  : 'ภายใน 7-14 วันทำการหลังยืนยัน'}
+                {reward.redeem_type === 'PREMIUM'
+                  ? 'หลังใช้ code ที่ Shopify ระบบจัดส่งตามที่อยู่ที่กรอกตอน checkout'
+                  : 'หลัง user จ่ายค่าส่วนเพิ่มที่ Shopify ระบบจะจัดส่งตามที่อยู่ในเว็บ Shopify'}
               </p>
             </div>
           </div>
@@ -449,10 +449,9 @@ export default function RewardDetailPage() {
             </div>
           ) : (
             <button onClick={() => {
-              // VOUCHER + POINTS_CASH ไม่ต้องกรอกที่อยู่ (POINTS_CASH ใส่ที่อยู่ตอน checkout Shopify)
-              // PREMIUM เท่านั้นที่ต้องที่อยู่ (admin ส่งของ)
-              if (reward.redeem_type === 'PREMIUM') setShowForm(true)
-              else submit()
+              // ทุก type ใช้ Shopify code → ไม่ต้องกรอกที่อยู่ตอนแลก
+              // ลูกค้าใส่ที่อยู่ตอน checkout ที่ Shopify เอง
+              submit()
             }} disabled={submitting}
             className="tap" style={{
               width: '100%', padding: '14px 16px',
@@ -635,17 +634,18 @@ function HowItWorks({ reward }: { reward: Reward }) {
       ? `ใช้ได้กับยอดซื้อขั้นต่ำ ฿${Number(reward.voucher_min_purchase_thb).toLocaleString()}`
       : 'ไม่มีขั้นต่ำการใช้',
   } : {
-    // PREMIUM
+    // PREMIUM — ใช้ Shopify code แบบเดียวกับ POINTS_CASH
     emoji: '🎁', color: '#3A8E5A', bg: 'rgba(58,142,90,0.06)', border: 'rgba(58,142,90,0.25)',
-    title: 'แลกของพรีเมียมฟรี — ไม่ต้องจ่ายเพิ่ม',
+    title: 'แลกของพรีเมียมฟรี — รับที่ Shopify',
     badge: 'ของพรีเมียม',
     steps: [
-      { icon: '✨', text: `กดแลก → หัก ${reward.points_required} แต้มทันที` },
-      { icon: '📝', text: 'กรอกที่อยู่จัดส่ง' },
-      { icon: '✅', text: 'ทีม Dreame ตรวจสอบและยืนยันคำสั่ง' },
-      { icon: '🚚', text: 'จัดส่งภายใน 7-14 วันทำการ' },
+      { icon: '✨', text: `กดแลก → หัก ${reward.points_required} แต้มทันที (ไม่ต้องกรอกที่อยู่ในแอป)` },
+      { icon: '🎟️', text: 'รหัสส่วนลด 100% เก็บไว้ในแท็บ "คูปอง" ของคุณ' },
+      { icon: '⏰', text: `รหัสมีอายุ ${validity} วัน — แลกเก็บไว้ก่อนได้` },
+      { icon: '🛒', text: 'กดไปที่ Shopify → กรอกที่อยู่จัดส่ง → ไม่ต้องจ่ายค่าสินค้า' },
+      { icon: '🚚', text: 'Shopify จัดส่งให้ถึงบ้านตามที่อยู่ที่กรอกตอน checkout' },
     ],
-    keyMessage: 'ไม่มีค่าใช้จ่ายเพิ่ม — แต้มล้วน',
+    keyMessage: 'ไม่มีค่าใช้จ่ายเพิ่มสำหรับสินค้า — แต้มล้วน (ค่าส่งตามนโยบาย Shopify)',
   }
 
   return (

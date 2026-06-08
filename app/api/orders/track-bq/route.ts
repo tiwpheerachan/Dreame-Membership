@@ -41,5 +41,11 @@ export async function GET(req: Request) {
     order:     orderRes.status === 'found' ? orderRes.data : null,
     shipments,
     has_tracking: shipments.some(s => s.tracking_numbers.length > 0),
-  }, { headers: rl.headers })
+    fetched_at:  new Date().toISOString(),
+  }, {
+    headers: {
+      ...rl.headers,
+      'Cache-Control': 'no-store, must-revalidate',
+    },
+  })
 }

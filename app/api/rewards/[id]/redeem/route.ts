@@ -100,11 +100,13 @@ export async function POST(
       let discountValue: number
       let minPurchase: number | undefined
 
-      if (reward.redeem_type === 'POINTS_CASH') {
-        // ── Realtime price sync ──
-        // ดึงราคาปัจจุบันจาก Shopify (กันราคาเปลี่ยนจากตอน admin ตั้ง reward)
-        // ถ้า fetch ไม่ได้ → fallback ใช้ original_price_thb ที่ admin ตั้ง
-        const cash = Number(reward.cash_top_up_thb || 0)
+      if (reward.redeem_type === 'POINTS_CASH' || reward.redeem_type === 'PREMIUM') {
+        // ── POINTS_CASH + PREMIUM: ทั้ง 2 type ดึงราคาจาก Shopify เหมือนกัน ──
+        // PREMIUM = แต้มล้วน → cash_top_up=0 → user จ่าย 0 (เฉพาะค่าส่งถ้ามี)
+        // POINTS_CASH = แต้ม+เงิน → user จ่ายเท่า cash_top_up_thb
+        const cash = reward.redeem_type === 'PREMIUM'
+          ? 0
+          : Number(reward.cash_top_up_thb || 0)
         const fallbackOriginal = Number(reward.original_price_thb || 0)
         let effectivePrice = fallbackOriginal
         if (reward.shopify_product_url) {
@@ -124,8 +126,11 @@ export async function POST(
             `ราคาสินค้าปัจจุบัน (฿${effectivePrice.toLocaleString()}) ต่ำกว่าหรือเท่ากับยอดที่ต้องจ่าย (฿${cash.toLocaleString()}) — ไม่ต้องใช้ code`
           )
         }
-        discountValue = effectivePrice - cash  // realtime — user จ่ายเท่า cash เป๊ะเสมอ
-        minPurchase = cash
+        discountValue = effectivePrice - cash  // PREMIUM: discount = full price ; POINTS_CASH: discount = price - cash
+        // min_purchase: ต้องซื้อให้ครบราคาสินค้า (ทั้ง 2 type) เพื่อกัน abuse
+        // PREMIUM: ต้อง add สินค้านี้เพื่อใช้ code (price = min_purchase)
+        // POINTS_CASH: cash = min_purchase
+        minPurchase = reward.redeem_type === 'PREMIUM' ? effectivePrice : cash
       } else {
         // VOUCHER
         discountValue = Number(reward.voucher_value_thb || 0)
@@ -173,12 +178,16 @@ export async function POST(
       // เมื่อ user ใช้ที่ Shopify checkout → webhook orders/paid จะ mark used_at
       // → cascade trigger (migration 0019) จะ flag redemption เป็น 'delivered' อัตโนมัติ
       const today = new Date().toISOString().split('T')[0]
-      const couponTitle = reward.redeem_type === 'POINTS_CASH'
-        ? `🎁 ${result.reward_name || 'reward'}`
-        : `🎟️ ${result.reward_name || 'voucher'}`
-      const couponDesc = reward.redeem_type === 'POINTS_CASH'
-        ? `ส่วนลดสำหรับสินค้าที่แลกไว้ — จ่ายเพิ่ม ฿${Number(reward.cash_top_up_thb || 0).toLocaleString()} ที่ Shopify`
-        : `ส่วนลด ฿${discountValue.toLocaleString()}${minPurchase ? ` ขั้นต่ำ ฿${minPurchase.toLocaleString()}` : ''}`
+      const couponTitle =
+          reward.redeem_type === 'PREMIUM'    ? `🎁 ${result.reward_name || 'ของแถม'}`
+        : reward.redeem_type === 'POINTS_CASH' ? `💰 ${result.reward_name || 'reward'}`
+        :                                        `🎟️ ${result.reward_name || 'voucher'}`
+      const couponDesc =
+          reward.redeem_type === 'PREMIUM'
+            ? `ของแถมฟรี — ใช้ code ที่ Shopify เพื่อรับสินค้า (ส่งฟรี / ค่าส่งตาม Shopify)`
+        : reward.redeem_type === 'POINTS_CASH'
+            ? `ส่วนลดสำหรับสินค้าที่แลกไว้ — จ่ายเพิ่ม ฿${Number(reward.cash_top_up_thb || 0).toLocaleString()} ที่ Shopify`
+        :     `ส่วนลด ฿${discountValue.toLocaleString()}${minPurchase ? ` ขั้นต่ำ ฿${minPurchase.toLocaleString()}` : ''}`
       const { error: couponErr } = await service.from('coupons').insert({
         user_id:        user.id,
         code:           memberCode,
@@ -189,13 +198,17 @@ export async function POST(
         min_purchase:   minPurchase || 0,
         valid_from:     today,
         valid_until:    endsAt.split('T')[0],
-        theme:          reward.redeem_type === 'POINTS_CASH' ? 'gold' : 'rose',
+        theme:
+            reward.redeem_type === 'PREMIUM'    ? 'emerald'
+          : reward.redeem_type === 'POINTS_CASH' ? 'gold'
+          :                                        'rose',
         image_url:      rewardFull?.image_url || null,    // โชว์รูปสินค้าบน coupon card
         shopify_shop_id:       DEFAULT_SHOP_ID,
         shopify_price_rule_id: shopifyResult.price_rule_id,
-        apply_url:             reward.redeem_type === 'POINTS_CASH'
-                                 ? (reward.shopify_product_url as string | null) || applyUrl
-                                 : applyUrl,
+        apply_url:
+            reward.redeem_type === 'PREMIUM' || reward.redeem_type === 'POINTS_CASH'
+              ? (reward.shopify_product_url as string | null) || applyUrl
+              : applyUrl,
         shopify_synced_at:     new Date().toISOString(),
         auto_issue_key:        `REWARD_${params.id}_${result.redemption_id}`,
       })
@@ -205,11 +218,16 @@ export async function POST(
           user_id: user.id, code: memberCode, title: couponTitle, description: couponDesc,
           discount_type: 'FIXED', discount_value: discountValue, min_purchase: minPurchase || 0,
           valid_from: today, valid_until: endsAt.split('T')[0],
-          theme: reward.redeem_type === 'POINTS_CASH' ? 'gold' : 'rose',
+          theme:
+              reward.redeem_type === 'PREMIUM'    ? 'emerald'
+            : reward.redeem_type === 'POINTS_CASH' ? 'gold'
+            :                                        'rose',
           shopify_shop_id: DEFAULT_SHOP_ID,
           shopify_price_rule_id: shopifyResult.price_rule_id,
-          apply_url: reward.redeem_type === 'POINTS_CASH'
-            ? (reward.shopify_product_url as string | null) || applyUrl : applyUrl,
+          apply_url:
+              reward.redeem_type === 'PREMIUM' || reward.redeem_type === 'POINTS_CASH'
+                ? (reward.shopify_product_url as string | null) || applyUrl
+                : applyUrl,
           shopify_synced_at: new Date().toISOString(),
           auto_issue_key: `REWARD_${params.id}_${result.redemption_id}`,
         })

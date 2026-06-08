@@ -39,21 +39,34 @@ export default function InlineShippingStatus({ orderSn, compact }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  async function load() {
-    setLoading(true); setError('')
+  async function load(silent = false) {
+    if (!silent) setLoading(true)
+    setError('')
     try {
       const r = await fetch(`/api/orders/track-bq?order_sn=${encodeURIComponent(orderSn)}`, { cache: 'no-store' })
       const d = await r.json()
       if (!r.ok) {
-        // 404 = ยังไม่มีข้อมูล — แสดงเป็น "ยังไม่มีสถานะการจัดส่ง" แทน error
         if (r.status === 404) { setShipments([]); return }
         throw new Error(d.error)
       }
       setShipments(d.shipments || [])
     } catch (e) { setError((e as Error).message) }
-    finally { setLoading(false) }
+    finally { if (!silent) setLoading(false) }
   }
-  useEffect(() => { load() }, [orderSn])
+  useEffect(() => {
+    load()
+    // Auto-refresh ทุก 90s + เมื่อกลับมาที่แท็บ
+    const interval = setInterval(() => {
+      if (!document.hidden) load(true)
+    }, 90_000)
+    function onVisible() { if (!document.hidden) load(true) }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderSn])
 
   // Loading state
   if (loading) {

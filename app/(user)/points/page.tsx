@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import {
   TrendingUp, TrendingDown, RefreshCw, Sparkles, Wand2,
-  Flame, Calendar, Gift, Package,
+  Flame, Calendar, Gift, Package, ShoppingBag, Ticket, ChevronRight,
 } from 'lucide-react'
 import type { PointsLog, UserTier } from '@/types'
 import { formatDateTime } from '@/lib/utils'
@@ -471,6 +472,67 @@ export default async function PointsPage() {
             </div>
           </div>
         )}
+      </section>
+
+      {/* ============================================================
+          QUICK LINKS — ประวัติสินค้า + ประวัติการแลก
+      ============================================================ */}
+      <section className="pop-in-d4" style={{ padding: '4px 16px 8px' }}>
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10,
+        }}>
+          <Link href="/purchases" className="tap" style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '12px 14px', borderRadius: 'var(--r-lg)',
+            background: '#fff', border: '1px solid var(--hair)',
+            boxShadow: '0 2px 8px rgba(20,18,15,0.04)',
+            textDecoration: 'none', color: 'inherit',
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+              background: 'linear-gradient(135deg, #FAF3DC, #EADBB1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#A0782B',
+            }}>
+              <ShoppingBag size={16} strokeWidth={2.2}/>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 800, lineHeight: 1.25 }}>
+                สินค้าที่ลงทะเบียน
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 10, color: 'var(--ink-mute)', fontWeight: 600 }}>
+                ดูประวัติทั้งหมด
+              </p>
+            </div>
+            <ChevronRight size={14} color="var(--ink-faint)" style={{ flexShrink: 0 }}/>
+          </Link>
+
+          <Link href="/coupons" className="tap" style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '12px 14px', borderRadius: 'var(--r-lg)',
+            background: '#fff', border: '1px solid var(--hair)',
+            boxShadow: '0 2px 8px rgba(20,18,15,0.04)',
+            textDecoration: 'none', color: 'inherit',
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+              background: 'linear-gradient(135deg, #FAF3DC, #EADBB1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#A0782B',
+            }}>
+              <Ticket size={16} strokeWidth={2.2}/>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 800, lineHeight: 1.25 }}>
+                ประวัติการแลกคูปอง
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 10, color: 'var(--ink-mute)', fontWeight: 600 }}>
+                คูปองทั้งหมด
+              </p>
+            </div>
+            <ChevronRight size={14} color="var(--ink-faint)" style={{ flexShrink: 0 }}/>
+          </Link>
+        </div>
       </section>
 
       {/* ============================================================

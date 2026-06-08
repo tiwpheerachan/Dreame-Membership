@@ -54,5 +54,8 @@ export async function GET() {
     user_id: user.id,
     count: items.length,
     items,
+    fetched_at: new Date().toISOString(),
+  }, {
+    headers: { 'Cache-Control': 'no-store, must-revalidate' },
   })
 }
