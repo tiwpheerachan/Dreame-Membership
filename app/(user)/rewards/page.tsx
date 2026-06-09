@@ -31,6 +31,7 @@ interface Reward {
   cash_top_up_thb: number | null
   voucher_value_thb: number | null
   shopify_product_url: string | null
+  original_price_thb?: number | null
 }
 
 interface Model { id: string; name: string; slug: string | null }
@@ -369,27 +370,49 @@ function RewardCard({ reward }: { reward: Reward }) {
             {reward.short_description}
           </p>
         )}
-        <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-            <span className="numerals" style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold-deep)' }}>
-              {reward.points_required.toLocaleString()}
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>แต้ม</span>
-            {reward.redeem_type === 'POINTS_CASH' && reward.cash_top_up_thb && (
-              <span style={{ fontSize: 11, color: 'var(--ink-mute)', marginLeft: 4 }}>
-                + ฿{Number(reward.cash_top_up_thb).toLocaleString()}
+        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span className="numerals" style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold-deep)' }}>
+                {reward.points_required.toLocaleString()}
               </span>
-            )}
-            {reward.redeem_type === 'VOUCHER' && reward.voucher_value_thb && (
-              <span style={{ fontSize: 11, color: 'var(--gold-deep)', marginLeft: 4, fontWeight: 600 }}>
-                = ฿{Number(reward.voucher_value_thb).toLocaleString()} off
+              <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>แต้ม</span>
+              {reward.redeem_type === 'VOUCHER' && reward.voucher_value_thb && (
+                <span style={{ fontSize: 11, color: 'var(--gold-deep)', marginLeft: 4, fontWeight: 600 }}>
+                  = ฿{Number(reward.voucher_value_thb).toLocaleString()} off
+                </span>
+              )}
+            </div>
+            {reward.stock !== null && reward.stock_remaining !== null && reward.stock_remaining < 10 && (
+              <span style={{ fontSize: 10, color: 'var(--red)', fontWeight: 600 }}>
+                เหลือ {reward.stock_remaining}
               </span>
             )}
           </div>
-          {reward.stock !== null && reward.stock_remaining !== null && reward.stock_remaining < 10 && (
-            <span style={{ fontSize: 10, color: 'var(--red)', fontWeight: 600 }}>
-              เหลือ {reward.stock_remaining}
-            </span>
+
+          {/* ── POINTS_CASH: เน้นยอดที่ต้องจ่ายเพิ่มเป็นบรรทัดต่างหาก ── */}
+          {reward.redeem_type === 'POINTS_CASH' && reward.cash_top_up_thb && (
+            <div style={{
+              display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: 6,
+              padding: '4px 9px', borderRadius: 'var(--r-pill)',
+              background: 'linear-gradient(135deg, #FAF3DC, #EADBB1)',
+              border: '1px solid rgba(201,155,62,0.30)',
+            }}>
+              <span style={{ fontSize: 10, color: '#A0782B', fontWeight: 800, letterSpacing: '0.04em' }}>
+                + จ่ายเพิ่ม
+              </span>
+              <span className="numerals" style={{ fontSize: 13, fontWeight: 800, color: '#1A1815', lineHeight: 1 }}>
+                ฿{Number(reward.cash_top_up_thb).toLocaleString()}
+              </span>
+              {reward.original_price_thb && Number(reward.original_price_thb) > Number(reward.cash_top_up_thb) && (
+                <span style={{
+                  fontSize: 9.5, color: 'var(--ink-faint)',
+                  textDecoration: 'line-through', marginLeft: 2,
+                }}>
+                  ฿{Number(reward.original_price_thb).toLocaleString()}
+                </span>
+              )}
+            </div>
           )}
         </div>
         {/* Mode badge */}
