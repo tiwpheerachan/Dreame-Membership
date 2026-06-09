@@ -42,6 +42,9 @@ interface MyRedemption {
   reward_snapshot: {
     name: string; image_url: string | null; points_required: number;
     redeem_type?: 'POINTS_CASH' | 'VOUCHER' | 'PREMIUM';
+    cash_top_up_thb?: number | null;
+    original_price_thb?: number | null;
+    voucher_value_thb?: number | null;
   }
   points_used: number
   status: 'pending' | 'redeemed' | 'confirmed' | 'shipping' | 'delivered' | 'cancelled' | 'expired'
@@ -692,7 +695,7 @@ function MyRedemptionRow({ r }: { r: MyRedemption }) {
           WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' as const }}>
           {snap.name}
         </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
           <span style={{
             fontSize: 9.5, padding: '2px 7px', borderRadius: 100,
             background: `${meta.color}1A`, color: meta.color,
@@ -700,11 +703,28 @@ function MyRedemptionRow({ r }: { r: MyRedemption }) {
           }}>
             <meta.Icon size={9}/> {meta.label}
           </span>
-          {snap.points_required > 0 && (
-            <span style={{ fontSize: 10, color: 'var(--ink-faint)' }}>
-              · {snap.points_required.toLocaleString()} แต้ม
+          {/* แต้ม + เงินสด → "100 แต้ม + ฿1,000" gold pill */}
+          {snap.redeem_type === 'POINTS_CASH' && snap.cash_top_up_thb != null ? (
+            <span style={{
+              display: 'inline-flex', alignItems: 'baseline', gap: 3,
+              padding: '2px 8px', borderRadius: 100,
+              background: 'linear-gradient(135deg, #FAF3DC, #EADBB1)',
+              border: '1px solid rgba(201,155,62,0.30)',
+            }}>
+              <span className="numerals" style={{ fontSize: 10.5, fontWeight: 800, color: '#A0782B' }}>
+                {(r.points_used || snap.points_required).toLocaleString()}
+              </span>
+              <span style={{ fontSize: 8.5, fontWeight: 700, color: '#A0782B' }}>แต้ม</span>
+              <span style={{ fontSize: 9, color: '#A0782B', margin: '0 1px' }}>+</span>
+              <span className="numerals" style={{ fontSize: 10.5, fontWeight: 800, color: '#1A1815' }}>
+                ฿{Number(snap.cash_top_up_thb).toLocaleString()}
+              </span>
             </span>
-          )}
+          ) : snap.points_required > 0 ? (
+            <span style={{ fontSize: 10, color: 'var(--ink-faint)' }}>
+              · {(r.points_used || snap.points_required).toLocaleString()} แต้ม
+            </span>
+          ) : null}
         </div>
         {r.shopify_code && !isExpired && r.status !== 'delivered' && r.status !== 'cancelled' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
