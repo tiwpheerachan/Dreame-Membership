@@ -196,7 +196,8 @@ export default function AdminRewardsPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="grid gap-3"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
             {filtered.map(r => (
               <RewardCard key={r.id} r={r}
                 stats={counts[r.id]}
@@ -233,72 +234,124 @@ function RewardCard({ r, stats, onEdit }: {
   r: Reward; stats?: { total: number; pending: number; delivered: number }
   onEdit: () => void
 }) {
+  const typeMeta =
+    r.redeem_type === 'POINTS_CASH' ? { emoji: '💰', color: '#C99B3E', bg: 'rgba(201,155,62,0.10)' } :
+    r.redeem_type === 'VOUCHER'     ? { emoji: '🎟️', color: '#4A7BC1', bg: 'rgba(74,123,193,0.10)' } :
+                                      { emoji: '🎁', color: '#3A8E5A', bg: 'rgba(58,142,90,0.10)' }
+
   return (
-    <div className="admin-card overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
-      onClick={onEdit}>
-      {/* Image */}
-      <div className="aspect-video relative" style={{ background: 'var(--admin-bg)' }}>
+    <div className="admin-card overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5 flex flex-col"
+      onClick={onEdit}
+      style={{ boxShadow: '0 1px 3px rgba(20,18,15,0.05)' }}>
+      {/* Image — smaller square */}
+      <div className="relative w-full" style={{
+        background: 'var(--admin-bg)',
+        aspectRatio: '4 / 3',
+      }}>
         {r.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={r.image_url} alt={r.name}
             className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center" style={{ color: 'var(--admin-ink-faint)' }}>
-            <Gift size={32} />
+          <div className="w-full h-full flex items-center justify-center"
+            style={{ color: 'var(--admin-ink-faint)' }}>
+            <Gift size={26} />
           </div>
         )}
-        {/* Featured + status badge */}
-        <div className="absolute top-2 left-2 flex gap-1">
-          {r.is_featured && <span className="admin-pill admin-pill-amber" style={{ fontSize: 9 }}>⭐ Featured</span>}
-          {r.status === 'paused'   && <span className="admin-pill" style={{ fontSize: 9 }}>Paused</span>}
-          {r.status === 'draft'    && <span className="admin-pill" style={{ fontSize: 9 }}>Draft</span>}
-          {r.status === 'archived' && <span className="admin-pill admin-pill-red" style={{ fontSize: 9 }}>Archived</span>}
+
+        {/* Featured + status badge — top-left */}
+        <div className="absolute top-1.5 left-1.5 flex gap-1">
+          {r.is_featured && <span className="admin-pill admin-pill-amber" style={{ fontSize: 8.5, padding: '1px 5px' }}>⭐</span>}
+          {r.status === 'paused'   && <span className="admin-pill" style={{ fontSize: 8.5, padding: '1px 5px' }}>Paused</span>}
+          {r.status === 'draft'    && <span className="admin-pill" style={{ fontSize: 8.5, padding: '1px 5px' }}>Draft</span>}
+          {r.status === 'archived' && <span className="admin-pill admin-pill-red" style={{ fontSize: 8.5, padding: '1px 5px' }}>Archived</span>}
         </div>
+
+        {/* Type chip — top-right */}
+        <span style={{
+          position: 'absolute', top: 6, right: 6,
+          fontSize: 9, padding: '2px 6px', borderRadius: 999,
+          background: typeMeta.bg, color: typeMeta.color, fontWeight: 700,
+          backdropFilter: 'blur(6px)',
+          border: `1px solid ${typeMeta.color}33`,
+        }}>
+          {typeMeta.emoji} {r.redeem_type === 'POINTS_CASH' ? 'P+C' : r.redeem_type === 'VOUCHER' ? 'Voucher' : 'Gift'}
+        </span>
       </div>
 
-      <div className="p-3 space-y-2">
-        <div className="flex items-start justify-between gap-2">
+      {/* Body */}
+      <div className="p-2.5 flex flex-col flex-1 gap-1.5">
+        {/* Title row */}
+        <div className="flex items-start justify-between gap-1.5">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold truncate" style={{ color: 'var(--admin-ink)' }}>{r.name}</p>
+            <p className="text-[12.5px] font-bold leading-tight" style={{
+              color: 'var(--admin-ink)',
+              overflow: 'hidden', display: '-webkit-box',
+              WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+              minHeight: '2em',
+            }}>{r.name}</p>
             {r.reward_models && (
-              <p className="text-[10px]" style={{ color: 'var(--admin-ink-faint)' }}>
+              <p className="text-[9.5px] mt-0.5 truncate" style={{ color: 'var(--admin-ink-faint)' }}>
                 {r.reward_models.name}
               </p>
             )}
           </div>
           <div className="text-right flex-shrink-0">
-            <p className="text-base font-bold tabular-nums" style={{ color: '#C99B3E' }}>
+            <p className="text-[13px] font-bold tabular-nums leading-none" style={{ color: '#C99B3E' }}>
               {r.points_required.toLocaleString()}
             </p>
-            <p className="text-[9px]" style={{ color: 'var(--admin-ink-faint)' }}>แต้ม</p>
+            <p className="text-[8.5px] mt-0.5" style={{ color: 'var(--admin-ink-faint)' }}>แต้ม</p>
           </div>
         </div>
 
-        {/* Allowed tiers */}
+        {/* Cash top-up (POINTS_CASH) / Voucher value (VOUCHER) */}
+        {r.redeem_type === 'POINTS_CASH' && r.cash_top_up_thb != null && (
+          <p className="text-[10px] tabular-nums" style={{ color: 'var(--admin-ink-mute)' }}>
+            + จ่าย <b style={{ color: 'var(--admin-ink)' }}>฿{Number(r.cash_top_up_thb).toLocaleString()}</b>
+            {r.original_price_thb != null && Number(r.original_price_thb) > Number(r.cash_top_up_thb) && (
+              <span style={{ color: 'var(--admin-ink-faint)', textDecoration: 'line-through', marginLeft: 4 }}>
+                ฿{Number(r.original_price_thb).toLocaleString()}
+              </span>
+            )}
+          </p>
+        )}
+        {r.redeem_type === 'VOUCHER' && r.voucher_value_thb != null && (
+          <p className="text-[10px] tabular-nums" style={{ color: '#3A8E5A', fontWeight: 600 }}>
+            = ฿{Number(r.voucher_value_thb).toLocaleString()} OFF
+          </p>
+        )}
+
+        {/* Tier chips */}
         <div className="flex gap-1 flex-wrap">
           {r.allowed_tiers.map(t => (
-            <span key={t} className="admin-pill" style={{ fontSize: 9 }}>{t}</span>
+            <span key={t} className="admin-pill"
+              style={{ fontSize: 8, padding: '1px 5px' }}>{t}</span>
           ))}
         </div>
 
-        {/* Stock + stats */}
-        <div className="grid grid-cols-3 gap-1 text-center pt-2"
+        {/* Footer stats — push to bottom */}
+        <div className="mt-auto grid grid-cols-3 text-center pt-1.5"
           style={{ borderTop: '1px solid var(--admin-border-2)' }}>
-          <Stat label="Stock"
+          <MiniStat label="Stock"
             value={r.stock === null ? '∞' : `${r.stock_remaining}/${r.stock}`} />
-          <Stat label="Pending" value={stats?.pending ?? 0} color={(stats?.pending ?? 0) > 0 ? '#C99B3E' : undefined} />
-          <Stat label="ส่งแล้ว" value={stats?.delivered ?? 0} color="#3A8E5A" />
+          <MiniStat label="Pend"
+            value={stats?.pending ?? 0}
+            color={(stats?.pending ?? 0) > 0 ? '#C99B3E' : undefined} />
+          <MiniStat label="Done"
+            value={stats?.delivered ?? 0} color="#3A8E5A" />
         </div>
       </div>
     </div>
   )
 }
 
-function Stat({ label, value, color }: { label: string; value: number | string; color?: string }) {
+function MiniStat({ label, value, color }: { label: string; value: number | string; color?: string }) {
   return (
     <div>
-      <p className="text-sm font-bold tabular-nums" style={{ color: color || 'var(--admin-ink)' }}>{value}</p>
-      <p className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--admin-ink-mute)' }}>{label}</p>
+      <p className="text-[11px] font-bold tabular-nums leading-none"
+        style={{ color: color || 'var(--admin-ink)' }}>{value}</p>
+      <p className="text-[8px] uppercase tracking-wider mt-0.5"
+        style={{ color: 'var(--admin-ink-mute)' }}>{label}</p>
     </div>
   )
 }
