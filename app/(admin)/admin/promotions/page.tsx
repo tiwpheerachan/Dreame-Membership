@@ -267,7 +267,7 @@ export default function AdminPromotionsPage() {
         </div>
       ) : (
         <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14,
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12,
         }}>
           {filtered.map(p => (
             <PromoAdminCard
@@ -336,10 +336,7 @@ function PromoAdminCard({
         onClick={onEdit}
         style={{
           position: 'relative', cursor: 'pointer',
-          aspectRatio:
-            promo.layout === 'banner' ? '12/5' :
-            promo.layout === 'feed'   ? '4/5'  :
-            '16/10',
+          aspectRatio: '16/10',  // unified — ทุกการ์ดสูงเท่ากัน
           background: (promo.image_url || promo.video_url) ? '#000' : 'linear-gradient(135deg,var(--gold-glow),var(--gold-pale))',
         }}
       >
@@ -363,46 +360,48 @@ function PromoAdminCard({
 
         {/* Top-left: layout badge */}
         <span style={{
-          position: 'absolute', top: 10, left: 10,
-          padding: '3px 9px', borderRadius: 'var(--r-pill)',
+          position: 'absolute', top: 6, left: 6,
+          padding: '2px 7px', borderRadius: 'var(--r-pill)',
           background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)',
-          color: '#fff', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-          display: 'inline-flex', alignItems: 'center', gap: 4,
+          color: '#fff', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+          display: 'inline-flex', alignItems: 'center', gap: 3,
         }}>
-          <Layout size={9} /> {LAYOUT_LABEL[promo.layout]}
+          <Layout size={8} /> {LAYOUT_LABEL[promo.layout]}
         </span>
 
         {/* Top-right: status indicators */}
-        <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 4 }}>
+        <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 3 }}>
           {promo.show_on_home && (
             <span title="แสดงในหน้า home" style={{
-              padding: 5, borderRadius: 6,
+              padding: 4, borderRadius: 5,
               background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)',
               color: 'var(--gold-soft)',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <Home size={11} />
+              <Home size={9} />
             </span>
           )}
           <span style={{
-            padding: '3px 8px', borderRadius: 'var(--r-pill)',
+            padding: '2px 6px', borderRadius: 'var(--r-pill)',
             background: promo.is_active ? 'rgba(46,122,61,0.85)' : 'rgba(0,0,0,0.65)',
             backdropFilter: 'blur(6px)',
-            color: '#fff', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase',
-            display: 'inline-flex', alignItems: 'center', gap: 4,
+            color: '#fff', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+            display: 'inline-flex', alignItems: 'center', gap: 3,
           }}>
-            {promo.is_active ? '● ACTIVE' : '○ OFF'}
+            {promo.is_active ? '●' : '○'}
           </span>
         </div>
 
         {/* Custom badge */}
         {promo.badge_text && (
           <span style={{
-            position: 'absolute', bottom: 10, left: 10,
-            padding: '4px 11px', borderRadius: 'var(--r-pill)',
+            position: 'absolute', bottom: 6, left: 6,
+            padding: '3px 8px', borderRadius: 'var(--r-pill)',
             background: 'linear-gradient(135deg,#EADBB1,#A0782B)',
-            color: '#1a1815', fontSize: 9.5, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.25)',
+            color: '#1a1815', fontSize: 8.5, fontWeight: 800, letterSpacing: '0.10em', textTransform: 'uppercase',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+            maxWidth: 'calc(100% - 12px)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {promo.badge_text}
           </span>
@@ -410,18 +409,19 @@ function PromoAdminCard({
       </div>
 
       {/* Body */}
-      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+      <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
         <div>
           <p style={{
-            margin: 0, fontWeight: 700, fontSize: 13.5, lineHeight: 1.35,
+            margin: 0, fontWeight: 700, fontSize: 12.5, lineHeight: 1.3,
             overflow: 'hidden', display: '-webkit-box',
             WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+            minHeight: '2.4em',
           }}>
             {promo.title || <span style={{ color: 'var(--ink-faint)', fontStyle: 'italic' }}>(ไม่มีชื่อ)</span>}
           </p>
           {promo.description && (
             <p style={{
-              margin: '4px 0 0', fontSize: 11.5, color: 'var(--ink-mute)', lineHeight: 1.5,
+              margin: '3px 0 0', fontSize: 10.5, color: 'var(--ink-mute)', lineHeight: 1.45,
               overflow: 'hidden', display: '-webkit-box',
               WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
             }}>
@@ -432,19 +432,19 @@ function PromoAdminCard({
 
         {/* Pricing strip */}
         {(promo.original_price || promo.discounted_price) && (
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, flexWrap: 'wrap' }}>
             {promo.original_price ? (
-              <span style={{ fontSize: 11, color: 'var(--ink-faint)', textDecoration: 'line-through' }}>
+              <span style={{ fontSize: 10, color: 'var(--ink-faint)', textDecoration: 'line-through' }}>
                 ฿{Number(promo.original_price).toLocaleString()}
               </span>
             ) : null}
             {promo.discounted_price ? (
-              <span className="num" style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold-deep)' }}>
+              <span className="num" style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--gold-deep)' }}>
                 ฿{Number(promo.discounted_price).toLocaleString()}
               </span>
             ) : null}
             {promo.discount_label && (
-              <span className="admin-pill admin-pill-amber" style={{ fontSize: 10 }}>
+              <span className="admin-pill admin-pill-amber" style={{ fontSize: 8.5, padding: '1px 5px' }}>
                 {promo.discount_label}
               </span>
             )}
@@ -454,28 +454,28 @@ function PromoAdminCard({
         {/* Footer meta + actions */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--hair)', gap: 6,
+          marginTop: 'auto', paddingTop: 6, borderTop: '1px solid var(--hair)', gap: 4,
         }}>
-          <div style={{ fontSize: 10, color: 'var(--ink-faint)', letterSpacing: '0.04em' }}>
-            sort {promo.sort_order} · {formatDate(promo.created_at || '')}
+          <div style={{ fontSize: 9, color: 'var(--ink-faint)', letterSpacing: '0.03em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            #{promo.sort_order} · {formatDate(promo.created_at || '')}
           </div>
-          <div style={{ display: 'flex', gap: 2 }}>
+          <div style={{ display: 'flex', gap: 1, flexShrink: 0 }}>
             <IconBtn title="แก้ไข" onClick={onEdit}>
-              <Edit3 size={12} />
+              <Edit3 size={11} />
             </IconBtn>
             <IconBtn title={promo.is_active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'} onClick={onToggle}>
-              {promo.is_active ? <EyeOff size={12} /> : <Eye size={12} />}
+              {promo.is_active ? <EyeOff size={11} /> : <Eye size={11} />}
             </IconBtn>
             {promo.link_url && (
               <a href={promo.link_url} target="_blank" rel="noopener noreferrer"
                 title="เปิดลิงก์ปลายทาง"
                 className="admin-btn admin-btn-ghost"
-                style={{ padding: 5, fontSize: 11 }}>
-                <ExternalLink size={12} />
+                style={{ padding: 4, fontSize: 10 }}>
+                <ExternalLink size={11} />
               </a>
             )}
             <IconBtn title="ลบ" onClick={onDelete} danger>
-              <Trash2 size={12} />
+              <Trash2 size={11} />
             </IconBtn>
           </div>
         </div>
@@ -493,7 +493,7 @@ function IconBtn({
     <button onClick={onClick} title={title}
       className="admin-btn admin-btn-ghost"
       style={{
-        padding: 5, fontSize: 11,
+        padding: 4, fontSize: 10,
         color: danger ? 'var(--red)' : 'var(--ink-mute)',
         borderColor: danger ? 'rgba(139,58,58,0.18)' : undefined,
       }}>
