@@ -106,6 +106,7 @@ export interface Coupon {
     redeem_type: 'POINTS_CASH' | 'VOUCHER' | 'PREMIUM' | string
     cash_top_up_thb: number | null
     shopify_product_url: string | null
+    points_used?: number | null
   } | null
 }
 

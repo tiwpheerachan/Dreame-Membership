@@ -50,10 +50,11 @@ export default async function CouponsPage() {
     redeem_type: string;
     cash_top_up_thb: number | null;
     shopify_product_url: string | null;
+    points_used: number | null;
   }> = {}
   if (rewardCodes.length > 0) {
     const { data: reds } = await service.from('redemptions')
-      .select('id, shopify_code, reward_id, reward_snapshot')
+      .select('id, shopify_code, reward_id, reward_snapshot, points_used')
       .in('shopify_code', rewardCodes).eq('user_id', user.id)
 
     // ── Fallback: snapshot ไม่ครบ → bulk fetch reward records ──
@@ -87,6 +88,7 @@ export default async function CouponsPage() {
         redeem_type:         snap.redeem_type || fallback?.redeem_type || 'VOUCHER',
         cash_top_up_thb:     snap.cash_top_up_thb ?? fallback?.cash_top_up_thb ?? null,
         shopify_product_url: snap.shopify_product_url ?? fallback?.shopify_product_url ?? null,
+        points_used:         (r.points_used as number | null) ?? null,
       }
     }
   }

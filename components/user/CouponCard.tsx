@@ -246,6 +246,26 @@ export default function CouponCard({ coupon, status }: Props) {
               </p>
             )}
 
+            {/* ── Points + Cash summary — "X แต้ม + ฿Y" ── */}
+            {isPointsCashReward && coupon.reward_meta?.points_used && (
+              <div style={{
+                marginTop: 5,
+                display: 'inline-flex', alignItems: 'baseline', gap: 4,
+                padding: '3px 8px', borderRadius: 'var(--r-pill)',
+                background: 'linear-gradient(135deg, #FAF3DC, #EADBB1)',
+                border: '1px solid rgba(201,155,62,0.30)',
+              }}>
+                <span className="numerals" style={{ fontSize: 11.5, fontWeight: 800, color: '#A0782B' }}>
+                  {Number(coupon.reward_meta.points_used).toLocaleString()}
+                </span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: '#A0782B' }}>แต้ม</span>
+                <span style={{ fontSize: 10, color: '#A0782B', margin: '0 1px' }}>+</span>
+                <span className="numerals" style={{ fontSize: 11.5, fontWeight: 800, color: '#1A1815' }}>
+                  ฿{Number(coupon.reward_meta.cash_top_up_thb || 0).toLocaleString()}
+                </span>
+              </div>
+            )}
+
             {/* Realtime live price (POINTS_CASH reward only) — compact */}
             {isPointsCashReward && (
               <div style={{
