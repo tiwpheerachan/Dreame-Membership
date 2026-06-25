@@ -1,7 +1,7 @@
 // ============================================================
 // Shopify Discount API client (ecom-data-platform)
 //
-// Wraps the external API at ecom-data-platform.onrender.com.
+// Wraps the external API at api-center.shd-technology.co.th.
 // All calls go through this single module so we can:
 //   • centralize auth (X-API-Key header)
 //   • centralize error mapping (their `{ detail: "..." }` → typed Error)
@@ -9,12 +9,12 @@
 //   • make the surface easy to mock in tests
 //
 // Env:
-//   SHOPIFY_DISCOUNT_API_URL   default https://ecom-data-platform.onrender.com
+//   SHOPIFY_DISCOUNT_API_URL   default https://api-center.shd-technology.co.th
 //   SHOPIFY_DISCOUNT_API_KEY   required at runtime — set on Render/local
 //   SHOPIFY_DEFAULT_SHOP_ID    default dreame-thailand.myshopify.com
 // ============================================================
 
-const BASE_URL = process.env.SHOPIFY_DISCOUNT_API_URL || 'https://ecom-data-platform.onrender.com'
+const BASE_URL = process.env.SHOPIFY_DISCOUNT_API_URL || 'https://api-center.shd-technology.co.th'
 const API_KEY  = process.env.SHOPIFY_DISCOUNT_API_KEY || ''
 export const DEFAULT_SHOP_ID = process.env.SHOPIFY_DEFAULT_SHOP_ID || 'dreame-thailand.myshopify.com'
 

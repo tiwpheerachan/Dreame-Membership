@@ -47,7 +47,7 @@ in Supabase SQL editor — adds these columns to `coupons`:
 Add to `.env.local` and Render/Vercel:
 
 ```
-SHOPIFY_DISCOUNT_API_URL=https://ecom-data-platform.onrender.com
+SHOPIFY_DISCOUNT_API_URL=https://api-center.shd-technology.co.th
 SHOPIFY_DISCOUNT_API_KEY=ecom_live_...        # get at ecom-dashboard.fly.dev
 SHOPIFY_DEFAULT_SHOP_ID=dreame-thailand.myshopify.com
 CRON_SECRET=...                               # already used for /api/cron/*
