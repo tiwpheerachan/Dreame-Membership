@@ -87,6 +87,8 @@ export default function CouponCard({ coupon, status }: Props) {
           opacity: isActive ? 1 : 0.55,
           position: 'relative',
           cursor: 'pointer',
+          // fit the square image (118) + gold price bar (≥42) without clipping
+          minHeight: coupon.image_url ? 160 : undefined,
           transition: 'transform 0.18s ease, box-shadow 0.18s ease',
         }}
       >
@@ -94,9 +96,10 @@ export default function CouponCard({ coupon, status }: Props) {
         {/* If coupon has image (reward coupon), show product image instead of theme stamp */}
         {coupon.image_url ? (
           <div style={{
-            width: 92, flexShrink: 0, position: 'relative',
+            width: 118, flexShrink: 0, position: 'relative',
             background: 'var(--bg-soft)',
             borderRight: '1px dashed var(--line)',
+            display: 'flex', flexDirection: 'column',
             overflow: 'hidden',
           }}>
             {/* Notches */}
@@ -110,28 +113,38 @@ export default function CouponCard({ coupon, status }: Props) {
               width: 14, height: 14, borderRadius: '50%',
               background: '#fff', border: '1px solid var(--line)',
             }} />
-            {/* Product image */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={coupon.image_url} alt={coupon.title || 'reward'}
-              style={{ width: '100%', height: '100%', objectFit: 'cover',
-                opacity: isActive ? 1 : 0.5 }} />
-            {/* Gold overlay tag — discount value */}
+
+            {/* Square product image (1:1, no crop) — soft top fade for a clean edge */}
+            <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', flexShrink: 0 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={coupon.image_url} alt={coupon.title || 'reward'}
+                style={{ width: '100%', height: '100%', objectFit: 'cover',
+                  display: 'block', opacity: isActive ? 1 : 0.5 }} />
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: '34%',
+                background: 'linear-gradient(to bottom, rgba(0,0,0,0.28), rgba(0,0,0,0))',
+                pointerEvents: 'none',
+              }} />
+            </div>
+
+            {/* Gold price bar — BELOW the image (full width, not overlapping) */}
             <div style={{
-              position: 'absolute', bottom: 4, left: 4, right: 4, zIndex: 3,
+              flex: 1, minHeight: 42,
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              padding: '5px 4px',
               background: isActive
-                ? 'linear-gradient(135deg, #FAF3DC 0%, #C9A063 100%)'
+                ? 'linear-gradient(135deg, #FAF3DC 0%, #EADBB1 40%, #C9A063 100%)'
                 : 'rgba(0,0,0,0.55)',
               color: isActive ? '#1A1815' : '#fff',
-              padding: '3px 4px', borderRadius: 4,
-              textAlign: 'center', backdropFilter: 'blur(4px)',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
+              borderTop: isActive ? '1px solid rgba(160,120,43,0.35)' : '1px solid var(--line)',
             }}>
-              <p style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: '0.14em',
-                textTransform: 'uppercase', margin: 0, opacity: 0.85, lineHeight: 1 }}>
+              <p style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.16em',
+                textTransform: 'uppercase', margin: 0, opacity: 0.82, lineHeight: 1 }}>
                 {isPercent ? 'OFF' : '฿ OFF'}
               </p>
               <p className="numerals" style={{
-                fontSize: 13.5, fontWeight: 800, lineHeight: 1.05, margin: '1px 0 0',
+                fontSize: 19, fontWeight: 800, lineHeight: 1.05, margin: '1px 0 0',
                 letterSpacing: '-0.01em',
                 transition: 'all 0.3s ease',
                 opacity: livePriceLoading ? 0.5 : 1,
@@ -141,8 +154,8 @@ export default function CouponCard({ coupon, status }: Props) {
                   : Number(Math.round(displayDiscount)).toLocaleString()}
               </p>
               {discountChanged && (
-                <p style={{ fontSize: 6.5, margin: '1px 0 0', opacity: 0.7,
-                  textDecoration: 'line-through', lineHeight: 1 }}>
+                <p style={{ fontSize: 8, margin: 0, opacity: 0.65,
+                  textDecoration: 'line-through', lineHeight: 1.1 }}>
                   {Number(coupon.discount_value).toLocaleString()}
                 </p>
               )}

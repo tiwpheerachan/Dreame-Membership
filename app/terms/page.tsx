@@ -219,54 +219,72 @@ export default function TermsPage() {
 
   const sections: Section[] = [
     {
-      no:'01', Icon: FileText, iconBg:'#EEF2FF', iconColor:'#4F46E5',
-      title:'ข้อมูลทั่วไป',
-      content: (
-        <p>โปรแกรม <strong>Dreame Thailand Membership</strong> บริหารจัดการโดย <strong>SHD Technology Co., Ltd.</strong> ผู้แทนจำหน่ายอย่างเป็นทางการของ Dreame Technology ในประเทศไทย ออกแบบมาเพื่อมอบสิทธิประโยชน์พิเศษให้ลูกค้าที่ซื้อสินค้า Dreame ผ่านช่องทางที่กำหนด</p>
-      ),
-    },
-    {
-      no:'02', Icon: User, iconBg:'#ECFDF5', iconColor:'#059669',
-      title:'คุณสมบัติผู้สมัคร',
+      no:'01', Icon: User, iconBg:'#ECFDF5', iconColor:'#059669',
+      title:'คุณสมบัติผู้สมัครและการสร้างบัญชี',
       content: (
         <ul>
-          <li>มีอายุไม่ต่ำกว่า 18 ปีบริบูรณ์</li>
-          <li>มีอีเมลหรือหมายเลขโทรศัพท์ที่ใช้งานได้จริงในไทย</li>
-          <li>ซื้อสินค้าผ่านช่องทางที่รับรอง — Shopee · Lazada · Website · TikTok Shop · หน้าร้าน</li>
-          <li>ยินยอมให้ข้อมูลส่วนบุคคลตามวัตถุประสงค์ของโปรแกรม</li>
+          <li>เป็นบุคคลธรรมดา อายุไม่ต่ำกว่า <strong>18 ปีบริบูรณ์</strong> ณ วันที่สมัคร และมีถิ่นพำนักในประเทศไทย</li>
+          <li>ให้ข้อมูลที่ถูกต้อง เป็นจริง และเป็นปัจจุบัน (ชื่อ-นามสกุล, เบอร์โทร, อีเมล) — หากพบว่าเป็นเท็จ บริษัทฯ ขอสงวนสิทธิ์ระงับหรือยกเลิกสมาชิกภาพทันที</li>
+          <li>บัญชีเป็นสิทธิ์เฉพาะบุคคล ไม่สามารถโอน จำหน่าย หรือยกสิทธิ์/คะแนนให้ผู้อื่นได้</li>
+          <li>1 ท่าน (อ้างอิงบัตรประชาชน หรือเบอร์โทร หรืออีเมล) มีได้เพียง <strong>1 บัญชี</strong></li>
         </ul>
       ),
     },
     {
-      no:'03', Icon: Star, iconBg:'#FFFBEB', iconColor:'#D97706',
-      title:'การสะสมคะแนน',
+      no:'02', Icon: Star, iconBg:'#FFFBEB', iconColor:'#D97706',
+      title:'ช่องทางที่รองรับ & การสะสมคะแนน',
       content: (
         <>
           <div className="hi-box">
-            อัตราการได้รับคะแนนตามช่องทางการซื้อ
+            อัตราคะแนน (คำนวณจากยอดหลังหักส่วนลด ไม่รวมค่าจัดส่ง)
             <ul style={{ marginTop:6 }}>
-              <li><strong>Website / หน้าร้าน</strong> — 200 บาท = 1 แต้ม</li>
-              <li><strong>Marketplace</strong> (Shopee, Lazada, TikTok) — 500 บาท = 1 แต้ม</li>
+              <li><strong>D2C ของแบรนด์</strong> (เว็บไซต์ทางการ / หน้าร้านทางการ) — <strong>500 บาท = 2 คะแนน</strong></li>
+              <li><strong>Marketplace &amp; ตัวแทน</strong> (Shopee / Lazada / TikTok Official, ห้าง CDS, ตัวแทนที่ได้รับอนุญาต) — <strong>500 บาท = 1 คะแนน</strong></li>
             </ul>
           </div>
           <ul style={{ marginTop:8 }}>
-            <li>คะแนนจะถูกเพิ่มภายใน 3–7 วันทำการหลังการตรวจสอบ</li>
-            <li>คะแนนไม่หมดอายุหากมีการใช้งานอย่างน้อย 1 ครั้งต่อปี</li>
-            <li>ไม่สามารถโอนหรือแปลงเป็นเงินสดได้</li>
-            <li>การคืนสินค้าจะหักคะแนนที่ได้รับตามสัดส่วน</li>
+            <li>เศษของยอดที่ไม่ถึง 500 บาท จะไม่ถูกคำนวณ และปัดเศษ/รวมบิลไม่ได้</li>
+            <li>การซื้อผ่าน Marketplace/ตัวแทน อาจต้องเชื่อมบัญชีหรือส่งหลักฐานภายในเวลาที่กำหนด เพื่อรับคะแนน</li>
           </ul>
         </>
       ),
     },
     {
-      no:'04', Icon: Layers, iconBg:'#F5F3FF', iconColor:'#7C3AED',
-      title:'ระดับสมาชิก (Membership Tier)',
+      no:'03', Icon: CheckCircle, iconBg:'#F0FDF4', iconColor:'#16A34A',
+      title:'เงื่อนไขการอนุมัติคะแนน',
+      content: (
+        <ul>
+          <li>คะแนนเข้าระบบภายใน <strong>3–7 วันทำการ</strong> หลังตรวจสอบเสร็จ และพ้นกำหนดการคืนสินค้า/คืนเงินของแต่ละช่องทาง</li>
+          <li>คะแนนเป็นสิทธิประโยชน์ของโปรแกรม มิใช่ทรัพย์สิน เงินตรา หรือสิทธิเรียกร้อง — โอน แลกเปลี่ยน แลกเงินสด หรือชำระหนี้ไม่ได้</li>
+          <li><strong>การคืน/ยกเลิกออเดอร์:</strong> บริษัทฯ มีสิทธิ์หักคะแนนที่ได้รับคืนตามสัดส่วน หากคะแนนไม่พอ ยอดอาจ<strong>ติดลบ</strong> และนำคะแนนในอนาคตมาหักจนเป็นศูนย์ (ไม่เรียกเก็บเงิน)</li>
+        </ul>
+      ),
+    },
+    {
+      no:'04', Icon: RefreshCw, iconBg:'#EEF2FF', iconColor:'#6366F1',
+      title:'อายุและการหมดอายุของคะแนน',
+      content: (
+        <>
+          <div className="hi-box">
+            คะแนนที่ได้รับในแต่ละปีปฏิทิน มีอายุถึง <strong>31 ธันวาคมของปีถัดไป</strong><br/>
+            <span style={{ fontSize:12, opacity:0.85 }}>ตัวอย่าง: คะแนนที่ได้รับปี 2569 จะหมดอายุทั้งหมดวันที่ 31 ธ.ค. 2570</span>
+          </div>
+          <ul style={{ marginTop:8 }}>
+            <li>คะแนนที่หมดอายุจะถูกลบอัตโนมัติ ขอต่ออายุ คืน หรือชดเชยไม่ได้</li>
+            <li>บริษัทฯ อาจแจ้งเตือนคะแนนใกล้หมดอายุผ่านเว็บไซต์ อีเมล หรือ LINE Official</li>
+          </ul>
+        </>
+      ),
+    },
+    {
+      no:'05', Icon: Layers, iconBg:'#F5F3FF', iconColor:'#7C3AED',
+      title:'ระดับสมาชิก (Membership Tiers)',
       content: (
         <div className="tier-row">
           {[
-            { label:'Silver',   range:'0 – 79 แต้ม',   perks:'ลงทะเบียนสินค้า · รับประกัน', from:'#C9D9E8', to:'#8DA9BC', ink:'#0F1B2D', bg:'#F4F6FB' },
-            { label:'Gold',     range:'80 – 399 แต้ม', perks:'+ ส่วนลดพิเศษ · คูปองวันเกิด',  from:'#F4C28A', to:'#C46B3A', ink:'#3A1F0A', bg:'#FFF8EE' },
-            { label:'Platinum', range:'400+ แต้ม',     perks:'+ Priority Support · 1.2× boost', from:'#5EEAD4', to:'#14B8A6', ink:'#053C36', bg:'#EBFCF7' },
+            { label:'Silver',   range:'0 – 63 คะแนน',     perks:'ลงทะเบียน/รับประกัน · Welcome Voucher 10%', from:'#C9D9E8', to:'#8DA9BC', ink:'#0F1B2D', bg:'#F4F6FB' },
+            { label:'Gold',     range:'64 – 319 คะแนน',   perks:'+ Upgrade Voucher เมื่อเลื่อนระดับ',          from:'#F4C28A', to:'#C46B3A', ink:'#3A1F0A', bg:'#FFF8EE' },
+            { label:'Platinum', range:'320 คะแนนขึ้นไป',  perks:'+ Voucher ฿1,000 (ขั้นต่ำ 10,000/บิล) · 1.2× · Quarterly Voucher', from:'#5EEAD4', to:'#14B8A6', ink:'#053C36', bg:'#EBFCF7' },
           ].map(t => (
             <div key={t.label} className="tier-item" style={{ background: t.bg }}>
               <div className="tier-badge" style={{ background:`linear-gradient(135deg,${t.from},${t.to})` }}>
@@ -283,75 +301,100 @@ export default function TermsPage() {
       ),
     },
     {
-      no:'05', Icon: ShieldCheck, iconBg:'#F0FDF4', iconColor:'#16A34A',
+      no:'06', Icon: Sparkles, iconBg:'#FFFBEB', iconColor:'#C99B3E',
+      title:'การใช้คะแนนแลกรับรางวัล',
+      content: (
+        <>
+          <div className="hi-box">
+            อัตราแลกมาตรฐาน <strong>1 คะแนน = ส่วนลด 2 บาท</strong>
+          </div>
+          <ul style={{ marginTop:8 }}>
+            <li>เมื่อกดยืนยันการแลกแล้วถือว่าสมบูรณ์ ยกเลิก เปลี่ยนแปลง หรือขอคืนคะแนนไม่ได้ (เว้นแต่เกิดจากความผิดพลาดของระบบ)</li>
+            <li>คูปองจากการแลกแต้มมีอายุ <strong>90 วัน</strong> นับจากวันรับสิทธิ์ หากไม่ใช้จะสิ้นสุดอัตโนมัติและไม่คืนคะแนน</li>
+            <li>1 คำสั่งซื้อใช้คูปองแลกแต้มได้ <strong>1 ใบเท่านั้น</strong> ห้ามใช้ซ้อนหลายใบในบิลเดียว และยอดในตะกร้าต้องมากกว่ามูลค่าคูปองอย่างน้อย 1 บาท</li>
+            <li>คูปองทุกประเภท: ทอน/แลกเงินสด หรือโอนให้ผู้อื่นไม่ได้ · ใช้ครั้งเดียว · เฉพาะสินค้าที่ร่วมรายการ · ใช้ย้อนหลังไม่ได้ · ไม่ลดค่าจัดส่ง (เว้นแต่กำหนดเป็นอย่างอื่น)</li>
+          </ul>
+        </>
+      ),
+    },
+    {
+      no:'07', Icon: ShieldCheck, iconBg:'#F0FDF4', iconColor:'#16A34A',
       title:'การลงทะเบียนสินค้า & การรับประกัน',
       content: (
         <>
           <div className="hi-box">
-            สินค้า Dreame ทุกชิ้นได้รับการรับประกัน <strong>2 ปีเต็ม</strong> นับจากวันรับสินค้า
+            ลงทะเบียนสินค้าภายใน <strong>15 วัน</strong> นับจากวันที่ซื้อ เพื่อรับสิทธิประโยชน์
           </div>
           <ul style={{ marginTop:8 }}>
-            <li>ลงทะเบียนได้ภายใน <strong>90 วัน</strong> นับจากวันที่ซื้อ</li>
-            <li>แนบหลักฐานการซื้อที่ชัดเจนทุกครั้ง</li>
-            <li>สินค้า 1 ชิ้นลงทะเบียนได้เพียง 1 ครั้ง</li>
-            <li>ระยะเวลาตรวจสอบโดยทีมงาน 3–7 วันทำการ</li>
+            <li>การรับประกันเป็นไปตามเงื่อนไข/ระยะเวลาของสินค้าแต่ละรุ่น (โครงสร้าง แบตเตอรี่ มอเตอร์ หรืออะไหล่ อาจต่างกัน) เริ่มนับจากวันที่ในหลักฐานการซื้อ หรือวันรับสินค้า</li>
+            <li>แนบหลักฐานการซื้อที่ชัดเจน (ใบเสร็จ / ใบกำกับภาษี / ภาพหน้าจอคำสั่งซื้อที่มีหมายเลขออเดอร์)</li>
+            <li>สินค้า 1 ชิ้น (อ้างอิง Serial Number) ลงทะเบียนได้ <strong>1 ครั้ง</strong></li>
+            <li>ระยะเวลาตรวจสอบและอนุมัติ 3–7 วันทำการ</li>
           </ul>
         </>
       ),
     },
     {
-      no:'06', Icon: Lock, iconBg:'#EFF6FF', iconColor:'#0284C7',
-      title:'นโยบายข้อมูลส่วนบุคคล (PDPA)',
+      no:'08', Icon: Lock, iconBg:'#EFF6FF', iconColor:'#0284C7',
+      title:'ความเป็นส่วนตัว (PDPA)',
       content: (
         <>
           <div className="hi-box">
-            ข้อมูลของท่านถูกเก็บและประมวลผลตาม <strong>พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562</strong> เพื่อการดำเนินโปรแกรมสมาชิกเท่านั้น
+            ข้อมูลของท่านถูกเก็บ ใช้ และเปิดเผยตาม <strong>พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562</strong> เพื่อดำเนินโปรแกรมสมาชิก
           </div>
           <ul style={{ marginTop:8 }}>
-            <li>บริษัทไม่ขายหรือเปิดเผยข้อมูลแก่บุคคลภายนอก</li>
-            <li>ท่านมีสิทธิ์ขอเข้าถึง แก้ไข หรือลบข้อมูลได้ตลอดเวลา</li>
-            <li>ใช้ HTTPS, DKIM และ SPF ในการส่งอีเมลทุกฉบับเพื่อความปลอดภัย</li>
+            <li>บริษัทฯ ไม่เปิดเผยข้อมูลแก่บุคคลภายนอก เว้นแต่ได้รับความยินยอม หรือเป็นไปตามกฎหมาย</li>
+            <li>ท่านมีสิทธิ์ขอเข้าถึง แก้ไข ลบ ระงับ คัดค้าน ถอนความยินยอม และโอนย้ายข้อมูลได้</li>
+            <li>การถอนความยินยอมหรือขอลบข้อมูลบางรายการ อาจกระทบต่อการให้บริการและสิทธิประโยชน์ของสมาชิก</li>
           </ul>
         </>
       ),
     },
     {
-      no:'07', Icon: AlertTriangle, iconBg:'#FEF2F2', iconColor:'#DC2626',
-      title:'การระงับบัญชี',
+      no:'09', Icon: AlertTriangle, iconBg:'#FEF2F2', iconColor:'#DC2626',
+      title:'การระงับ / ยกเลิกสมาชิกภาพ',
       content: (
         <ul>
-          <li>พบการใช้ข้อมูลเท็จหรือปลอมแปลงหลักฐาน</li>
-          <li>ลงทะเบียนสินค้าที่ไม่ได้ซื้อจริง</li>
-          <li>บัญชีไม่มีการใช้งานเกิน 2 ปี</li>
-          <li>การยกเลิกบัญชีจะส่งผลให้คะแนนสูญเสียทั้งหมด</li>
+          <li>ให้ข้อมูลเท็จ ปลอมแปลงเอกสาร หรือละเมิดข้อกำหนด</li>
+          <li>มีพฤติการณ์ทุจริตในการสะสมคะแนน หรือลงทะเบียนสินค้าที่ไม่ได้ซื้อจริง</li>
+          <li>บัญชีไม่มีการเคลื่อนไหวหรือไม่มีประวัติการซื้อติดต่อกันเกิน <strong>2 ปี</strong></li>
+          <li>หากตรวจสอบพบการฝ่าฝืน บริษัทฯ มีสิทธิ์ยกเลิกสมาชิกภาพ ระงับคะแนน และเพิกถอนสิทธิประโยชน์ — เมื่อสมาชิกภาพสิ้นสุด คะแนน/สิทธิ์ที่ยังไม่ใช้จะสิ้นสุดทันที</li>
         </ul>
       ),
     },
     {
-      no:'08', Icon: RefreshCw, iconBg:'#EEF2FF', iconColor:'#6366F1',
-      title:'การเปลี่ยนแปลงข้อกำหนด',
+      no:'10', Icon: FileText, iconBg:'#EEF2FF', iconColor:'#6366F1',
+      title:'การเปลี่ยนแปลงข้อกำหนด · ภาษี',
       content: (
-        <p>บริษัทขอสงวนสิทธิ์เปลี่ยนแปลงข้อกำหนดได้ตลอดเวลา โดยแจ้งล่วงหน้าไม่น้อยกว่า 15 วัน ผ่านแอปหรืออีเมล การใช้งานต่อหลังวันมีผลบังคับใช้ถือว่ายอมรับการเปลี่ยนแปลงนั้น</p>
+        <ul>
+          <li>บริษัทฯ สงวนสิทธิ์แก้ไข/ยกเลิกข้อกำหนด อัตราคะแนน หรือสิทธิประโยชน์ โดยแจ้งล่วงหน้าไม่น้อยกว่า <strong>15 วัน</strong> — การเปลี่ยนแปลงไม่มีผลย้อนหลังต่อคะแนนที่ได้รับไปแล้ว</li>
+          <li>การใช้สิทธิ์ต่อหลังประกาศ ถือว่ายอมรับข้อกำหนดฉบับใหม่</li>
+          <li>บริษัทฯ ไม่รับผิดต่อความล่าช้า/ขัดข้องอันเกิดจากเหตุสุดวิสัย (ภัยธรรมชาติ โรคระบาด ระบบของผู้ให้บริการภายนอก ฯลฯ)</li>
+          <li>สมาชิกรับผิดชอบภาษีหรือค่าธรรมเนียมที่อาจเกิดจากของรางวัล/การแลกคะแนน (หากมี)</li>
+        </ul>
       ),
     },
     {
-      no:'09', Icon: Mail, iconBg:'#EFF6FF', iconColor:'#0284C7',
-      title:'ช่องทางติดต่อ',
+      no:'11', Icon: Mail, iconBg:'#EFF6FF', iconColor:'#0284C7',
+      title:'กฎหมายที่ใช้บังคับ & ติดต่อ',
       content: (
-        <ul style={{ listStyle:'none', marginLeft:0 }}>
-          <li style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-            <Mail size={13} color="#A0782B" />
-            <span><strong>อีเมล</strong> · <a href="mailto:support@dreame-thailand.com" style={{ color:'#A0782B', fontWeight:600 }}>support@dreame-thailand.com</a></span>
-          </li>
-          <li style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-            <Sparkles size={13} color="#A0782B" />
-            <span><strong>LINE Official</strong> · <span style={{ color:'#A0782B', fontWeight:600 }}>@DreameThailand</span></span>
-          </li>
-          <li style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <Phone size={13} color="#A0782B" />
-            <span>จันทร์ – ศุกร์ 09:00 – 18:00 น.</span>
-          </li>
-        </ul>
+        <>
+          <p style={{ marginBottom:8 }}>ข้อกำหนดนี้อยู่ภายใต้บังคับและตีความตามกฎหมายของราชอาณาจักรไทย</p>
+          <ul style={{ listStyle:'none', marginLeft:0 }}>
+            <li style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+              <Mail size={13} color="#A0782B" />
+              <span><strong>อีเมล</strong> · <a href="mailto:support@dreame-thailand.com" style={{ color:'#A0782B', fontWeight:600 }}>support@dreame-thailand.com</a></span>
+            </li>
+            <li style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+              <Sparkles size={13} color="#A0782B" />
+              <span><strong>LINE Official</strong> · <span style={{ color:'#A0782B', fontWeight:600 }}>@DreameThailand</span></span>
+            </li>
+            <li style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <Phone size={13} color="#A0782B" />
+              <span>จันทร์ – ศุกร์ 09:00 – 18:00 น. (ยกเว้นวันหยุดนักขัตฤกษ์)</span>
+            </li>
+          </ul>
+        </>
       ),
     },
   ]
