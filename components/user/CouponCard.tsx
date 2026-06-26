@@ -24,7 +24,6 @@ export default function CouponCard({ coupon, status }: Props) {
     current: number; discount: number; cash_top_up: number; sale: boolean
   } | null>(null)
   const [livePriceLoading, setLivePriceLoading] = useState(false)
-  const [usingCode, setUsingCode] = useState(false)
 
   // Fetch live price on mount (เฉพาะ POINTS_CASH)
   useEffect(() => {
@@ -56,28 +55,14 @@ export default function CouponCard({ coupon, status }: Props) {
   const discountChanged = isPointsCashReward && livePrice
     && Math.abs(livePrice.discount - coupon.discount_value) > 0.01
 
-  // Smart-use button: regenerate code with current price → redirect to Shopify
-  async function smartUse(e: React.MouseEvent) {
+  // Use button: open THIS coupon's own apply link (cart permalink that carries
+  // this exact code + product). We deliberately do NOT regenerate the code here —
+  // regenerating produced a new code each click that no longer matched the code
+  // shown on the coupon ("โค้ดไม่ตรงกัน"). The code stays stable = always matches.
+  function smartUse(e: React.MouseEvent) {
     e.stopPropagation(); e.preventDefault()
-    if (!coupon.reward_meta?.redemption_id) {
-      // ไม่ใช่ reward coupon → เปิด apply_url ปกติ
-      if (coupon.apply_url) window.open(coupon.apply_url, '_blank')
-      return
-    }
-    setUsingCode(true)
-    try {
-      const r = await fetch(`/api/redemptions/${coupon.reward_meta.redemption_id}/refresh-code`, {
-        method: 'POST',
-      })
-      const d = await r.json()
-      const target = d.apply_url || coupon.reward_meta.shopify_product_url || coupon.apply_url
-      if (target) window.open(target, '_blank')
-    } catch {
-      // fallback — เปิด URL เดิม
-      if (coupon.apply_url) window.open(coupon.apply_url, '_blank')
-    } finally {
-      setUsingCode(false)
-    }
+    const target = coupon.apply_url || coupon.reward_meta?.shopify_product_url
+    if (target) window.open(target, '_blank')
   }
 
   function copy(e: React.MouseEvent) {
@@ -321,17 +306,15 @@ export default function CouponCard({ coupon, status }: Props) {
             {isActive && (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 {(coupon.apply_url || coupon.reward_meta) && (
-                  <button onClick={smartUse} disabled={usingCode}
+                  <button onClick={smartUse}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 4,
                       padding: '5px 10px', borderRadius: 'var(--r-pill)',
                       background: '#5E8E3E', color: '#fff',
-                      border: 'none', cursor: usingCode ? 'wait' : 'pointer',
+                      border: 'none', cursor: 'pointer',
                       fontSize: 10.5, fontWeight: 700,
                     }}>
-                    {usingCode
-                      ? <><RefreshCw size={10} className="animate-spin"/> sync</>
-                      : <><ExternalLink size={10}/> ใช้</>}
+                    <ExternalLink size={10}/> ใช้
                   </button>
                 )}
                 <button onClick={copy} className="tap" style={{

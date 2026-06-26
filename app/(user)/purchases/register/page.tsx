@@ -8,7 +8,7 @@ import Link from 'next/link'
 import PlatformLogo from '@/components/admin/PlatformLogo'
 
 type Step = 'order' | 'upload' | 'done'
-type VerifyStatus = 'idle' | 'loading' | 'verified' | 'pending' | 'bq_error' | 'error'
+type VerifyStatus = 'idle' | 'loading' | 'verified' | 'pending' | 'bq_error' | 'error' | 'claimed'
 
 const CHANNELS = [
   { value: 'SHOPEE',  label: 'Shopee',     type: 'ONLINE' },
@@ -24,6 +24,7 @@ export default function RegisterPage() {
   const [orderSn, setOrderSn] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>('idle')
+  const [verifyMsg, setVerifyMsg] = useState('')
   const [verifiedData, setVerifiedData] = useState<Record<string, unknown> | null>(null)
   const [channel, setChannel] = useState('SHOPEE')
   const [receipt, setReceipt] = useState<File | null>(null)
@@ -45,6 +46,7 @@ export default function RegisterPage() {
       })
       const data = await res.json()
       if (data.status === 'VERIFIED') { setVerifiedData(data.order); setVerifyStatus('verified') }
+      else if (data.status === 'ALREADY_CLAIMED') { setVerifyMsg(data.message || 'ออเดอร์นี้ถูกใช้ลงทะเบียนไปแล้ว'); setVerifyStatus('claimed') }
       else if (data.status === 'PENDING') setVerifyStatus('pending')
       else if (data.status === 'BQ_ERROR') setVerifyStatus('bq_error')
       else setVerifyStatus('error')
@@ -72,6 +74,9 @@ export default function RegisterPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'บันทึกไม่สำเร็จ')
       setStep('done')
+      // Bust the client-side router cache so /purchases, /home, /points show
+      // the freshly-awarded points immediately instead of a stale snapshot.
+      router.refresh()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด')
     } finally { setSubmitting(false) }
@@ -318,6 +323,24 @@ export default function RegisterPage() {
                   <p style={{ fontSize: 12.5, color: 'var(--red)', margin: 0, fontWeight: 600 }}>
                     ไม่พบ Order ID นี้ กรุณาตรวจสอบอีกครั้ง
                   </p>
+                </div>
+              )}
+              {verifyStatus === 'claimed' && (
+                <div style={{
+                  marginTop: 12, padding: 14, display: 'flex', gap: 10,
+                  background: 'var(--red-soft)',
+                  border: '1px solid rgba(139,58,58,0.18)',
+                  borderRadius: 'var(--r-md)',
+                }}>
+                  <X size={15} color="var(--red)" style={{ flexShrink: 0, marginTop: 1 }} />
+                  <div>
+                    <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--red)', margin: '0 0 2px' }}>
+                      ออเดอร์นี้ถูกใช้แล้ว
+                    </p>
+                    <p style={{ fontSize: 11, color: 'var(--red)', margin: 0 }}>
+                      {verifyMsg || 'ออเดอร์นี้ถูกใช้ลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้'}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

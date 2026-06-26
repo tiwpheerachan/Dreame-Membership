@@ -7,6 +7,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { logAdminAction } from '@/lib/audit'
+import { validateProductUrl } from '@/lib/reward-validation'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -73,6 +74,11 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}))
   if (!body.name)            return NextResponse.json({ error: 'name required' }, { status: 400 })
   if (!body.points_required) return NextResponse.json({ error: 'points_required required' }, { status: 400 })
+
+  // PREMIUM / POINTS_CASH ต้องผูกหน้าสินค้า Shopify จริง (มี /products/) เพื่อให้
+  // ออก discount code + apply URL ได้ — กันใส่ลิงก์ตะกร้า/checkout/รูปภาพผิด
+  const urlErr = validateProductUrl(body.redeem_type || 'PREMIUM', body.shopify_product_url)
+  if (urlErr) return NextResponse.json({ error: urlErr }, { status: 400 })
 
   const insert = {
     model_id:                  body.model_id || null,

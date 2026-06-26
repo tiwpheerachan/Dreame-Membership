@@ -136,7 +136,7 @@ export default function RewardDetailPage() {
         <p style={{ fontSize: 13.5, color: 'var(--ink-mute)', margin: '8px 0 22px' }}>
           {success.redeem_type === 'POINTS_CASH' ? 'นำรหัสไปใช้ที่ Shopify เพื่อจ่ายส่วนเพิ่ม' :
            success.redeem_type === 'VOUCHER'     ? 'รหัสคูปองพร้อมใช้ที่ Shopify checkout' :
-                                                   'เราจะติดต่อจัดส่งภายใน 7-14 วันทำการ'}
+                                                   'นำรหัสไปใช้ที่ Shopify เพื่อรับของรางวัล (ฟรี · จ่ายเฉพาะค่าส่ง)'}
         </p>
 
         {/* Code card */}
@@ -193,9 +193,7 @@ export default function RewardDetailPage() {
             )}
             {(success.apply_url || success.shopify_product_url) && (
               <a
-                href={success.redeem_type === 'POINTS_CASH'
-                  ? (success.shopify_product_url || success.apply_url || '#')
-                  : (success.apply_url || '#')}
+                href={success.apply_url || success.shopify_product_url || '#'}
                 target="_blank" rel="noopener noreferrer"
                 className="tap"
                 style={{

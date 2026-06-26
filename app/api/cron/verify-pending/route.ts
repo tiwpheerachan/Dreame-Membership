@@ -125,8 +125,25 @@ export async function GET(req: Request) {
       }
     }
 
-    console.log(`[CRON] Done: ${verified} verified, ${failed} still pending`)
-    return NextResponse.json({ message: 'Cron completed', verified, still_pending: failed })
+    // ── Self-heal: award any BQ_VERIFIED / ADMIN_APPROVED registration that
+    // somehow still has points_awarded = 0 (e.g. an award RPC that errored at
+    // registration time). award_points_for_purchase is idempotent, so this is
+    // safe to run every cycle and guarantees no verified order stays unawarded.
+    let healed = 0
+    const { data: unawarded } = await supabase
+      .from('purchase_registrations')
+      .select('id')
+      .in('status', ['BQ_VERIFIED', 'ADMIN_APPROVED'])
+      .eq('points_awarded', 0)
+      .limit(500)
+    for (const r of unawarded || []) {
+      const { data: pts } = await supabase.rpc('award_points_for_purchase', { p_purchase_reg_id: r.id })
+      if ((pts as number) > 0) healed++
+    }
+    if (healed > 0) console.log(`[CRON] Self-healed ${healed} unawarded verified registrations`)
+
+    console.log(`[CRON] Done: ${verified} verified, ${failed} still pending, ${healed} healed`)
+    return NextResponse.json({ message: 'Cron completed', verified, still_pending: failed, healed })
 
   } catch (error) {
     console.error('[CRON] Error:', error)

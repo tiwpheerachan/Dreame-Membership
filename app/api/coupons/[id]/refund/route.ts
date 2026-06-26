@@ -5,6 +5,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { rateLimit, getRateKey } from '@/lib/rate-limit'
+import { deletePriceRule, isConfigured, DEFAULT_SHOP_ID } from '@/lib/shopify-discounts'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +28,30 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   if (!params.id) {
     return NextResponse.json({ error: 'coupon id required' }, { status: 400 })
+  }
+
+  // ── Revoke the Shopify discount code FIRST ──
+  // The refund RPC returns points + archives the coupon, but the code lives in
+  // Shopify independently. If we don't delete the price rule, a user could
+  // refund for points AND still redeem the code at checkout (double-dip).
+  // Delete before refunding: if revoke fails we abort so points aren't returned
+  // while the code is still usable. (RLS lets a user read only their own coupon.)
+  const { data: coupon } = await supabase
+    .from('coupons')
+    .select('used_at, auto_issue_key, shopify_price_rule_id, shopify_shop_id')
+    .eq('id', params.id)
+    .maybeSingle()
+
+  if (coupon && !coupon.used_at && coupon.shopify_price_rule_id && isConfigured()) {
+    try {
+      await deletePriceRule(coupon.shopify_shop_id || DEFAULT_SHOP_ID, coupon.shopify_price_rule_id)
+    } catch (e) {
+      console.error('[refund] deletePriceRule failed:', e)
+      return NextResponse.json(
+        { error: 'ยกเลิกรหัสส่วนลดที่ Shopify ไม่สำเร็จ — กรุณาลองใหม่อีกครั้ง' },
+        { status: 502 },
+      )
+    }
   }
 
   // เรียก RPC — RPC เช็คเจ้าของผ่าน auth.uid() เอง

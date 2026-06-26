@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { logAdminAction } from '@/lib/audit'
+import { validateProductUrl } from '@/lib/reward-validation'
 
 async function authStaff() {
   const supabase = createClient()
@@ -32,6 +33,18 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   ]
   const patch: Record<string, unknown> = {}
   for (const k of allowed) if (k in body) patch[k] = body[k]
+
+  // Validate Shopify product URL when it's being set on a PREMIUM/POINTS_CASH reward
+  if ('shopify_product_url' in body && body.shopify_product_url) {
+    let rtype = body.redeem_type
+    if (!rtype) {
+      const { data: cur } = await auth.service.from('rewards')
+        .select('redeem_type').eq('id', params.id).single()
+      rtype = cur?.redeem_type
+    }
+    const urlErr = validateProductUrl(String(rtype || ''), body.shopify_product_url)
+    if (urlErr) return NextResponse.json({ error: urlErr }, { status: 400 })
+  }
 
   // ถ้าเปลี่ยน stock → reset stock_remaining (admin restock)
   if ('stock' in body && body.stock !== null && !('stock_remaining' in body)) {

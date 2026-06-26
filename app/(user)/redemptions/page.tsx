@@ -33,7 +33,7 @@ interface Redemption {
 const STATUS_LABEL: Record<Redemption['status'], { label: string; color: string; Icon: typeof Clock }> = {
   pending:   { label: 'รอยืนยัน',    color: '#C99B3E', Icon: Clock },
   redeemed:  { label: 'พร้อมใช้',    color: '#C99B3E', Icon: Sparkles },
-  confirmed: { label: 'ยืนยันแล้ว',   color: '#4A7BC1', Icon: CheckCircle },
+  confirmed: { label: 'พร้อมใช้',    color: '#C99B3E', Icon: Sparkles },
   shipping:  { label: 'กำลังส่ง',    color: '#4A7BC1', Icon: Truck },
   delivered: { label: 'ใช้แล้ว',     color: '#3A8E5A', Icon: CheckCircle },
   cancelled: { label: 'ยกเลิก',     color: '#B14242', Icon: XCircle },
@@ -180,7 +180,12 @@ function RedemptionCard({ r }: { r: Redemption }) {
   const isPremium    = r.reward_snapshot?.redeem_type === 'PREMIUM'
   const isUsed       = r.status === 'delivered'
   const isExpired    = r.status === 'expired'
-  const canUseCode   = r.shopify_code && r.status === 'redeemed'
+  // Code is ready to use while the redemption is 'redeemed' (no code yet / just
+  // issued) OR 'confirmed' (Shopify code generated, not yet used). The redeem
+  // API marks it 'confirmed' after generating the code, so requiring exactly
+  // 'redeemed' here hid the code + "go to Shopify" button on every successful
+  // redemption.
+  const canUseCode   = r.shopify_code && (r.status === 'redeemed' || r.status === 'confirmed')
   const currentCode  = refreshed?.code || r.shopify_code
   const currentUrl   = refreshed?.apply_url || r.shopify_apply_url || r.reward_snapshot?.shopify_product_url
 

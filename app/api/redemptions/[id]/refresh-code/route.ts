@@ -17,7 +17,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import {
-  generateDiscounts, deletePriceRule, buildApplyUrl, isConfigured,
+  generateDiscounts, deletePriceRule, buildApplyUrl, buildProductApplyUrl, buildCartApplyUrl, isConfigured,
   DEFAULT_SHOP_ID, ShopifyDiscountError,
 } from '@/lib/shopify-discounts'
 import { fetchShopifyProductPrice } from '@/lib/shopify-price'
@@ -122,7 +122,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       },
     })
 
-    const applyUrl = buildApplyUrl(DEFAULT_SHOP_ID, newCode)
+    // Cart permalink (add product + apply code + checkout in one click) when we
+    // have the variant; otherwise fall back to /discount/<code>?redirect=product.
+    const applyUrl =
+      (live.variant_id ? buildCartApplyUrl(snapshot.shopify_product_url, live.variant_id, newCode) : '')
+      || buildProductApplyUrl(snapshot.shopify_product_url, newCode)
+      || buildApplyUrl(DEFAULT_SHOP_ID, newCode)
+
+    const oldCode = red.shopify_code
 
     await service.from('redemptions').update({
       shopify_code:          newCode,
@@ -130,6 +137,18 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       shopify_price_rule_id: gen.price_rule_id,
       code_expires_at:       endsAt,
     }).eq('id', red.id)
+
+    // Keep the coupon in sync — without this the coupon card still shows the OLD
+    // code while checkout uses the new one ("โค้ดไม่ตรงกัน"). Update code +
+    // apply_url + discount value + expiry so the displayed code == applied code.
+    if (oldCode) {
+      await service.from('coupons').update({
+        code:           newCode,
+        apply_url:      applyUrl,
+        discount_value: newDiscount,
+        valid_until:    endsAt.split('T')[0],
+      }).eq('code', oldCode).eq('user_id', user.id)
+    }
 
     return NextResponse.json({
       success:           true,

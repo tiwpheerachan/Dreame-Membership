@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { rateLimit, getRateKey } from '@/lib/rate-limit'
 import {
-  generateDiscounts, buildApplyUrl, isConfigured,
+  generateDiscounts, buildApplyUrl, buildProductApplyUrl, buildCartApplyUrl, isConfigured,
   DEFAULT_SHOP_ID, ShopifyDiscountError,
 } from '@/lib/shopify-discounts'
 import { fetchShopifyProductPrice } from '@/lib/shopify-price'
@@ -99,6 +99,7 @@ export async function POST(
 
       let discountValue: number
       let minPurchase: number | undefined
+      let variantId: number | null = null   // for the cart-permalink apply URL
 
       if (reward.redeem_type === 'POINTS_CASH' || reward.redeem_type === 'PREMIUM') {
         // ── POINTS_CASH + PREMIUM: ทั้ง 2 type ดึงราคาจาก Shopify เหมือนกัน ──
@@ -113,6 +114,7 @@ export async function POST(
           const live = await fetchShopifyProductPrice(reward.shopify_product_url as string)
           if (live && live.current_price_thb > 0) {
             effectivePrice = live.current_price_thb
+            variantId = live.variant_id
             priceInfo = {
               current:       live.current_price_thb,
               original_used: fallbackOriginal,
@@ -151,6 +153,11 @@ export async function POST(
         minimum_order_amount: minPurchase,
         usage_limit_per_customer: true,
         usage_limit: 1,
+        // order_discounts:true จำเป็นต้องเป็น true ไม่งั้น Shopify จะบล็อก code
+        // เมื่อมีโปร order อัตโนมัติ (เช่น site-wide sale) ทำงานอยู่ → "ไม่ลดราคา"
+        // ⚠️ ผลข้างเคียง: code นี้ "ซ้อน" กับโปรอัตโนมัติได้ (ลูกค้าจ่ายน้อยกว่า
+        // cash_top_up ที่ตั้งไว้) — การกัน 2 reward code ซ้อนกัน/จ่ายเป๊ะ ต้องทำเป็น
+        // product discount (ผูก shopify_product_id) ซึ่งยังต้องเติม product id ก่อน
         combines_with: {
           order_discounts:    true,
           product_discounts:  false,
@@ -158,7 +165,18 @@ export async function POST(
         },
       })
 
-      const applyUrl = buildApplyUrl(DEFAULT_SHOP_ID, memberCode)
+      // Best UX (PREMIUM / POINTS_CASH): a cart permalink that adds the exact
+      // product to the cart, applies the code, and drops the user on checkout in
+      // ONE click — /cart/<variant>:1?discount=<code>. Falls back to a
+      // /discount/<code>?redirect=/products/... link if we couldn't resolve the
+      // variant, and to a plain /discount/<code> for VOUCHER.
+      const isProductReward = reward.redeem_type === 'PREMIUM' || reward.redeem_type === 'POINTS_CASH'
+      const applyUrl =
+        (isProductReward && reward.shopify_product_url && variantId
+          ? buildCartApplyUrl(reward.shopify_product_url as string, variantId, memberCode) : '')
+        || (isProductReward && reward.shopify_product_url
+          ? buildProductApplyUrl(reward.shopify_product_url as string, memberCode) : '')
+        || buildApplyUrl(DEFAULT_SHOP_ID, memberCode)
 
       // ดึง image_url + reward_name ปัจจุบัน เผื่อ admin แก้ทีหลัง
       const { data: rewardFull } = await service.from('rewards')
@@ -205,10 +223,7 @@ export async function POST(
         image_url:      rewardFull?.image_url || null,    // โชว์รูปสินค้าบน coupon card
         shopify_shop_id:       DEFAULT_SHOP_ID,
         shopify_price_rule_id: shopifyResult.price_rule_id,
-        apply_url:
-            reward.redeem_type === 'PREMIUM' || reward.redeem_type === 'POINTS_CASH'
-              ? (reward.shopify_product_url as string | null) || applyUrl
-              : applyUrl,
+        apply_url: applyUrl,  // applies the code + lands on product (see buildProductApplyUrl)
         shopify_synced_at:     new Date().toISOString(),
         auto_issue_key:        `REWARD_${params.id}_${result.redemption_id}`,
       })
@@ -242,14 +257,48 @@ export async function POST(
     } catch (e) {
       const err = e as ShopifyDiscountError | Error
       codeError = ('detail' in err && err.detail) ? err.detail : err.message
-      console.error('[redeem] code generation failed:', codeError)
-      // ไม่ rollback — redemption สำเร็จไปแล้ว
-      // mark generation_failed_at เพื่อให้ admin filter เจอ + regenerate ได้
+      console.error('[redeem] code generation failed — auto-refunding:', codeError)
+
+      // ── Auto-refund instead of leaving the user charged ──
+      // Most failures here are config (PREMIUM reward without shopify_product_url
+      // / price → discount = ฿0). The old behavior deducted points + showed the
+      // legacy "we'll ship in 7-14 days" screen with NO usable code = points lost
+      // for nothing. Roll the whole redemption back so the user keeps their points.
+      const { data: red } = await service.from('redemptions')
+        .select('points_used, reward_id').eq('id', result.redemption_id).single()
+      const refundPts = Number(red?.points_used) || 0
+      if (refundPts > 0) {
+        const { data: newTotal } = await service.rpc('adjust_user_points', {
+          p_user_id: user.id, p_delta: refundPts,
+        })
+        await service.from('points_log').insert({
+          user_id: user.id, points_delta: refundPts, balance_after: newTotal ?? null,
+          type: 'ADMIN_ADJUST',
+          description: 'คืนแต้ม (ออกรหัสไม่สำเร็จ): ' + (result.reward_name || 'reward'),
+        })
+      }
+      if (red?.reward_id) {
+        const { data: rw } = await service.from('rewards')
+          .select('stock, stock_remaining').eq('id', red.reward_id).single()
+        if (rw?.stock != null) {
+          await service.from('rewards')
+            .update({ stock_remaining: (rw.stock_remaining || 0) + 1 }).eq('id', red.reward_id)
+        }
+      }
       await service.from('redemptions').update({
+        status:                'cancelled',
+        refunded_at:           new Date().toISOString(),
+        refund_reason:         'code_generation_failed',
         generation_failed_at:  new Date().toISOString(),
         last_generation_error: codeError,
-        admin_note:            `[Auto] Code generation failed: ${codeError}. Admin to retry.`,
       }).eq('id', result.redemption_id)
+
+      revalidatePath('/rewards'); revalidatePath('/redemptions')
+      revalidatePath('/coupons'); revalidatePath('/points')
+      return NextResponse.json({
+        error: 'ขออภัย ออกรหัสส่วนลดไม่สำเร็จ — คืนแต้มให้เรียบร้อยแล้ว ของรางวัลนี้อาจยังตั้งค่าไม่ครบ กรุณาลองใหม่ภายหลังหรือเลือกของอื่น',
+        refunded: true,
+      }, { status: 502, headers: rl.headers })
     }
   }
 

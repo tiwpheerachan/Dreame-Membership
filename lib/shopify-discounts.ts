@@ -162,6 +162,44 @@ export function buildApplyUrl(shopId: string, code: string): string {
   return `https://${shopId}/discount/${encodeURIComponent(code)}`
 }
 
+// Apply the code AND land the user on the specific product page, on the SAME
+// storefront domain the product lives on (e.g. th.dreametech.com). Shopify's
+// /discount/<code>?redirect=<path> activates the code in the session then
+// redirects — so it carries through to checkout. Using the product's own
+// origin (not the myshopify.com domain) keeps the discount session on the
+// domain the customer actually checks out on.
+//
+// ⚠️ Without this, linking straight to the product URL leaves the code
+// un-applied → only Shopify's automatic site discounts show at checkout.
+// Best one-click UX: add the exact variant to the cart, apply the discount code,
+// and land the user on checkout — all in one URL. Shopify cart permalink format:
+//   https://<storefront>/cart/<variantId>:<qty>?discount=<code>
+// This is what makes the discount "appear already applied" at checkout.
+export function buildCartApplyUrl(productUrl: string, variantId: number, code: string): string {
+  try {
+    const u = new URL(productUrl)
+    return `${u.origin}/cart/${variantId}:1?discount=${encodeURIComponent(code)}`
+  } catch {
+    return ''
+  }
+}
+
+export function buildProductApplyUrl(productUrl: string, code: string): string {
+  try {
+    const u = new URL(productUrl)
+    // Only redirect to real product pages. If the stored URL is a cart/checkout
+    // link or anything else, applying the code on that path is broken — fall back
+    // to /discount/<code> on the same storefront origin (code still carries to
+    // checkout), landing on the store home.
+    const redirect = /^\/products\//.test(u.pathname)
+      ? `?redirect=${encodeURIComponent(u.pathname)}`
+      : ''
+    return `${u.origin}/discount/${encodeURIComponent(code)}${redirect}`
+  } catch {
+    return ''
+  }
+}
+
 // ── Endpoints ────────────────────────────────────────────────
 
 export async function generateDiscounts(req: GenerateRequest): Promise<GenerateResponse> {

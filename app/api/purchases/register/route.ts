@@ -24,23 +24,37 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'order_sn is required' }, { status: 400 })
     }
 
-    // Check duplicate
-    const { data: existing } = await supabase
+    const service = createServiceClient()
+
+    // ── Global duplicate guard: 1 order = 1 claim across the WHOLE system ──
+    // The old check filtered .eq('user_id') so a DIFFERENT user could re-claim
+    // the same order_sn and earn points twice. We now block any non-REJECTED
+    // registration of this order_sn (REJECTED excluded so a wrongly-rejected
+    // order can be re-registered).
+    // NOTE: must use the service client — RLS hides other users' rows, so a
+    // user-scoped query would never see someone else's duplicate.
+    const { data: existing } = await service
       .from('purchase_registrations')
-      .select('id')
+      .select('id, user_id, status')
       .eq('order_sn', order_sn)
-      .eq('user_id', user.id)
+      .neq('status', 'REJECTED')
+      .limit(1)
       .maybeSingle()
 
-    if (existing) return NextResponse.json({ error: 'คุณลงทะเบียน Order ID นี้แล้ว' }, { status: 409 })
+    if (existing) {
+      const mine = existing.user_id === user.id
+      return NextResponse.json({
+        error: mine
+          ? 'คุณลงทะเบียน Order ID นี้แล้ว'
+          : 'ออเดอร์นี้ถูกลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้',
+      }, { status: 409 })
+    }
 
     // Parse BQ data if available
     let bqData: BQOrderData | null = null
     if (bqDataStr) {
       try { bqData = JSON.parse(bqDataStr) } catch { /* ignore malformed */ }
     }
-
-    const service = createServiceClient()
 
     // Upload receipt with validation
     let receipt_image_url: string | null = null
@@ -90,7 +104,16 @@ export async function POST(req: Request) {
     // orders will never appear in BigQuery and must be approved by an admin,
     // so adding them to pending_verifications wastes BQ quota and retry slots.
     if (bqData) {
-      await service.rpc('award_points_for_purchase', { p_purchase_reg_id: reg.id })
+      // Award immediately. CHECK the result — a swallowed RPC error here is how
+      // a BQ-verified registration ends up with 0 points and no recovery path.
+      // On failure, enqueue so the cron sweep re-awards it (award fn is idempotent).
+      const { error: awardErr } = await service.rpc('award_points_for_purchase', { p_purchase_reg_id: reg.id })
+      if (awardErr) {
+        console.error('[register] award_points_for_purchase failed — enqueueing for retry:', awardErr)
+        await service.from('pending_verifications')
+          .insert({ purchase_reg_id: reg.id, order_sn })
+          .then(() => {}, () => {})
+      }
     } else if (channel_type === 'ONLINE') {
       await service.from('pending_verifications').insert({
         purchase_reg_id: reg.id,
@@ -113,6 +136,16 @@ export async function POST(req: Request) {
     revalidatePath('/admin/pending')
     revalidatePath('/admin/purchases')
     revalidatePath(`/admin/members/${user.id}`)
+
+    // Invalidate the user's own pages too — points/tier/registration list all
+    // change on a successful (BQ-verified) registration. Without this the user
+    // lands back on a cached /purchases or /home showing the OLD point balance.
+    revalidatePath('/home')
+    revalidatePath('/points')
+    revalidatePath('/purchases')
+    revalidatePath('/profile')
+    revalidatePath('/rewards')
+    revalidatePath('/(user)', 'layout')
 
     return NextResponse.json({ success: true, registration_id: reg.id, status: reg.status })
   } catch (error) {
