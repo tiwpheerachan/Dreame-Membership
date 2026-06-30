@@ -83,8 +83,15 @@ export async function POST(
 
   let priceInfo: { current: number; original_used: number; sale_detected: boolean } | null = null
 
-  if (result.needs_code_generation && result.redemption_id && isConfigured()) {
+  if (result.needs_code_generation && result.redemption_id) {
     try {
+      // Shopify discount API ต้องพร้อมก่อน ไม่งั้นจะได้ redemption กำพร้า
+      // (หักแต้มแล้วแต่ไม่มีโค้ด/ไม่มีคูปอง) — โยน error เข้า catch ด้านล่าง
+      // เพื่อให้คืนแต้ม + cancel อัตโนมัติ แทนการข้ามเงียบๆ
+      if (!isConfigured()) {
+        throw new Error('ระบบออกโค้ดส่วนลดยังไม่พร้อมใช้งาน (SHOPIFY_DISCOUNT_API_KEY ไม่ถูกตั้งค่า)')
+      }
+
       // ดึง reward เพื่อหา discount value
       const { data: reward } = await service.from('rewards')
         .select('redeem_type, original_price_thb, cash_top_up_thb, voucher_value_thb, voucher_min_purchase_thb, code_validity_days, shopify_product_id, shopify_product_url')
