@@ -1,13 +1,14 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Package, Ticket, UserRound, Megaphone, Coins, Gift } from 'lucide-react'
+import { Home, Package, Ticket, UserRound, Coins, Gift, Sparkles } from 'lucide-react'
 import { GlassEffect, GlassFilter } from '@/components/ui/liquid-glass'
 
 const NAV = [
   { href: '/home',       icon: Home,       label: 'หน้าหลัก' },
   { href: '/points',     icon: Coins,      label: 'แต้ม' },
   { href: '/rewards',    icon: Gift,       label: 'แลก' },
+  { href: '/privileges', icon: Sparkles,   label: 'สิทธิ' },
   { href: '/coupons',    icon: Ticket,     label: 'คูปอง' },
   { href: '/purchases',  icon: Package,    label: 'สินค้า' },
   { href: '/profile',    icon: UserRound,  label: 'โปรไฟล์' },

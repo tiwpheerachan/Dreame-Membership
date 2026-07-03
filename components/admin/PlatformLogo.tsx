@@ -4,7 +4,7 @@
 // Strategy:
 //   • Shopee / Lazada / TikTok → simpleicons.org CDN (official SVGs,
 //     brand-color-tinted, no API key, used by Vercel/GitHub in prod)
-//   • Website (Dreame storefront) → bundled /dreame-logo.png
+//   • Website (Dreame storefront) → bundled /website-logo.png (square "D" mark)
 //   • Store / OTHER → Lucide icon on tier-tinted square
 //
 // All marks rendered with rounded square plate so list rows stay tidy
@@ -77,11 +77,12 @@ export default function PlatformLogo({ channel, size = 20, withLabel, className,
   if (brand.logo) {
     inner = <BrandImage slug={brand.logo} color={brand.logoColor!} alt={label} size={innerSize} />
   } else if (c === 'WEBSITE') {
-    // Dreame brand logo for the storefront
+    // Dreame storefront — square "D" brand mark (th.dreametech.com favicon),
+    // fits the square plate cleanly (the old wide wordmark got squished)
     inner = (
       /* eslint-disable-next-line @next/next/no-img-element */
-      <img src="/dreame-logo.png" alt="Dreame"
-        style={{ width: '85%', height: '60%', objectFit: 'contain' }} />
+      <img src="/website-logo.png" alt="Dreame"
+        style={{ width: '78%', height: '78%', objectFit: 'contain' }} />
     )
   } else if (c === 'STORE') {
     inner = <Store size={innerSize} strokeWidth={1.8} style={{ color: brand.color }} />

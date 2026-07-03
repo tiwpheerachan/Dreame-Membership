@@ -14,11 +14,12 @@ export type AuditAction =
   | 'COUPON_SHOPIFY_BATCH_CREATED'
   | 'COUPON_SHOPIFY_REDEEMED'
   | 'MEMBER_VIEWED'
+  | 'REFILL_ROUND_UPDATED'
 
 interface LogParams {
   staffId:     string
   action:      AuditAction
-  targetType:  'purchase' | 'user' | 'points' | 'coupon' | 'reward' | 'redemption'
+  targetType:  'purchase' | 'user' | 'points' | 'coupon' | 'reward' | 'redemption' | 'refill_round'
   targetId?:   string  // UUID; omit for actions that target a non-UUID identifier (e.g. an order_sn)
   userId?:     string
   detail?:     Record<string, unknown>

@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Clock, Package, Tag, Megaphone,
   History, LogOut, UserCog, BarChart3, Search, Heart, Activity,
-  CalendarHeart, Bell, AlertTriangle, Gift, Truck, TrendingUp,
+  CalendarHeart, Bell, AlertTriangle, Gift, Truck, TrendingUp, Sparkles,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -27,6 +27,7 @@ const NAV: Array<{ href: string; icon: typeof Users; label: string; group?: stri
 
   { href: '/admin/rewards',            icon: Gift,            label: 'ของรางวัล',        group: 'LOYALTY' },
   { href: '/admin/redemptions',        icon: Truck,           label: 'การจัดส่ง' },
+  { href: '/admin/privileges',         icon: Sparkles,        label: 'สิทธิพิเศษ (น้ำยาฟรี)' },
   { href: '/admin/points/expiring',    icon: AlertTriangle,   label: 'แต้มจะหมดอายุ' },
 
   { href: '/admin/staff',              icon: UserCog,         label: 'พนักงาน',         group: 'SETTINGS' },
