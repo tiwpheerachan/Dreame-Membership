@@ -9,6 +9,7 @@ import {
 import type { PurchaseRegistration, BQOrderData } from '@/types'
 import TrackOrderBanner from '@/components/user/TrackOrderBanner'
 import { formatDate, warrantyDaysLeft } from '@/lib/utils'
+import { computeWarranty, mainWarrantyMonths } from '@/lib/warranty'
 import { calculatePoints, normalizeTier } from '@/lib/points'
 import { batchVerifyOrders } from '@/lib/bigquery'
 
@@ -95,7 +96,7 @@ export default async function PurchasesPage() {
           const firstItem = data.items?.[0]
           const purchaseDate = data.order_date ? new Date(data.order_date) : new Date()
           const warrantyEnd = new Date(purchaseDate)
-          warrantyEnd.setMonth(warrantyEnd.getMonth() + 24)
+          warrantyEnd.setMonth(warrantyEnd.getMonth() + mainWarrantyMonths(firstItem?.item_name))
           const warrantyStart = purchaseDate.toISOString().split('T')[0]
           const warrantyEndStr = warrantyEnd.toISOString().split('T')[0]
           const purchaseDateStr = data.order_date || null
@@ -195,7 +196,13 @@ export default async function PurchasesPage() {
         {!purchases || purchases.length === 0 ? (
           <EmptyState />
         ) : purchases.map(p => {
-          const daysLeft = warrantyDaysLeft(p.warranty_end)
+          // Headline warranty = main-body tier, derived from the product type
+          // and the warranty start (falls back to purchase date). Computing it
+          // here keeps older records — stored with a flat 24-month end — correct.
+          const wStart = p.warranty_start || p.purchase_date || null
+          const wMain = computeWarranty(p.model_name, wStart).tiers.find(t => t.key === 'main')
+          const daysLeft = wMain?.daysLeft ?? warrantyDaysLeft(p.warranty_end)
+          const mainEnd = wMain?.endDate ?? p.warranty_end
           const wOk = daysLeft > 0
           const ch = CHANNEL[p.channel] || CHANNEL.OTHER
           const projected = calculatePoints(p.total_amount || 0, userTier, p.channel)
@@ -210,8 +217,8 @@ export default async function PurchasesPage() {
           // Warranty progress: % of original warranty period still remaining.
           // Falls back to a 365-day default if warranty_start is missing.
           let warrantyTotal = 365
-          if (p.warranty_start && p.warranty_end) {
-            const ms = new Date(p.warranty_end).getTime() - new Date(p.warranty_start).getTime()
+          if (wStart && mainEnd) {
+            const ms = new Date(mainEnd).getTime() - new Date(wStart).getTime()
             const days = Math.round(ms / 86400000)
             if (days > 0) warrantyTotal = days
           }
@@ -345,7 +352,7 @@ export default async function PurchasesPage() {
                 </div>
 
                 {/* Warranty progress — thin inline bar with day count */}
-                {p.warranty_end && (
+                {mainEnd && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
                     <ShieldCheck
                       size={11}

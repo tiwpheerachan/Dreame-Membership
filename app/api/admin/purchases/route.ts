@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { logAdminAction } from '@/lib/audit'
 import { uploadToSupabase } from '@/lib/upload'
+import { mainWarrantyMonths } from '@/lib/warranty'
 
 export async function POST(req: Request) {
   const supabase = createClient()
@@ -40,8 +41,9 @@ export async function POST(req: Request) {
   }
 
   const purchaseDate = purchase_date ? new Date(purchase_date) : new Date()
+  const warrantyMonths = mainWarrantyMonths(model_name)  // per product type
   const warrantyEnd = new Date(purchaseDate)
-  warrantyEnd.setMonth(warrantyEnd.getMonth() + 24)  // 2-year warranty
+  warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
 
   const { data: reg, error } = await service
     .from('purchase_registrations')
@@ -51,7 +53,7 @@ export async function POST(req: Request) {
       purchase_date: purchaseDate.toISOString().split('T')[0],
       total_amount: Number(total_amount || 0),
       receipt_image_url,
-      warranty_months: 24,
+      warranty_months: warrantyMonths,
       warranty_start: purchaseDate.toISOString().split('T')[0],
       warranty_end: warrantyEnd.toISOString().split('T')[0],
       bq_verified: channel_type === 'ONLINE',

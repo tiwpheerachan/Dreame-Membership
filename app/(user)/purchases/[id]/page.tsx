@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import type { PurchaseRegistration, BQOrderData, BQOrderItem } from '@/types'
 import { formatDate, warrantyDaysLeft } from '@/lib/utils'
+import { computeWarranty } from '@/lib/warranty'
 import { calculatePoints, normalizeTier } from '@/lib/points'
 import { EARN_DIVISOR_BY_CHANNEL, TIER_MULTIPLIER } from '@/types'
 import InlineShippingStatus from '@/components/user/InlineShippingStatus'
@@ -52,7 +53,13 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
   const bq = (p.bq_raw_data as BQOrderData | null) ?? null
   const items: BQOrderItem[] = Array.isArray(bq?.items) ? bq!.items : []
   const ch = CHANNEL[p.channel] || CHANNEL.OTHER
-  const daysLeft = warrantyDaysLeft(p.warranty_end)
+
+  // Multi-tier warranty derived from the product type + warranty start.
+  // Computing it here keeps older records (stored with a flat 24-month end)
+  // consistent with the per-type rules.
+  const warranty = computeWarranty(p.model_name || p.item_name, p.warranty_start || p.purchase_date)
+  const mainTier = warranty.tiers.find(t => t.key === 'main')
+  const daysLeft = mainTier?.daysLeft ?? warrantyDaysLeft(p.warranty_end)
   const wOk = daysLeft > 0
 
   // Points: prefer the awarded number; if zero, show the projected amount so
@@ -239,22 +246,76 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
           </div>
         )}
 
-        {/* ── Warranty ── */}
-        {p.warranty_end && (
+        {/* ── Warranty (multi-tier by product type) ── */}
+        {warranty.start && (
           <div className="surface" style={{ padding: 18 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            {/* Header: main-body status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
               <ShieldCheck size={18} color={wOk ? 'var(--green)' : 'var(--ink-faint)'} strokeWidth={1.7} />
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 700, margin: 0,
                   color: wOk ? 'var(--green)' : 'var(--ink-faint)' }}>
                   {wOk ? 'ประกันยังมีผล' : 'ประกันหมดอายุ'}
                 </p>
-                <p style={{ fontSize: 11.5, color: 'var(--ink-mute)', margin: '2px 0 0' }}>
-                  {p.warranty_start ? `${formatDate(p.warranty_start)} → ` : ''}{formatDate(p.warranty_end)}
+                <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '2px 0 0' }}>
+                  {warranty.rule.category} · เริ่ม {formatDate(warranty.start)}
+                  {warranty.rule.service === 'replacement' ? ' · เปลี่ยนตัวใหม่' : ''}
                 </p>
               </div>
-              {wOk && <span className="pill pill-green">{daysLeft} วัน</span>}
+              {wOk && mainTier && <span className="pill pill-green">{mainTier.daysLeft} วัน</span>}
             </div>
+
+            {/* Per-tier breakdown */}
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {warranty.tiers.map(t => {
+                const none = t.months == null
+                const active = t.active
+                const dotColor = none ? 'var(--ink-faint)' : active ? 'var(--green)' : '#B14242'
+                const years = t.months ? (t.months % 12 === 0 ? `${t.months / 12} ปี` : `${t.months} เดือน`) : null
+                return (
+                  <div key={t.key} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    padding: '10px 12px', borderRadius: 'var(--r-md)',
+                    background: 'var(--bg-soft)',
+                  }}>
+                    <span aria-hidden style={{
+                      width: 8, height: 8, borderRadius: '50%', marginTop: 5,
+                      background: dotColor, flexShrink: 0,
+                    }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                        <p style={{ fontSize: 12.5, fontWeight: 700, margin: 0 }}>{t.label}</p>
+                        <span style={{
+                          fontSize: 11, fontWeight: 800, flexShrink: 0,
+                          color: none ? 'var(--ink-faint)' : 'var(--ink)',
+                        }}>
+                          {none ? 'ไม่มีประกัน' : years}
+                        </span>
+                      </div>
+                      {t.detail && (
+                        <p style={{ fontSize: 10.5, color: 'var(--ink-mute)', margin: '3px 0 0', lineHeight: 1.5 }}>
+                          {t.detail}
+                        </p>
+                      )}
+                      {!none && (
+                        <p style={{
+                          fontSize: 10.5, margin: '4px 0 0', fontWeight: 600,
+                          color: active ? 'var(--green)' : '#B14242',
+                        }}>
+                          {active
+                            ? `ถึง ${formatDate(t.endDate)} · เหลือ ${t.daysLeft} วัน`
+                            : `หมดอายุ ${formatDate(t.endDate)}`}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <p style={{ fontSize: 10, color: 'var(--ink-faint)', margin: '10px 0 0', lineHeight: 1.5 }}>
+              * ระยะเวลาประกันเป็นไปตามเงื่อนไขการรับประกันของ Dreame ตามประเภทสินค้า
+            </p>
           </div>
         )}
 

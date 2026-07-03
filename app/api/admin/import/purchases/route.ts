@@ -1,6 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { logAdminAction } from '@/lib/audit'
+import { mainWarrantyMonths } from '@/lib/warranty'
 
 interface Row {
   member_id?: string
@@ -88,9 +89,9 @@ export async function POST(req: Request) {
       continue
     }
 
-    // Compute warranty — default 24 months (2 years) unless CSV overrides it
+    // Compute warranty — CSV can override; otherwise derive from product type.
     const purchaseDate = row.purchase_date ? new Date(row.purchase_date) : new Date()
-    const warrantyMonths = Number(row.warranty_months) || 24
+    const warrantyMonths = Number(row.warranty_months) || mainWarrantyMonths(row.model_name)
     const warrantyEnd = new Date(purchaseDate)
     warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
 
