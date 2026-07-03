@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { Store, MapPin, Navigation, Clock, Phone } from 'lucide-react'
 import type { Branch } from '@/types'
 import BranchGallery from '@/components/user/BranchGallery'
+import BackButton from '@/components/user/BackButton'
 
 export default async function BranchesPage() {
   const supabase = createClient()
@@ -27,7 +28,10 @@ export default async function BranchesPage() {
   return (
     <div className="page-enter" style={{ paddingTop: 18, background: '#fff', minHeight: '100vh' }}>
       <header style={{ padding: '14px 20px 24px' }}>
-        <p className="kicker" style={{ marginBottom: 8 }}>Our Stores</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          <BackButton />
+          <p className="kicker" style={{ margin: 0 }}>Our Stores</p>
+        </div>
         <h1 className="display" style={{ margin: 0, fontSize: 30, lineHeight: 1.05, letterSpacing: '-0.02em' }}>
           <span style={{ fontWeight: 800 }}>รวมสาขา</span>{' '}
           <span className="serif-i" style={{ fontWeight: 400 }}>ของเรา</span>
@@ -77,8 +81,11 @@ function BranchCard({ branch }: { branch: Branch }) {
 
   return (
     <article className="card" style={{ overflow: 'hidden', padding: 0 }}>
-      {/* Photo with name tag */}
-      <div style={{ position: 'relative', aspectRatio: '16/10', background: '#000' }}>
+      {/* Photo with name tag — fixed 16/9 so every card's cover is identical */}
+      <div style={{
+        position: 'relative', aspectRatio: '16 / 9', background: '#000',
+        borderTopLeftRadius: 'var(--r-lg)', borderTopRightRadius: 'var(--r-lg)', overflow: 'hidden',
+      }}>
         {branch.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={branch.image_url} alt={branch.name}
@@ -98,10 +105,10 @@ function BranchCard({ branch }: { branch: Branch }) {
           position: 'absolute', top: 12, right: 12,
           maxWidth: 'calc(100% - 24px)',
           padding: '6px 13px', borderRadius: 'var(--r-pill)',
-          background: 'rgba(255,255,255,0.22)',
+          background: 'rgba(20,18,15,0.55)',
           backdropFilter: 'blur(12px) saturate(160%)',
           WebkitBackdropFilter: 'blur(12px) saturate(160%)',
-          border: '1px solid rgba(255,255,255,0.35)',
+          border: '1px solid rgba(255,255,255,0.25)',
           color: '#fff', fontSize: 12.5, fontWeight: 800,
           display: 'inline-flex', alignItems: 'center', gap: 5,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',

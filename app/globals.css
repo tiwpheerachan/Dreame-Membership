@@ -330,6 +330,16 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; line-he
   to   { opacity: 1; transform: translateY(0)    scale(1); }
 }
 .pop-in   { animation: pop-in 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) both; }
+
+/* Lightbox / photo popup */
+@keyframes lightbox-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lightbox-pop {
+  from { opacity: 0; transform: scale(0.86); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.lightbox-fade { animation: lightbox-fade 0.22s ease both; }
+.lightbox-pop  { animation: lightbox-pop 0.34s cubic-bezier(0.34, 1.35, 0.5, 1) both; }
+
 .pop-in-d1 { animation: pop-in 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) 0.10s both; }
 .pop-in-d2 { animation: pop-in 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) 0.20s both; }
 .pop-in-d3 { animation: pop-in 0.55s cubic-bezier(0.34, 1.2, 0.64, 1) 0.30s both; }

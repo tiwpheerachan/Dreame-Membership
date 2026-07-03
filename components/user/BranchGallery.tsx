@@ -62,9 +62,11 @@ export default function BranchGallery({ images, name }: { images: string[]; name
       {open && (
         <div
           onClick={close}
+          className="lightbox-fade"
           style={{
             position: 'fixed', inset: 0, zIndex: 200,
             background: 'rgba(10,9,8,0.94)',
+            backdropFilter: 'blur(4px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: 16,
           }}
@@ -82,12 +84,14 @@ export default function BranchGallery({ images, name }: { images: string[]; name
             <X size={18} />
           </button>
 
-          {/* Image */}
+          {/* Image — key on index so the pop animation replays on each change */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            key={index}
             src={images[index]} alt={`${name} ${index + 1}`}
             onClick={e => e.stopPropagation()}
-            style={{ maxWidth: '100%', maxHeight: '82vh', objectFit: 'contain', borderRadius: 8 }}
+            className="lightbox-pop"
+            style={{ maxWidth: '100%', maxHeight: '82vh', objectFit: 'contain', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}
           />
 
           {/* Prev / Next */}
