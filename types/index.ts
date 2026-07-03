@@ -147,6 +147,23 @@ export interface Promotion {
   created_at?: string
 }
 
+// ── Store branch ("รวมสาขาของเรา") ──
+export interface Branch {
+  id: string
+  name: string                 // shown as the name tag on the top-right of the image
+  image_url: string | null     // cover photo — used in the home carousel
+  gallery_urls: string[] | null // extra photos, viewable as a gallery on /branches
+  address: string | null
+  map_url: string | null       // Google Maps link
+  phone: string | null
+  hours: string | null         // opening hours, e.g. "10:00 – 22:00 ทุกวัน"
+  badge_text: string | null    // optional highlight chip, e.g. "เปิดใหม่"
+  sort_order: number
+  is_active: boolean
+  show_on_home: boolean
+  created_at?: string
+}
+
 // ── BigQuery payload ──
 export interface BQOrderItem {
   item_id: string

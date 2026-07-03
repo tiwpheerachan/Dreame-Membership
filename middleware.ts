@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest) {
   const isUserRoute = path === '/home' || path.startsWith('/purchases') ||
     path.startsWith('/points') || path.startsWith('/coupons') ||
     path.startsWith('/profile') || path.startsWith('/promotions') ||
-    path.startsWith('/notifications')
+    path.startsWith('/branches') || path.startsWith('/notifications')
 
   if (isUserRoute && !isLoggedIn) {
     return NextResponse.redirect(new URL('/login', request.url))
@@ -72,6 +72,7 @@ export const config = {
     '/coupons',
     '/profile',
     '/promotions',
+    '/branches',
     '/notifications',
     '/admin/:path*',
     '/login',

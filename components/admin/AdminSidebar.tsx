@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Clock, Package, Tag, Megaphone,
   History, LogOut, UserCog, BarChart3, Search, Heart, Activity,
-  CalendarHeart, Bell, AlertTriangle, Gift, Truck, TrendingUp, Sparkles,
+  CalendarHeart, Bell, AlertTriangle, Gift, Truck, TrendingUp, Sparkles, Store,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -21,6 +21,7 @@ const NAV: Array<{ href: string; icon: typeof Users; label: string; group?: stri
 
   { href: '/admin/coupons',            icon: Tag,             label: 'คูปอง',           group: 'MARKETING' },
   { href: '/admin/promotions',         icon: Megaphone,       label: 'โปรโมชั่น' },
+  { href: '/admin/branches',           icon: Store,           label: 'สาขา' },
   { href: '/admin/announcements',      icon: Bell,            label: 'ประกาศ' },
   { href: '/admin/campaigns',          icon: CalendarHeart,   label: 'แคมเปญ' },
   { href: '/admin/insights/tier-up',   icon: TrendingUp,      label: 'Tier-up forecast' },

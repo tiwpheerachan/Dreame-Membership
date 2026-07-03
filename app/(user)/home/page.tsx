@@ -5,7 +5,7 @@ import {
   Bell, Plus, Package,
   ChevronRight, TrendingUp, Sparkles, Award, ArrowRight,
 } from 'lucide-react'
-import type { User, PurchaseRegistration, Promotion, UserTier, BQOrderData } from '@/types'
+import type { User, PurchaseRegistration, Promotion, UserTier, BQOrderData, Branch } from '@/types'
 import dynamic from 'next/dynamic'
 const MemberCard = dynamic(() => import('@/components/user/MemberCard'), { ssr: false })
 const TrackOrderBanner = dynamic(() => import('@/components/user/TrackOrderBanner'), { ssr: false })
@@ -18,8 +18,9 @@ const WarpShader = dynamic(() => import('@/components/ui/warp-shader'), { ssr: f
 import { MembershipDashboardCard } from '@/components/ui/animated-dashboard-card'
 import QuickActionsBar from '@/components/user/QuickActionsBar'
 const TrackCTA = dynamic(() => import('@/components/user/TrackCTA'), { ssr: false })
-import { PromoHero, PromoSmall, PromoFeed } from '@/components/user/PromoCard'
+import { PromoHero, PromoSmall } from '@/components/user/PromoCard'
 import BannerMarquee from '@/components/user/BannerMarquee'
+import BranchShowcase from '@/components/user/BranchShowcase'
 import { formatDate } from '@/lib/utils'
 import { getNextTierInfo } from '@/lib/points'
 
@@ -43,11 +44,17 @@ export default async function HomePage() {
   // The data is public-facing anyway, just filtered by is_active.
   const service = createServiceClient()
 
-  const [{ data: user }, { data: purchases }, { data: promos, error: promosErr }] = await Promise.all([
+  const [{ data: user }, { data: purchases }, { data: promos, error: promosErr }, { data: branchRows }] = await Promise.all([
     supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
     supabase.from('purchase_registrations').select('*').eq('user_id', authUser.id)
       .order('created_at', { ascending: false }).limit(3),
     service.from('promotions').select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: false })
+      .order('created_at', { ascending: false }).limit(20),
+    // Branches table may not exist yet on some DBs — a failed query just
+    // returns null and the section renders nothing.
+    service.from('branches').select('*')
       .eq('is_active', true)
       .order('sort_order', { ascending: false })
       .order('created_at', { ascending: false }).limit(20),
@@ -81,8 +88,13 @@ export default async function HomePage() {
   )
   const heroPromo    = homePromos.find((p: Promotion) => p.layout === 'hero')
   const cardPromos   = homePromos.filter((p: Promotion) => p.layout === 'card')
-  const feedPromos   = homePromos.filter((p: Promotion) => p.layout === 'feed')
   const bannerPromos = homePromos.filter((p: Promotion) => p.layout === 'banner')
+
+  // Branches shown on home (show_on_home defaults to true if the column/table
+  // isn't present yet).
+  const homeBranches = (branchRows || []).filter((b: Branch) =>
+    b.show_on_home === undefined || b.show_on_home === null || b.show_on_home === true
+  )
   // Split into 2 marquee rows. Default unset/null/1 to row 1.
   const bannerRow1 = bannerPromos.filter(p => (p.banner_row ?? 1) === 1)
   const bannerRow2 = bannerPromos.filter(p => p.banner_row === 2)
@@ -300,6 +312,9 @@ export default async function HomePage() {
         </section>
       )}
 
+      {/* ─── Our branches ("รวมสาขาของเรา") ─── */}
+      <BranchShowcase branches={homeBranches} />
+
       {/* ─── Tiers and Perks ─── */}
       <section style={{ padding: '28px 16px 16px' }}>
         <div style={{ padding: '0 4px 14px', textAlign: 'center' }}>
@@ -460,20 +475,6 @@ export default async function HomePage() {
           </div>
         )}
       </section>
-
-      {/* ─── Feed (vertical Instagram-style) ─── */}
-      {feedPromos.length > 0 && (
-        <section style={{ padding: '24px 16px 8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0 4px 14px' }}>
-            <h2 className="display" style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
-              ฟีด<span className="gold-text">โปรโมชั่น</span>
-            </h2>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {feedPromos.map((p: Promotion) => <PromoFeed key={p.id} promo={p} />)}
-          </div>
-        </section>
-      )}
 
       {/* ─── Footer ─── */}
       <div style={{ textAlign: 'center', padding: '24px 0 28px' }}>

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import {
   Search, User, Package, Tag, LayoutDashboard, Megaphone,
   Clock, UserCog, BarChart3, Bell, Heart, History, AlertTriangle,
-  Activity, CalendarHeart, Users,
+  Activity, CalendarHeart, Users, Store,
 } from 'lucide-react'
 
 interface Result {
@@ -24,6 +24,7 @@ const PAGES: Result[] = [
   { type: 'page', href: '/admin/import',          title: 'นำเข้า CSV',         icon: Activity },
   { type: 'page', href: '/admin/coupons',         title: 'คูปอง',              icon: Tag },
   { type: 'page', href: '/admin/promotions',      title: 'โปรโมชั่น',           icon: Megaphone },
+  { type: 'page', href: '/admin/branches',        title: 'สาขา',               icon: Store },
   { type: 'page', href: '/admin/announcements',   title: 'ประกาศ',             icon: Bell },
   { type: 'page', href: '/admin/campaigns',       title: 'แคมเปญ',             icon: CalendarHeart },
   { type: 'page', href: '/admin/points/expiring', title: 'แต้มจะหมดอายุ',       icon: AlertTriangle },
