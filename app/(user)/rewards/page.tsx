@@ -330,38 +330,88 @@ function tabStyle(active: boolean): React.CSSProperties {
   }
 }
 
+// Coupon-ticket geometry: image panel width + notch diameter.
+const IMG_W = 108
+const NOTCH = 16
+
+// ============================================================
+// RewardCard — coupon-ticket style (matches CouponCard):
+// rounded 16 corners, dashed perforation divider, notch cutouts,
+// product image shown in full (contain) so nothing gets cropped.
+// ============================================================
 function RewardCard({ reward }: { reward: Reward }) {
+  const featured = reward.is_featured
   return (
     <Link href={`/rewards/${reward.id}`}
-      className="card-product tap"
+      className="tap"
       style={{
-        display: 'flex', overflow: 'hidden',
+        display: 'block', position: 'relative',
         textDecoration: 'none', color: 'inherit',
-        opacity: reward.can_redeem ? 1 : 0.7,
-        position: 'relative',
+        opacity: reward.can_redeem ? 1 : 0.72,
       }}>
-      {/* Image */}
-      <div style={{
-        width: 110, flexShrink: 0,
-        background: 'var(--bg-soft)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        {reward.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={reward.image_url} alt={reward.name}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        ) : (
-          <Gift size={28} color="var(--ink-faint)" strokeWidth={1.4} />
-        )}
-      </div>
+      {/* Notch cutouts straddling the perforation (page-bg colored) */}
+      <span aria-hidden style={{
+        position: 'absolute', left: IMG_W - NOTCH / 2, top: -NOTCH / 2,
+        width: NOTCH, height: NOTCH, borderRadius: '50%',
+        background: '#fff', border: '1px solid var(--hair)', zIndex: 2,
+      }} />
+      <span aria-hidden style={{
+        position: 'absolute', left: IMG_W - NOTCH / 2, bottom: -NOTCH / 2,
+        width: NOTCH, height: NOTCH, borderRadius: '50%',
+        background: '#fff', border: '1px solid var(--hair)', zIndex: 2,
+      }} />
 
-      {/* Body */}
-      <div style={{ flex: 1, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-        {reward.is_featured && (
-          <p style={{ fontSize: 9, color: 'var(--gold-deep)', letterSpacing: '0.18em', textTransform: 'uppercase', margin: 0, fontWeight: 700 }}>
-            ⭐ Featured
-          </p>
-        )}
+      <div style={{
+        display: 'flex', overflow: 'hidden',
+        background: '#fff', borderRadius: 16,
+        border: featured ? '1px solid var(--gold-line)' : '1px solid var(--hair)',
+        boxShadow: featured
+          ? '0 3px 14px rgba(201,155,62,0.12)'
+          : '0 2px 10px rgba(20,18,15,0.05)',
+      }}>
+        {/* Image panel — full product visible, never cropped */}
+        <div style={{
+          width: IMG_W, flexShrink: 0, alignSelf: 'stretch',
+          position: 'relative',
+          background: 'var(--bg-soft)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 8, minHeight: 116,
+        }}>
+          {reward.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={reward.image_url} alt={reward.name}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', maxHeight: 108 }} />
+          ) : (
+            <Gift size={28} color="var(--ink-faint)" strokeWidth={1.4} />
+          )}
+          {featured && (
+            <span style={{
+              position: 'absolute', top: 6, left: 6,
+              fontSize: 8.5, fontWeight: 800, letterSpacing: '0.1em',
+              padding: '3px 6px', borderRadius: 'var(--r-pill)',
+              background: 'linear-gradient(135deg, #FAF3DC, #EADBB1)',
+              color: '#A0782B', textTransform: 'uppercase',
+            }}>
+              ⭐ Featured
+            </span>
+          )}
+        </div>
+
+        {/* Dashed perforation divider */}
+        <div style={{
+          display: 'flex', flexDirection: 'column', justifyContent: 'center',
+          gap: 4, padding: '0 1px', flexShrink: 0,
+        }}>
+          {Array.from({ length: 9 }).map((_, i) => (
+            <span key={i} style={{
+              width: 2, height: 4, borderRadius: 1,
+              background: featured ? 'var(--gold-line)' : 'var(--line)',
+            }} />
+          ))}
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, padding: '12px 14px 12px 12px', display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
         <p style={{ fontSize: 14, fontWeight: 700, margin: 0, lineHeight: 1.3,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {reward.name}
@@ -445,6 +495,7 @@ function RewardCard({ reward }: { reward: Reward }) {
             <Lock size={9} /> {reward.reason_blocked}
           </p>
         )}
+        </div>
       </div>
     </Link>
   )
