@@ -7,6 +7,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { batchVerifyOrders } from '@/lib/bigquery'
+import { mainWarrantyMonths } from '@/lib/warranty'
 
 export async function GET(req: Request) {
   // Security check — bail loudly if the secret isn't configured at all
@@ -23,14 +24,16 @@ export async function GET(req: Request) {
   const supabase = createServiceClient()
 
   try {
-    // Self-heal: any PENDING+ONLINE registration that's missing from the
-    // queue (e.g. legacy rows, or an insert that raced with a queue failure)
+    // Self-heal: any PENDING registration with a real Order ID that's missing
+    // from the queue (legacy rows, or an insert that raced with a queue failure)
     // would never get re-checked. Backfill them before reading the queue.
+    // Excludes หน้าร้าน (STORE): it has no Order ID, so BQ can't match it —
+    // an admin verifies it via the receipt instead.
     const { data: orphans } = await supabase
       .from('purchase_registrations')
       .select('id, order_sn')
       .eq('status', 'PENDING')
-      .eq('channel_type', 'ONLINE')
+      .neq('channel', 'STORE')
       .limit(500)
     if (orphans && orphans.length > 0) {
       const orphanIds = orphans.map(o => o.id)
@@ -48,14 +51,14 @@ export async function GET(req: Request) {
       }
     }
 
-    // Only retry ONLINE orders. STORE/ONSITE rows can never appear in BQ and
-    // must be admin-approved instead. The register endpoint already gates
-    // inserts by channel_type, but the inner join here also protects against
-    // legacy rows from before that gate existed.
+    // Retry every order with a real Order ID (online marketplaces + Brand Shop).
+    // Only หน้าร้าน (STORE) is excluded — it has no Order ID for BQ to match and
+    // must be admin-approved via receipt. The register endpoint already gates
+    // inserts, but the inner join here also protects against legacy queue rows.
     const { data: pendingQueue } = await supabase
       .from('pending_verifications')
-      .select('id, purchase_reg_id, order_sn, retry_count, purchase_registrations!inner(channel_type)')
-      .eq('purchase_registrations.channel_type', 'ONLINE')
+      .select('id, purchase_reg_id, order_sn, retry_count, purchase_registrations!inner(channel)')
+      .neq('purchase_registrations.channel', 'STORE')
       .lt('retry_count', 168)  // 168 × 1h = 7 days; BQ refresh is ~6h so ~28 real chances
       .order('created_at', { ascending: true })
       .limit(200)
@@ -87,8 +90,11 @@ export async function GET(req: Request) {
         // Found in BQ → update registration
         const firstItem = bqData.items?.[0]
         const purchaseDate = bqData.order_date ? new Date(bqData.order_date) : new Date()
+        // Warranty length depends on the product type — match the register route
+        // (was hardcoded 24mo here, which under/over-stated non-standard products).
+        const warrantyMonths = mainWarrantyMonths(firstItem?.item_name)
         const warrantyEnd = new Date(purchaseDate)
-        warrantyEnd.setMonth(warrantyEnd.getMonth() + 24)  // 2-year warranty
+        warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
 
         const { error } = await supabase
           .from('purchase_registrations')
@@ -101,6 +107,7 @@ export async function GET(req: Request) {
             model_name: firstItem?.item_name || null,
             purchase_date: bqData.order_date || null,
             total_amount: bqData.total_amount,
+            warranty_months: warrantyMonths,
             warranty_start: purchaseDate.toISOString().split('T')[0],
             warranty_end: warrantyEnd.toISOString().split('T')[0],
           })

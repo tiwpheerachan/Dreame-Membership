@@ -122,7 +122,13 @@ export async function POST(req: Request) {
           .insert({ purchase_reg_id: reg.id, order_sn: claimKey })
           .then(() => {}, () => {})
       }
-    } else if (channel_type === 'ONLINE') {
+    } else if (order_sn) {
+      // Retroactive BQ verification: every channel that supplies a REAL Order ID
+      // (online marketplaces AND Brand Shop) eventually lands in BigQuery — BQ
+      // just isn't real-time. Enqueue so the cron re-checks it over the next
+      // 1–2 days and auto-promotes it to BQ_VERIFIED + awards points.
+      // หน้าร้าน (STORE) has no Order ID (order_sn falls back to the serial
+      // number, which BQ can't match) → an admin verifies it via the receipt.
       await service.from('pending_verifications').insert({
         purchase_reg_id: reg.id,
         order_sn: claimKey,

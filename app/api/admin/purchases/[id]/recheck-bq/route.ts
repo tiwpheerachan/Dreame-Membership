@@ -8,6 +8,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { verifyOrderInBQ } from '@/lib/bigquery'
+import { mainWarrantyMonths } from '@/lib/warranty'
 import { logAdminAction } from '@/lib/audit'
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
@@ -22,15 +23,17 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   const { data: reg } = await service
     .from('purchase_registrations')
-    .select('id, user_id, order_sn, status, channel_type, points_awarded')
+    .select('id, user_id, order_sn, status, channel, channel_type, points_awarded')
     .eq('id', params.id)
     .single()
 
   if (!reg) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (reg.channel_type !== 'ONLINE') {
+  // Only หน้าร้าน (STORE) can't be BQ-matched (no Order ID). Brand Shop is
+  // ONSITE too but has a real Order ID that lands in BQ once it refreshes.
+  if (reg.channel === 'STORE') {
     return NextResponse.json({
       status: 'SKIPPED',
-      message: 'คำสั่งซื้อช่องทางหน้าร้านไม่ตรวจสอบกับ BigQuery — กรุณาอนุมัติด้วยตนเอง',
+      message: 'คำสั่งซื้อหน้าร้านไม่มี Order ID จึงตรวจกับ BigQuery ไม่ได้ — กรุณาอนุมัติด้วยตนเอง',
     })
   }
 
@@ -68,8 +71,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   // Found — promote to BQ_VERIFIED
   const firstItem = bqData.items?.[0]
   const purchaseDate = bqData.order_date ? new Date(bqData.order_date) : new Date()
+  const warrantyMonths = mainWarrantyMonths(firstItem?.item_name)
   const warrantyEnd = new Date(purchaseDate)
-  warrantyEnd.setMonth(warrantyEnd.getMonth() + 24)  // 2-year warranty
+  warrantyEnd.setMonth(warrantyEnd.getMonth() + warrantyMonths)
 
   const { error: updErr } = await service
     .from('purchase_registrations')
@@ -82,6 +86,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       model_name: firstItem?.item_name || null,
       purchase_date: bqData.order_date || null,
       total_amount: bqData.total_amount,
+      warranty_months: warrantyMonths,
       warranty_start: purchaseDate.toISOString().split('T')[0],
       warranty_end: warrantyEnd.toISOString().split('T')[0],
     })

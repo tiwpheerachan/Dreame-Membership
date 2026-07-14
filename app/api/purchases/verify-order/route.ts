@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     }
     return NextResponse.json({
       status: 'PENDING',
-      message: 'ยังไม่พบข้อมูลใน BigQuery (ระบบอัปเดตทุก 6 ชั่วโมง) ลงทะเบียนต่อได้เลย ระบบจะตรวจสอบให้อัตโนมัติ',
+      message: 'ยังไม่พบข้อมูลออเดอร์ กรุณาตรวจสอบความถูกต้องของข้อมูล — สถานะการสั่งซื้อจะได้รับการตรวจสอบภายใน 1-2 วัน ลงทะเบียนต่อได้เลย',
     })
   } catch (error) {
     console.error('[API] verify-order error:', error)

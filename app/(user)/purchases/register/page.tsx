@@ -394,6 +394,19 @@ export default function RegisterPage() {
               )}
             </div>
 
+            {/* Brand Shop: order id ไม่เรียลไทม์ — ไม่มีปุ่มค้นหา, แจ้งว่ารอตรวจสอบ */}
+            {showOrderId && !showVerify && (
+              <div style={{
+                marginTop: 12, padding: 14, display: 'flex', gap: 10,
+                background: 'var(--amber-soft)', border: '1px solid rgba(154,110,31,0.20)', borderRadius: 'var(--r-md)',
+              }}>
+                <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
+                <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0, lineHeight: 1.5 }}>
+                  หมายเลข Order ID ของ Brand Shop ไม่ใช่เรียลไทม์ — สถานะการสั่งซื้อจะได้รับการตรวจสอบภายใน 1–2 วัน
+                </p>
+              </div>
+            )}
+
             {/* Verified BQ preview (online only) */}
             {showVerify && verifyStatus === 'verified' && verifiedData && (() => {
               const items = (verifiedData.items as Array<Record<string, unknown>>) || []
@@ -487,8 +500,10 @@ export default function RegisterPage() {
               }}>
                 <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
                 <div>
-                  <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>ยังไม่พบใน BigQuery</p>
-                  <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0 }}>ระบบจะตรวจสอบอัตโนมัติ คุณสามารถลงทะเบียนต่อได้</p>
+                  <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>ยังไม่พบข้อมูลออเดอร์</p>
+                  <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0, lineHeight: 1.5 }}>
+                    กรุณาตรวจสอบความถูกต้องของข้อมูล — สถานะการสั่งซื้อจะได้รับการตรวจสอบภายใน 1–2 วัน คุณลงทะเบียนต่อได้เลย
+                  </p>
                 </div>
               </div>
             )}
@@ -499,8 +514,10 @@ export default function RegisterPage() {
               }}>
                 <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
                 <div>
-                  <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>ตรวจสอบ BigQuery ไม่สำเร็จ</p>
-                  <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0 }}>ลงทะเบียนต่อได้ แอดมินจะตรวจสอบให้</p>
+                  <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>ตรวจสอบไม่สำเร็จชั่วคราว</p>
+                  <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0, lineHeight: 1.5 }}>
+                    ลงทะเบียนต่อได้เลย — สถานะการสั่งซื้อจะได้รับการตรวจสอบภายใน 1–2 วัน
+                  </p>
                 </div>
               </div>
             )}
