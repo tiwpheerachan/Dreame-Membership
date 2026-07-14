@@ -546,7 +546,7 @@ function EditForm({ row, onLocalPatch }: { row: OrderRow; onLocalPatch: (patch: 
         <Field label="Invoice no." value={invoice_no} onChange={setInvoice} />
         <SelectField label="ช่องทาง" value={channel} onChange={setChannel} options={[
           ['SHOPEE', 'Shopee'], ['LAZADA', 'Lazada'], ['WEBSITE', 'Website'],
-          ['TIKTOK', 'TikTok'], ['STORE', 'หน้าร้าน'], ['OTHER', 'อื่นๆ'],
+          ['TIKTOK', 'TikTok'], ['BRANDSHOP', 'Brand Shop'], ['STORE', 'หน้าร้าน'], ['OTHER', 'อื่นๆ'],
         ]} />
         <Field label="ยอด (THB)" value={total_amount} onChange={setTotal} type="number" />
         <Field label="วันที่ซื้อ" value={purchase_date} onChange={setPurchaseDate} type="date" />
@@ -859,6 +859,7 @@ function FilterForm({ initialQS }: { initialQS: string }) {
         <option value="LAZADA">Lazada</option>
         <option value="WEBSITE">Website</option>
         <option value="TIKTOK">TikTok</option>
+        <option value="BRANDSHOP">Brand Shop</option>
         <option value="STORE">หน้าร้าน</option>
         <option value="OTHER">อื่นๆ</option>
       </select>

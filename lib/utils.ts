@@ -87,7 +87,7 @@ export function channelLabel(channel: string): string {
   const map: Record<string, string> = {
     STORE: '🏪 หน้าร้าน', SHOPEE: '🛍️ Shopee',
     LAZADA: '🛒 Lazada', WEBSITE: '🌐 Website',
-    TIKTOK: '🎵 TikTok', OTHER: 'อื่นๆ',
+    TIKTOK: '🎵 TikTok', BRANDSHOP: '🏬 Brand Shop', OTHER: 'อื่นๆ',
   }
   return map[channel] ?? channel
 }

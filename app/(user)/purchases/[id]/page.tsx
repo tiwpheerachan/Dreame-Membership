@@ -8,7 +8,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Package, ShieldCheck, CalendarDays,
-  ShoppingBag, Globe, Store, Sparkles, Hash, FileText, AlertCircle, Coins, ExternalLink,
+  ShoppingBag, Globe, Store, Sparkles, Building2, Hash, FileText, AlertCircle, Coins, ExternalLink,
 } from 'lucide-react'
 import type { PurchaseRegistration, BQOrderData, BQOrderItem } from '@/types'
 import { formatDate, warrantyDaysLeft } from '@/lib/utils'
@@ -22,6 +22,7 @@ const CHANNEL: Record<string, { Icon: typeof ShoppingBag; label: string }> = {
   LAZADA:  { Icon: ShoppingBag, label: 'Lazada'   },
   WEBSITE: { Icon: Globe,       label: 'Website'  },
   TIKTOK:  { Icon: Sparkles,    label: 'TikTok'   },
+  BRANDSHOP: { Icon: Building2, label: 'Brand Shop' },
   STORE:   { Icon: Store,       label: 'หน้าร้าน' },
   OTHER:   { Icon: Package,     label: 'อื่นๆ'    },
 }

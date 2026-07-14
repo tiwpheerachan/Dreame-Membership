@@ -21,11 +21,20 @@ export async function POST(req: Request) {
     const bqDataStr     = formData.get('bq_data') as string | null
     const receiptFile   = formData.get('receipt') as File | null
 
-    // หน้าร้าน (STORE) has NO Order ID — its Serial Number is the unique
-    // identifier instead. Fall back to SN so the NOT NULL + global unique
-    // index on order_sn still hold (1 physical unit = 1 SN = 1 claim).
-    // Every other channel supplies a real order_sn.
-    const claimKey = order_sn || serial_number
+    // Parse BQ data early — we dedupe & store on the CANONICAL order_sn.
+    let bqData: BQOrderData | null = null
+    if (bqDataStr) {
+      try { bqData = JSON.parse(bqDataStr) } catch { /* ignore malformed */ }
+    }
+
+    // Claim key priority:
+    //  1) canonical BQ order_sn — a fuzzy verify means the buyer's typed order_sn
+    //     (e.g. 15-digit Lazada) differs from BQ's 16-digit canonical; storing the
+    //     canonical makes BOTH typed forms dedupe to a single claim.
+    //  2) the typed order_sn.
+    //  3) serial number — หน้าร้าน has no Order ID, so its SN is the unique key;
+    //     keeps the NOT NULL + global unique index on order_sn valid.
+    const claimKey = bqData?.order_sn?.trim() || order_sn || serial_number
     if (!claimKey) {
       return NextResponse.json({ error: 'ต้องมี Order ID หรือ Serial Number อย่างน้อยหนึ่งอย่าง' }, { status: 400 })
     }
@@ -55,12 +64,6 @@ export async function POST(req: Request) {
           ? (isStore ? 'คุณลงทะเบียน Serial Number นี้แล้ว' : 'คุณลงทะเบียน Order ID นี้แล้ว')
           : (isStore ? 'Serial Number นี้ถูกลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้' : 'ออเดอร์นี้ถูกลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้'),
       }, { status: 409 })
-    }
-
-    // Parse BQ data if available
-    let bqData: BQOrderData | null = null
-    if (bqDataStr) {
-      try { bqData = JSON.parse(bqDataStr) } catch { /* ignore malformed */ }
     }
 
     // Upload receipt with validation

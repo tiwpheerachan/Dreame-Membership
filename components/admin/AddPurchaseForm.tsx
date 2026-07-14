@@ -14,6 +14,7 @@ const CHANNELS = [
   { value: 'LAZADA',  label: 'Lazada',     type: 'ONLINE' },
   { value: 'WEBSITE', label: 'Website',    type: 'ONLINE' },
   { value: 'TIKTOK',  label: 'TikTok',     type: 'ONLINE' },
+  { value: 'BRANDSHOP', label: 'Brand Shop', type: 'ONSITE' },
   { value: 'STORE',   label: 'หน้าร้าน',   type: 'ONSITE' },
 ]
 

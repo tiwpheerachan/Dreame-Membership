@@ -11,7 +11,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================================
 CREATE TYPE user_tier              AS ENUM ('SILVER', 'GOLD', 'PLATINUM');
 CREATE TYPE channel_type           AS ENUM ('ONLINE', 'ONSITE');
-CREATE TYPE sale_channel           AS ENUM ('STORE', 'SHOPEE', 'LAZADA', 'WEBSITE', 'TIKTOK', 'OTHER');
+CREATE TYPE sale_channel           AS ENUM ('STORE', 'SHOPEE', 'LAZADA', 'WEBSITE', 'TIKTOK', 'BRANDSHOP', 'OTHER');
 CREATE TYPE purchase_status        AS ENUM ('PENDING', 'BQ_VERIFIED', 'ADMIN_APPROVED', 'REJECTED');
 CREATE TYPE points_type            AS ENUM ('EARNED', 'REDEEMED', 'EXPIRED', 'ADMIN_ADJUST');
 CREATE TYPE coupon_discount_type   AS ENUM ('PERCENT', 'FIXED');
@@ -422,12 +422,10 @@ BEGIN
   SELECT * INTO v_user FROM public.users
     WHERE id = v_reg.user_id FOR UPDATE;
 
+  -- Brand Shop & Website = 250฿/pt (500฿ = 2 pts); ทุกช่องอื่น = 500฿/pt (see 0042)
   v_divisor := CASE UPPER(COALESCE(v_reg.channel::TEXT, 'OTHER'))
-    WHEN 'WEBSITE' THEN 200
-    WHEN 'STORE'   THEN 200
-    WHEN 'SHOPEE'  THEN 500
-    WHEN 'LAZADA'  THEN 500
-    WHEN 'TIKTOK'  THEN 500
+    WHEN 'BRANDSHOP' THEN 250
+    WHEN 'WEBSITE'   THEN 250
     ELSE 500
   END;
   v_base_points := FLOOR(COALESCE(v_reg.total_amount, 0) / v_divisor);

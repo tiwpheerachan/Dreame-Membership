@@ -50,9 +50,15 @@ const DATASET = process.env.BQ_DATASET ?? 'Membership'
 const T_ITEMS  = 'order_items'  // 1 row / SKU / order — มี buyer_paid + image_url
 const T_ORDERS = 'orders'       // 1 row / order — มี items[] aggregated แล้ว
 
-// Partition filter: ต้องครอบ "อายุข้อมูลใน BQ ทั้งหมด" — เคยตั้ง 13 เดือน
-// แล้ว user เจอเคสออเดอร์ที่มีจริงแต่ตกขอบ (oldest ใน dataset = 2025-04-13)
-// 24 เดือนกัน edge case ระยะยาว — ถ้า dataset โตเกินนี้ในอนาคต ค่อยรีวิวเพิ่ม
+// ⚠️ Time window for TIME-RELEVANT scans only (shipping status, keyword search).
+// DO NOT use this on exact order_sn lookups (verify / batch / getOrdersByOrderSns):
+// order_sn is the exact key, so any order_date is valid, and a lower bound just
+// silently hides real orders. Bug found 2026-07-14: dataset went back to
+// 2023-01-03 while this window cut off at 24mo → 876 real orders (older than 2yr)
+// became "not found" on register even though they were in BQ. Neither order_items
+// nor orders has require_partition_filter, and order_items is clustered on
+// brand_id/platform (NOT order_sn), so pruning by order_date saved nothing on
+// exact lookups anyway. Exact-key queries now scan the full table (small: ~480k rows).
 const PARTITION_RANGE = `order_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)`
 
 // ============================================================
@@ -97,8 +103,7 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
             model_name, model_sku, quantity, price, buyer_paid, image_url
           )) AS items
         FROM \`${PROJECT}.${DATASET}.${T_ITEMS}\`
-        WHERE ${PARTITION_RANGE}
-          AND UPPER(TRIM(order_sn)) = @order_sn
+        WHERE UPPER(TRIM(order_sn)) = @order_sn
         GROUP BY order_sn
         LIMIT 1
       `,
@@ -120,8 +125,7 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
           CAST(order_date        AS STRING) AS order_date,
           total_amount, items
         FROM \`${PROJECT}.${DATASET}.${T_ORDERS}\`
-        WHERE ${PARTITION_RANGE}
-          AND UPPER(TRIM(order_sn)) = @order_sn
+        WHERE UPPER(TRIM(order_sn)) = @order_sn
         LIMIT 1
       `,
       params: { order_sn: normalized },
@@ -130,6 +134,47 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
     if (rows && rows.length > 0) return { status: 'found', data: mapRow(rows[0]) }
   } catch (e) {
     attempted.push({ view: T_ORDERS, error: (e as Error).message })
+  }
+
+  // ── Attempt 3: fuzzy fallback — ±1 trailing digit, must resolve to ONE order ──
+  // บาง Lazada order (source "jst") เก็บ order_sn ที่มีเลขต่อท้ายเกินมา 1 หลัก
+  // จากเลขที่ลูกค้าเห็นบน Lazada (เช่น พิมพ์ 110558584858342 แต่ BQ = 1105585848583422).
+  // พิสูจน์แล้ว (2026-07-14) ว่าตัด 1 หลักท้ายของ order 16 หลักไม่ชนกันเลย
+  // (94,852 orders → 94,852 prefixes ไม่ซ้ำ) → prefix match ที่ได้ "ออเดอร์เดียว"
+  // ปลอดภัยพอจะรับได้. ถ้าเจอมากกว่า 1 = กำกวม → ไม่ match (กันให้แต้มผิดออเดอร์).
+  try {
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          order_sn,
+          ANY_VALUE(platform)     AS platform,
+          ANY_VALUE(order_status) AS order_status,
+          CAST(ANY_VALUE(order_create_time) AS STRING) AS order_create_time,
+          CAST(ANY_VALUE(order_date)        AS STRING) AS order_date,
+          SUM(buyer_paid) AS total_amount,
+          ARRAY_AGG(STRUCT(
+            item_id, model_id, item_name, item_sku,
+            model_name, model_sku, quantity, price, buyer_paid, image_url
+          )) AS items
+        FROM \`${PROJECT}.${DATASET}.${T_ITEMS}\`
+        WHERE ABS(LENGTH(TRIM(order_sn)) - @len) = 1
+          AND ( STARTS_WITH(UPPER(TRIM(order_sn)), @order_sn)
+             OR STARTS_WITH(@order_sn, UPPER(TRIM(order_sn))) )
+        GROUP BY order_sn
+        LIMIT 2
+      `,
+      params: { order_sn: normalized, len: normalized.length },
+    })
+    viewsQueried += 1
+    if (rows && rows.length === 1) {
+      console.warn(`[BQ] fuzzy order_sn match: "${normalized}" → "${rows[0].order_sn}" (±1 trailing digit)`)
+      return { status: 'found', data: mapRow(rows[0]) }
+    }
+    if (rows && rows.length > 1) {
+      console.warn(`[BQ] fuzzy order_sn "${normalized}" ambiguous — ${rows.length}+ candidates, not matching`)
+    }
+  } catch (e) {
+    attempted.push({ view: `${T_ITEMS} (fuzzy)`, error: (e as Error).message })
   }
 
   // ถ้า "ไม่มี view ไหน return rows สำเร็จเลย" = ไม่ทราบจริงๆ ว่ามีหรือไม่
@@ -226,8 +271,7 @@ export async function batchVerifyOrders(orderSns: string[]): Promise<BQOrderData
             model_name, model_sku, quantity, price, buyer_paid, image_url
           )) AS items
         FROM \`${PROJECT}.${DATASET}.${T_ITEMS}\`
-        WHERE ${PARTITION_RANGE}
-          AND UPPER(TRIM(order_sn)) IN UNNEST(@sns)
+        WHERE UPPER(TRIM(order_sn)) IN UNNEST(@sns)
         GROUP BY order_sn
       `,
       params: { sns: normalizedSns },
@@ -454,8 +498,7 @@ export async function getOrdersByOrderSns(order_sns: string[]): Promise<BQOrderI
         CAST(order_create_time AS STRING) AS order_create_time,
         total_amount, items
       FROM \`${PROJECT}.${DATASET}.${T_ORDERS}\`
-      WHERE ${PARTITION_RANGE}
-        AND brand_id = 'dreame'
+      WHERE brand_id = 'dreame'
         AND order_sn IN UNNEST(@order_sns)
     `
     const [rows] = await bq.query({ query, params: { order_sns } })

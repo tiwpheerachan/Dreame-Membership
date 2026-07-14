@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   Clock, CheckCircle, Loader2, Check, X, ExternalLink, Database,
   RefreshCw, Search, ShoppingBag, Globe, Store as StoreIcon, Sparkles,
-  Package, ChevronRight,
+  Package, ChevronRight, Building2,
 } from 'lucide-react'
 import { channelLabel, formatDate, formatDateTime } from '@/lib/utils'
 import PlatformLogo from '@/components/admin/PlatformLogo'
@@ -39,7 +39,7 @@ const POLL_MS = 25_000
 
 const CHANNEL_ICON: Record<string, typeof ShoppingBag> = {
   SHOPEE: ShoppingBag, LAZADA: ShoppingBag, WEBSITE: Globe,
-  TIKTOK: Sparkles, STORE: StoreIcon, OTHER: Package,
+  TIKTOK: Sparkles, BRANDSHOP: Building2, STORE: StoreIcon, OTHER: Package,
 }
 
 function formatTime(d: Date) {

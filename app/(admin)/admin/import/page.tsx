@@ -47,7 +47,7 @@ function parseCSV(text: string) {
 const REQUIRED_FIELDS = ['order_sn', 'channel'] as const
 const NUMERIC_FIELDS = ['total_amount', 'warranty_months'] as const
 const DATE_FIELDS = ['purchase_date'] as const
-const VALID_CHANNELS = ['STORE', 'SHOPEE', 'LAZADA', 'WEBSITE', 'TIKTOK', 'OTHER']
+const VALID_CHANNELS = ['STORE', 'SHOPEE', 'LAZADA', 'WEBSITE', 'TIKTOK', 'BRANDSHOP', 'OTHER']
 const VALID_CHANNEL_TYPES = ['ONLINE', 'ONSITE']
 
 function validateRow(row: Record<string, string>, rowIdx: number): string[] {
