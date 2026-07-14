@@ -59,6 +59,9 @@ export default function RegisterPage() {
   // ── shared "current entry" inputs ──
   const [orderSn, setOrderSn] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
+  // Multiple SNs per order (an order can ship several products). Order-based
+  // channels collect a list here; หน้าร้าน keeps a single SN (its lookup key).
+  const [serialList, setSerialList] = useState<string[]>([])
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>('idle')
   const [verifyMsg, setVerifyMsg] = useState('')
   const [verifiedData, setVerifiedData] = useState<Record<string, unknown> | null>(null)
@@ -109,9 +112,25 @@ export default function RegisterPage() {
   const entryKey = () => orderSn.trim() || serialNumber.trim()
 
   function resetCurrent() {
-    setOrderSn(''); setSerialNumber(''); setVerifyStatus('idle'); setVerifyMsg(''); setVerifiedData(null)
+    setOrderSn(''); setSerialNumber(''); setSerialList([]); setVerifyStatus('idle'); setVerifyMsg(''); setVerifiedData(null)
     // A queued entry takes ownership of previewUrl — clear the ref WITHOUT revoking.
     setReceipt(null); setPreviewUrl(null)
+  }
+
+  // Order-based channels: add the typed SN to the list (1 order → many SNs).
+  function addSerial() {
+    const s = serialNumber.trim()
+    if (!s || serialList.includes(s)) { setSerialNumber(''); return }
+    setSerialList(prev => [...prev, s])
+    setSerialNumber('')
+  }
+  function removeSerial(s: string) {
+    setSerialList(prev => prev.filter(x => x !== s))
+  }
+  // All SNs for the current entry (list + anything still typed but not added).
+  function collectSerials(): string[] {
+    const typed = serialNumber.trim()
+    return typed && !serialList.includes(typed) ? [...serialList, typed] : serialList
   }
 
   function switchChannel(v: string) {
@@ -147,11 +166,13 @@ export default function RegisterPage() {
   }
 
   function makeEntry(key: string): OrderEntry {
+    // หน้าร้าน = single SN (its lookup key). Order-based = the collected list.
+    const serials = lookupOnSerial ? [serialNumber.trim()].filter(Boolean) : collectSerials()
     return {
       key,
       channel,
       order_sn: orderSn.trim(),
-      serial_number: serialNumber.trim(),
+      serial_number: serials.join(', '),
       // Keep the BQ data even for Brand Shop/หน้าร้าน — admin sees the product —
       // but their state is 'manual' (รอแอดมินยืนยัน), never auto-verified.
       bqData: verifiedData,
@@ -518,7 +539,10 @@ export default function RegisterPage() {
                     </p>
                     <p style={{ margin: '2px 0 0', fontSize: 10.5, color: 'var(--ink-mute)' }}>
                       {stateLabel(o.state)}
-                      {o.order_sn && o.serial_number ? ` · SN ${o.serial_number}` : ''}
+                      {(() => {
+                        const n = o.order_sn ? o.serial_number.split(',').filter(s => s.trim()).length : 0
+                        return n > 0 ? ` · ${n} SN` : ''
+                      })()}
                     </p>
                   </div>
                   <button onClick={() => removeOrder(o.key)} className="tap-down" style={{
@@ -568,7 +592,9 @@ export default function RegisterPage() {
         {showSnCard && (
           <div className="surface" style={{ padding: 18 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
-              <p className="kicker" style={{ margin: 0 }}>Serial Number (SN)</p>
+              <p className="kicker" style={{ margin: 0 }}>
+                Serial Number (SN){!lookupOnSerial && serialList.length > 0 ? ` · ${serialList.length}` : ''}
+              </p>
               <span style={{
                 fontSize: 10, letterSpacing: '0.04em', fontWeight: snReq ? 700 : 600,
                 color: snReq ? 'var(--red)' : 'var(--ink-faint)',
@@ -581,21 +607,51 @@ export default function RegisterPage() {
                 className="field" type="text" placeholder="เช่น SN-ABCD1234567"
                 value={serialNumber}
                 onChange={e => { setSerialNumber(e.target.value.toUpperCase()); if (lookupOnSerial && verifyStatus !== 'idle') { setVerifyStatus('idle'); setVerifiedData(null) } }}
-                onKeyDown={e => e.key === 'Enter' && lookupOnSerial && verifyOrder()}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); lookupOnSerial ? verifyOrder() : addSerial() } }}
                 autoCapitalize="characters" autoComplete="off" spellCheck={false} maxLength={50}
                 style={{ flex: 1, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}
               />
-              {lookupOnSerial && (
+              {lookupOnSerial ? (
                 <button onClick={verifyOrder} disabled={verifyStatus === 'loading' || !serialNumber.trim()}
                   className="btn btn-ink tap-down" style={{ padding: '0 18px' }}>
                   {verifyStatus === 'loading' ? <Loader2 size={16} className="spinner" /> : <Search size={16} />}
                 </button>
+              ) : (
+                <button onClick={addSerial} disabled={!serialNumber.trim()}
+                  className="btn btn-ink tap-down" style={{ padding: '0 16px' }} title="เพิ่ม SN">
+                  <Plus size={16} />
+                </button>
               )}
             </div>
+
+            {/* Added SNs (order-based: 1 order → many SNs) */}
+            {!lookupOnSerial && serialList.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                {serialList.map(s => (
+                  <span key={s} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '5px 8px 5px 10px', background: 'var(--bg-soft)',
+                    border: '1px solid var(--hair)', borderRadius: 'var(--r-pill)',
+                    fontSize: 11.5, fontFamily: 'var(--font-mono)', color: 'var(--ink)',
+                  }}>
+                    {s}
+                    <button onClick={() => removeSerial(s)} className="tap-down" style={{
+                      width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                      background: '#fff', border: '1px solid var(--line)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: 'var(--red)', cursor: 'pointer', padding: 0,
+                    }}>
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
             <p style={{ fontSize: 10.5, color: 'var(--ink-mute)', margin: '8px 0 0', lineHeight: 1.5 }}>
               {lookupOnSerial
                 ? <>เลขเครื่องด้านล่าง/หลังกล่องสินค้า — กด <strong>ค้นหา</strong> เพื่อดึงข้อมูลสินค้า (ถ้ามีในระบบ)</>
-                : <>เลขเครื่องด้านล่าง/หลังกล่องสินค้า — ใช้สำหรับ <strong>การรับประกัน</strong> และ service</>}
+                : <>เลขเครื่องด้านล่าง/หลังกล่องสินค้า — <strong>1 ออเดอร์ใส่ได้หลาย SN</strong> (กด + เพื่อเพิ่มทีละตัว)</>}
             </p>
             {lookupOnSerial && renderVerifyResult()}
           </div>
