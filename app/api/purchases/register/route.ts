@@ -21,8 +21,13 @@ export async function POST(req: Request) {
     const bqDataStr     = formData.get('bq_data') as string | null
     const receiptFile   = formData.get('receipt') as File | null
 
-    if (!order_sn) {
-      return NextResponse.json({ error: 'order_sn is required' }, { status: 400 })
+    // หน้าร้าน (STORE) has NO Order ID — its Serial Number is the unique
+    // identifier instead. Fall back to SN so the NOT NULL + global unique
+    // index on order_sn still hold (1 physical unit = 1 SN = 1 claim).
+    // Every other channel supplies a real order_sn.
+    const claimKey = order_sn || serial_number
+    if (!claimKey) {
+      return NextResponse.json({ error: 'ต้องมี Order ID หรือ Serial Number อย่างน้อยหนึ่งอย่าง' }, { status: 400 })
     }
 
     const service = createServiceClient()
@@ -37,17 +42,18 @@ export async function POST(req: Request) {
     const { data: existing } = await service
       .from('purchase_registrations')
       .select('id, user_id, status')
-      .eq('order_sn', order_sn)
+      .eq('order_sn', claimKey)
       .neq('status', 'REJECTED')
       .limit(1)
       .maybeSingle()
 
     if (existing) {
       const mine = existing.user_id === user.id
+      const isStore = !order_sn
       return NextResponse.json({
         error: mine
-          ? 'คุณลงทะเบียน Order ID นี้แล้ว'
-          : 'ออเดอร์นี้ถูกลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้',
+          ? (isStore ? 'คุณลงทะเบียน Serial Number นี้แล้ว' : 'คุณลงทะเบียน Order ID นี้แล้ว')
+          : (isStore ? 'Serial Number นี้ถูกลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้' : 'ออเดอร์นี้ถูกลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้'),
       }, { status: 409 })
     }
 
@@ -78,7 +84,7 @@ export async function POST(req: Request) {
       .from('purchase_registrations')
       .insert({
         user_id: user.id,
-        order_sn,
+        order_sn: claimKey,
         invoice_no: invoice_no || null,
         channel,
         channel_type,
@@ -113,13 +119,13 @@ export async function POST(req: Request) {
       if (awardErr) {
         console.error('[register] award_points_for_purchase failed — enqueueing for retry:', awardErr)
         await service.from('pending_verifications')
-          .insert({ purchase_reg_id: reg.id, order_sn })
+          .insert({ purchase_reg_id: reg.id, order_sn: claimKey })
           .then(() => {}, () => {})
       }
     } else if (channel_type === 'ONLINE') {
       await service.from('pending_verifications').insert({
         purchase_reg_id: reg.id,
-        order_sn,
+        order_sn: claimKey,
       })
     }
 

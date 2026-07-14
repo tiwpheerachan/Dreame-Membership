@@ -10,71 +10,114 @@ import PlatformLogo from '@/components/admin/PlatformLogo'
 type Step = 'form' | 'done'
 type VerifyStatus = 'idle' | 'loading' | 'verified' | 'pending' | 'bq_error' | 'error' | 'claimed'
 
-const CHANNELS = [
-  { value: 'SHOPEE',  label: 'Shopee',     type: 'ONLINE' },
-  { value: 'LAZADA',  label: 'Lazada',     type: 'ONLINE' },
-  { value: 'WEBSITE', label: 'Website',    type: 'ONLINE' },
-  { value: 'TIKTOK',  label: 'TikTok',     type: 'ONLINE' },
-  { value: 'STORE',   label: 'หน้าร้าน',   type: 'ONSITE' },
-]
+// Per-field requirement per channel. 'req' = บังคับ, 'opt' = ไม่บังคับ, 'off' = ไม่ต้อง
+type Req = 'req' | 'opt' | 'off'
+interface ChannelDef {
+  value: string
+  label: string
+  orderId: Req
+  sn: Req
+  receipt: Req
+  bqVerify: boolean            // ตรวจสอบกับ BigQuery หรือไม่ (เฉพาะช่องทางออนไลน์)
+  channelType: 'ONLINE' | 'ONSITE'
+}
 
-// A single online order queued for submission (multiple allowed).
+// Matrix (ยืนยันกับลูกค้าแล้ว):
+//   Platform (Shopee/Lazada/TikTok) : OrderID บังคับ · SN ไม่บังคับ · ใบเสร็จ ไม่ต้อง · verify BQ
+//   Website (Shopify)               : OrderID บังคับ · SN ไม่บังคับ · ใบเสร็จ ไม่ต้อง · verify BQ
+//   Brand Shop                      : OrderID บังคับ · SN ไม่บังคับ · ใบเสร็จ บังคับ
+//   หน้าร้าน                          : OrderID ไม่ต้อง · SN บังคับ · ใบเสร็จ บังคับ
+const CHANNELS: ChannelDef[] = [
+  { value: 'SHOPEE',    label: 'Shopee',     orderId: 'req', sn: 'opt', receipt: 'off', bqVerify: true,  channelType: 'ONLINE' },
+  { value: 'LAZADA',    label: 'Lazada',     orderId: 'req', sn: 'opt', receipt: 'off', bqVerify: true,  channelType: 'ONLINE' },
+  { value: 'TIKTOK',    label: 'TikTok',     orderId: 'req', sn: 'opt', receipt: 'off', bqVerify: true,  channelType: 'ONLINE' },
+  { value: 'WEBSITE',   label: 'Website',    orderId: 'req', sn: 'opt', receipt: 'off', bqVerify: true,  channelType: 'ONLINE' },
+  { value: 'BRANDSHOP', label: 'Brand Shop', orderId: 'req', sn: 'opt', receipt: 'req', bqVerify: false, channelType: 'ONSITE' },
+  { value: 'STORE',     label: 'หน้าร้าน',    orderId: 'off', sn: 'req', receipt: 'req', bqVerify: false, channelType: 'ONSITE' },
+]
+const defOf = (v: string): ChannelDef => CHANNELS.find(c => c.value === v) ?? CHANNELS[0]
+
+// A single order/unit queued for submission (multiple allowed, any channel).
 interface OrderEntry {
   key: string
+  channel: string
   order_sn: string
   serial_number: string
-  channel: string
   bqData: Record<string, unknown> | null
-  state: 'verified' | 'pending' | 'bq_error'
+  state: 'verified' | 'pending' | 'bq_error' | 'manual'
+  receipt: File | null
+  receiptPreview: string | null
 }
 
 export default function RegisterPage() {
   const router = useRouter()
   const [step, setStep] = useState<Step>('form')
   const [channel, setChannel] = useState('SHOPEE')
-  const selectedChannel = CHANNELS.find(c => c.value === channel)
-  const isOnline = selectedChannel?.type === 'ONLINE'
+  const def = defOf(channel)
 
-  // ── shared "current order" inputs (used by both online add + onsite) ──
+  // ── shared "current entry" inputs ──
   const [orderSn, setOrderSn] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>('idle')
   const [verifyMsg, setVerifyMsg] = useState('')
   const [verifiedData, setVerifiedData] = useState<Record<string, unknown> | null>(null)
-
-  // ── online: queue of orders ──
-  const [orders, setOrders] = useState<OrderEntry[]>([])
-  const keyRef = useRef(0)
-
-  // ── onsite: receipt ──
   const [receipt, setReceipt] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // ── queue of orders ──
+  const [orders, setOrders] = useState<OrderEntry[]>([])
+  const keyRef = useRef(0)
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [doneCount, setDoneCount] = useState(0)
   const [failMsgs, setFailMsgs] = useState<string[]>([])
 
-  // Current order counts as "ready" once it has verified/pending/bq_error state.
-  const currentReady = verifyStatus === 'verified' || verifyStatus === 'pending' || verifyStatus === 'bq_error'
-  const totalOrders = orders.length + (currentReady && orderSn.trim() ? 1 : 0)
+  // Derived per-channel flags
+  const showOrderId  = def.orderId !== 'off'
+  const orderIdReq   = def.orderId === 'req'
+  const showVerify   = def.bqVerify
+  const snReq        = def.sn === 'req'
+  const showReceipt  = def.receipt !== 'off'
+  const receiptReq   = def.receipt === 'req'
+
+  // Order-ID step satisfied enough to reveal SN/receipt.
+  // BQ channels: needs a resolved verify state. Others: always ready.
+  const currentReady = !showVerify
+    || verifyStatus === 'verified' || verifyStatus === 'pending' || verifyStatus === 'bq_error'
+
+  // Show SN card: for req channels always; for opt channels once the order-id step is ready.
+  const showSnCard = def.sn !== 'off' && (snReq || currentReady)
+
+  // Is the "current entry" complete enough to add/submit?
+  function currentValid(): boolean {
+    if (orderIdReq && !orderSn.trim()) return false
+    if (showVerify && !(verifyStatus === 'verified' || verifyStatus === 'pending' || verifyStatus === 'bq_error')) return false
+    if (snReq && !serialNumber.trim()) return false
+    if (receiptReq && !receipt) return false
+    return true
+  }
+
+  const entryKey = () => orderSn.trim() || serialNumber.trim()
 
   function resetCurrent() {
     setOrderSn(''); setSerialNumber(''); setVerifyStatus('idle'); setVerifyMsg(''); setVerifiedData(null)
+    // A queued entry takes ownership of previewUrl — clear the ref WITHOUT revoking.
+    setReceipt(null); setPreviewUrl(null)
   }
 
   function switchChannel(v: string) {
-    setChannel(v)
-    setError('')
-    // Orders already queued keep their own captured channel, so switching the
-    // selector only affects the NEXT order the user adds — nothing to clear.
+    if (v === channel) return
+    setChannel(v); setError('')
+    // Current, un-queued receipt is discarded on switch — safe to revoke.
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    resetCurrent()
   }
 
   async function verifyOrder() {
     const sn = orderSn.trim()
     if (!sn) return
-    // Guard against queuing the same order twice.
     if (orders.some(o => o.order_sn === sn)) {
       setVerifyStatus('claimed'); setVerifyMsg('คุณเพิ่มออเดอร์นี้ไว้แล้ว')
       return
@@ -94,63 +137,81 @@ export default function RegisterPage() {
     } catch { setVerifyStatus('error') }
   }
 
-  // Push the current verified order into the queue and clear inputs for the next.
-  function addAnother() {
-    if (!currentReady || !orderSn.trim()) return
-    setOrders(prev => [...prev, {
-      key: `o${keyRef.current++}`,
+  function makeEntry(key: string): OrderEntry {
+    return {
+      key,
+      channel,
       order_sn: orderSn.trim(),
       serial_number: serialNumber.trim(),
-      channel,
       bqData: verifiedData,
-      state: verifyStatus as OrderEntry['state'],
-    }])
+      state: showVerify ? (verifyStatus as OrderEntry['state']) : 'manual',
+      receipt,
+      receiptPreview: previewUrl,
+    }
+  }
+
+  // Push the current (valid) entry into the queue and clear inputs for the next.
+  function addAnother() {
+    if (!currentValid()) return
+    const k = entryKey()
+    if (orders.some(o => (o.order_sn || o.serial_number) === k)) {
+      setError('รายการนี้ถูกเพิ่มไว้แล้ว'); return
+    }
+    setError('')
+    setOrders(prev => [...prev, makeEntry(`o${keyRef.current++}`)])
     resetCurrent()
   }
 
   function removeOrder(key: string) {
-    setOrders(prev => prev.filter(o => o.key !== key))
+    setOrders(prev => {
+      const o = prev.find(x => x.key === key)
+      if (o?.receiptPreview) URL.revokeObjectURL(o.receiptPreview)
+      return prev.filter(x => x.key !== key)
+    })
   }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
     setReceipt(file)
     setPreviewUrl(URL.createObjectURL(file))
   }
 
-  // All orders to submit = queued + the current one (if ready & not queued).
-  function collectOrders(): OrderEntry[] {
+  // All entries to submit = queued + the current one (if valid & not already queued).
+  function collectEntries(): OrderEntry[] {
     const list = [...orders]
-    const sn = orderSn.trim()
-    if (currentReady && sn && !list.some(o => o.order_sn === sn)) {
-      list.push({
-        key: 'current', order_sn: sn, serial_number: serialNumber.trim(),
-        channel, bqData: verifiedData, state: verifyStatus as OrderEntry['state'],
-      })
+    if (currentValid()) {
+      const k = entryKey()
+      if (!list.some(o => (o.order_sn || o.serial_number) === k)) list.push(makeEntry('current'))
     }
     return list
   }
 
-  async function submitOnline() {
-    const list = collectOrders()
-    if (list.length === 0) { setError('กรุณาเพิ่มอย่างน้อย 1 ออเดอร์'); return }
+  const entries = collectEntries()
+  const totalEntries = entries.length
+
+  async function submitAll() {
+    if (entries.length === 0) { setError('กรุณาเพิ่มอย่างน้อย 1 รายการ'); return }
     setSubmitting(true); setError('')
     let ok = 0
     const fails: string[] = []
-    for (const o of list) {
+    for (const o of entries) {
+      const d = defOf(o.channel)
+      const label = o.order_sn || o.serial_number
       try {
         const fd = new FormData()
-        fd.append('order_sn', o.order_sn)
+        if (o.order_sn) fd.append('order_sn', o.order_sn)
         fd.append('channel', o.channel)
-        fd.append('channel_type', 'ONLINE')
+        fd.append('channel_type', d.channelType)
         if (o.serial_number) fd.append('serial_number', o.serial_number)
         if (o.bqData) fd.append('bq_data', JSON.stringify(o.bqData))
+        if (o.receipt) fd.append('receipt', o.receipt)
         const res = await fetch('/api/purchases/register', { method: 'POST', body: fd })
         const data = await res.json()
-        if (!res.ok) fails.push(`${o.order_sn}: ${data.error || 'ไม่สำเร็จ'}`)
+        if (!res.ok) fails.push(`${label}: ${data.error || 'ไม่สำเร็จ'}`)
         else ok++
-      } catch { fails.push(`${o.order_sn}: เกิดข้อผิดพลาด`) }
+      } catch { fails.push(`${label}: เกิดข้อผิดพลาด`) }
     }
     setSubmitting(false)
     if (ok > 0) {
@@ -160,24 +221,16 @@ export default function RegisterPage() {
     }
   }
 
-  async function submitOnsite() {
-    if (!orderSn.trim()) { setError('กรุณากรอก Order ID'); return }
-    if (!receipt) { setError('กรุณาแนบใบเสร็จ (จำเป็นสำหรับหน้าร้าน)'); return }
-    setSubmitting(true); setError('')
-    try {
-      const fd = new FormData()
-      fd.append('order_sn', orderSn.trim())
-      fd.append('channel', channel)
-      fd.append('channel_type', 'ONSITE')
-      if (serialNumber.trim()) fd.append('serial_number', serialNumber.trim())
-      fd.append('receipt', receipt)
-      const res = await fetch('/api/purchases/register', { method: 'POST', body: fd })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'บันทึกไม่สำเร็จ')
-      setDoneCount(1); setFailMsgs([]); setStep('done'); router.refresh()
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด')
-    } finally { setSubmitting(false) }
+  const helpText = def.bqVerify
+    ? 'กรอก Order ID เพื่อตรวจสอบ · Serial Number ไม่บังคับ · เพิ่มได้หลายออเดอร์'
+    : def.orderId === 'off'
+      ? 'กรอก Serial Number และแนบใบเสร็จ (จำเป็น) · ไม่ต้องมี Order ID · เพิ่มได้หลายรายการ'
+      : 'กรอก Order ID และแนบใบเสร็จ (จำเป็น) · Serial Number ไม่บังคับ · เพิ่มได้หลายรายการ'
+
+  function stateLabel(s: OrderEntry['state']) {
+    if (s === 'verified') return '✓ ตรวจสอบแล้ว'
+    if (s === 'manual') return 'รอแอดมินตรวจสอบ'
+    return 'รอตรวจสอบ'
   }
 
   // ── DONE ──
@@ -200,7 +253,7 @@ export default function RegisterPage() {
         </h2>
         <p className="fade-up serif-i" style={{ color: 'var(--ink-mute)', fontSize: 13, margin: '0 0 12px', lineHeight: 1.6, maxWidth: 300 }}>
           {doneCount > 1
-            ? `บันทึก ${doneCount} ออเดอร์เรียบร้อย — คะแนนจะถูกเพิ่มหลังตรวจสอบ`
+            ? `บันทึก ${doneCount} รายการเรียบร้อย — คะแนนจะถูกเพิ่มหลังตรวจสอบ`
             : 'รับข้อมูลแล้ว คะแนนจะถูกเพิ่มหลังการตรวจสอบ'}
         </p>
         {failMsgs.length > 0 && (
@@ -210,7 +263,7 @@ export default function RegisterPage() {
             borderRadius: 'var(--r-md)', textAlign: 'left',
           }}>
             <p style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 4px' }}>
-              {failMsgs.length} ออเดอร์ไม่สำเร็จ
+              {failMsgs.length} รายการไม่สำเร็จ
             </p>
             {failMsgs.map((m, i) => (
               <p key={i} style={{ fontSize: 11, color: 'var(--amber)', margin: 0, lineHeight: 1.5 }}>• {m}</p>
@@ -270,16 +323,14 @@ export default function RegisterPage() {
             })}
           </div>
           <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '12px 0 0', lineHeight: 1.5 }}>
-            {isOnline
-              ? 'ซื้อออนไลน์ — กรอก Order ID เพิ่มได้หลายออเดอร์ · Serial Number ไม่บังคับ'
-              : 'ซื้อหน้าร้าน — กรอก Order ID และแนบใบเสร็จ (จำเป็น)'}
+            {helpText}
           </p>
         </div>
 
-        {/* ── Queued online orders ── */}
-        {isOnline && orders.length > 0 && (
+        {/* ── Queued orders ── */}
+        {orders.length > 0 && (
           <div className="surface" style={{ padding: 18 }}>
-            <p className="kicker" style={{ margin: '0 0 12px' }}>ออเดอร์ที่เพิ่มแล้ว ({orders.length})</p>
+            <p className="kicker" style={{ margin: '0 0 12px' }}>รายการที่เพิ่มแล้ว ({orders.length})</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {orders.map(o => (
                 <div key={o.key} style={{
@@ -288,13 +339,20 @@ export default function RegisterPage() {
                   border: '1px solid var(--hair)', borderRadius: 'var(--r-md)',
                 }}>
                   <PlatformLogo channel={o.channel} size={18} />
+                  {o.receiptPreview && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={o.receiptPreview} alt="receipt" style={{
+                      width: 32, height: 32, flexShrink: 0, objectFit: 'cover',
+                      borderRadius: 'var(--r-sm)', border: '1px solid var(--hair)',
+                    }} />
+                  )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {o.order_sn}
+                      {o.order_sn || o.serial_number}
                     </p>
                     <p style={{ margin: '2px 0 0', fontSize: 10.5, color: 'var(--ink-mute)' }}>
-                      {o.state === 'verified' ? '✓ ตรวจสอบแล้ว' : 'รอตรวจสอบ'}
-                      {o.serial_number ? ` · SN ${o.serial_number}` : ''}
+                      {stateLabel(o.state)}
+                      {o.order_sn && o.serial_number ? ` · SN ${o.serial_number}` : ''}
                     </p>
                   </div>
                   <button onClick={() => removeOrder(o.key)} className="tap-down" style={{
@@ -312,167 +370,177 @@ export default function RegisterPage() {
         )}
 
         {/* ── Order ID card ── */}
-        <div className="surface" style={{ padding: 18 }}>
-          <p className="kicker" style={{ margin: '0 0 12px' }}>
-            {isOnline && orders.length > 0 ? 'เพิ่มออเดอร์ถัดไป' : 'Order ID'}
-          </p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input className="field" type="text" placeholder="เช่น 250123456789"
-              value={orderSn}
-              onChange={e => { setOrderSn(e.target.value); if (verifyStatus !== 'idle') { setVerifyStatus('idle'); setVerifiedData(null) } }}
-              onKeyDown={e => e.key === 'Enter' && isOnline && verifyOrder()}
-              style={{ flex: 1 }} />
-            {isOnline && (
-              <button onClick={verifyOrder} disabled={verifyStatus === 'loading' || !orderSn.trim()}
-                className="btn btn-ink tap-down" style={{ padding: '0 18px' }}>
-                {verifyStatus === 'loading' ? <Loader2 size={16} className="spinner" /> : <Search size={16} />}
-              </button>
-            )}
-          </div>
+        {showOrderId && (
+          <div className="surface" style={{ padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+              <p className="kicker" style={{ margin: 0 }}>
+                {orders.length > 0 ? 'เพิ่มออเดอร์ถัดไป' : 'Order ID'}
+              </p>
+              {!orderIdReq && (
+                <span style={{ fontSize: 10, color: 'var(--ink-faint)', letterSpacing: '0.04em', fontWeight: 600 }}>ไม่จำเป็น</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="field" type="text" placeholder="เช่น 250123456789"
+                value={orderSn}
+                onChange={e => { setOrderSn(e.target.value); if (verifyStatus !== 'idle') { setVerifyStatus('idle'); setVerifiedData(null) } }}
+                onKeyDown={e => e.key === 'Enter' && showVerify && verifyOrder()}
+                style={{ flex: 1 }} />
+              {showVerify && (
+                <button onClick={verifyOrder} disabled={verifyStatus === 'loading' || !orderSn.trim()}
+                  className="btn btn-ink tap-down" style={{ padding: '0 18px' }}>
+                  {verifyStatus === 'loading' ? <Loader2 size={16} className="spinner" /> : <Search size={16} />}
+                </button>
+              )}
+            </div>
 
-          {/* Verified BQ preview (online only) */}
-          {verifyStatus === 'verified' && verifiedData && (() => {
-            const items = (verifiedData.items as Array<Record<string, unknown>>) || []
-            const orderDate = verifiedData.order_date as string | undefined
-            const totalQty = items.reduce((s, it) => s + Number(it.quantity || 0), 0)
-            return (
-              <div style={{
-                marginTop: 12, padding: 14,
-                background: 'var(--green-soft)',
-                border: '1px solid rgba(64,107,63,0.18)',
-                borderRadius: 'var(--r-md)',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                  <CheckCircle size={14} color="var(--green)" />
-                  <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--green)', margin: 0 }}>
-                    ตรวจสอบสำเร็จ
-                  </p>
-                </div>
+            {/* Verified BQ preview (online only) */}
+            {showVerify && verifyStatus === 'verified' && verifiedData && (() => {
+              const items = (verifiedData.items as Array<Record<string, unknown>>) || []
+              const orderDate = verifiedData.order_date as string | undefined
+              const totalQty = items.reduce((s, it) => s + Number(it.quantity || 0), 0)
+              return (
                 <div style={{
-                  display: 'grid', gridTemplateColumns: '1fr 1fr',
-                  gap: '6px 14px', fontSize: 12, color: 'var(--ink-soft)',
-                  paddingBottom: items.length > 0 ? 10 : 0,
-                  marginBottom: items.length > 0 ? 10 : 0,
-                  borderBottom: items.length > 0 ? '1px solid rgba(64,107,63,0.18)' : 'none',
+                  marginTop: 12, padding: 14,
+                  background: 'var(--green-soft)',
+                  border: '1px solid rgba(64,107,63,0.18)',
+                  borderRadius: 'var(--r-md)',
                 }}>
-                  <div>Platform: <strong>{verifiedData.platform as string}</strong></div>
-                  {orderDate && (<div>วันที่ซื้อ: <strong>{orderDate}</strong></div>)}
-                  <div>ยอดรวม: <strong>฿{Number(verifiedData.total_amount).toLocaleString()}</strong></div>
-                  {totalQty > 0 && (<div>จำนวน: <strong>{totalQty} ชิ้น</strong></div>)}
-                </div>
-                {items.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <p style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>
-                      รายการสินค้า ({items.length})
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                    <CheckCircle size={14} color="var(--green)" />
+                    <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--green)', margin: 0 }}>
+                      ตรวจสอบสำเร็จ
                     </p>
-                    {items.map((it, i) => {
-                      const qty = Number(it.quantity || 0)
-                      const price = Number(it.price || 0)
-                      const itemName = (it.item_name as string) || ''
-                      const modelName = (it.model_name as string) || ''
-                      const sku = (it.item_sku as string) || (it.model_sku as string) || ''
-                      const imageUrl = (it.image_url as string | null) || null
-                      const showModel = modelName && itemName && modelName !== itemName
-                      return (
-                        <div key={i} style={{
-                          padding: '8px 10px',
-                          background: 'rgba(255,255,255,0.6)',
-                          borderRadius: 'var(--r-sm)',
-                          fontSize: 11.5, color: 'var(--ink)',
-                          display: 'flex', gap: 10, alignItems: 'flex-start',
-                        }}>
-                          {imageUrl && (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img src={imageUrl} alt={itemName || modelName || 'product'}
-                              style={{
-                                width: 48, height: 48, flexShrink: 0,
-                                objectFit: 'cover', borderRadius: 'var(--r-sm)',
-                                background: 'var(--bg-soft)', border: '1px solid var(--hair)',
-                              }} />
-                          )}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ margin: '0 0 2px', fontWeight: 600, lineHeight: 1.35 }}>
-                              {itemName || modelName || '—'}
-                            </p>
-                            {showModel && (
-                              <p style={{ margin: '0 0 2px', fontSize: 10.5, color: 'var(--ink-mute)' }}>
-                                รุ่น: {modelName}
-                              </p>
+                  </div>
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: '1fr 1fr',
+                    gap: '6px 14px', fontSize: 12, color: 'var(--ink-soft)',
+                    paddingBottom: items.length > 0 ? 10 : 0,
+                    marginBottom: items.length > 0 ? 10 : 0,
+                    borderBottom: items.length > 0 ? '1px solid rgba(64,107,63,0.18)' : 'none',
+                  }}>
+                    <div>Platform: <strong>{verifiedData.platform as string}</strong></div>
+                    {orderDate && (<div>วันที่ซื้อ: <strong>{orderDate}</strong></div>)}
+                    <div>ยอดรวม: <strong>฿{Number(verifiedData.total_amount).toLocaleString()}</strong></div>
+                    {totalQty > 0 && (<div>จำนวน: <strong>{totalQty} ชิ้น</strong></div>)}
+                  </div>
+                  {items.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <p style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>
+                        รายการสินค้า ({items.length})
+                      </p>
+                      {items.map((it, i) => {
+                        const qty = Number(it.quantity || 0)
+                        const price = Number(it.price || 0)
+                        const itemName = (it.item_name as string) || ''
+                        const modelName = (it.model_name as string) || ''
+                        const sku = (it.item_sku as string) || (it.model_sku as string) || ''
+                        const imageUrl = (it.image_url as string | null) || null
+                        const showModel = modelName && itemName && modelName !== itemName
+                        return (
+                          <div key={i} style={{
+                            padding: '8px 10px',
+                            background: 'rgba(255,255,255,0.6)',
+                            borderRadius: 'var(--r-sm)',
+                            fontSize: 11.5, color: 'var(--ink)',
+                            display: 'flex', gap: 10, alignItems: 'flex-start',
+                          }}>
+                            {imageUrl && (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img src={imageUrl} alt={itemName || modelName || 'product'}
+                                style={{
+                                  width: 48, height: 48, flexShrink: 0,
+                                  objectFit: 'cover', borderRadius: 'var(--r-sm)',
+                                  background: 'var(--bg-soft)', border: '1px solid var(--hair)',
+                                }} />
                             )}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
-                              <span>{sku}</span>
-                              <span>
-                                ฿{price.toLocaleString()} × {qty} ={' '}
-                                <strong style={{ color: 'var(--ink)' }}>฿{(price * qty).toLocaleString()}</strong>
-                              </span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ margin: '0 0 2px', fontWeight: 600, lineHeight: 1.35 }}>
+                                {itemName || modelName || '—'}
+                              </p>
+                              {showModel && (
+                                <p style={{ margin: '0 0 2px', fontSize: 10.5, color: 'var(--ink-mute)' }}>
+                                  รุ่น: {modelName}
+                                </p>
+                              )}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+                                <span>{sku}</span>
+                                <span>
+                                  ฿{price.toLocaleString()} × {qty} ={' '}
+                                  <strong style={{ color: 'var(--ink)' }}>฿{(price * qty).toLocaleString()}</strong>
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })()}
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
-          {verifyStatus === 'pending' && (
-            <div style={{
-              marginTop: 12, padding: 14, display: 'flex', gap: 10,
-              background: 'var(--amber-soft)', border: '1px solid rgba(154,110,31,0.20)', borderRadius: 'var(--r-md)',
-            }}>
-              <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
-              <div>
-                <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>ยังไม่พบใน BigQuery</p>
-                <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0 }}>ระบบจะตรวจสอบอัตโนมัติ คุณสามารถลงทะเบียนต่อได้</p>
+            {showVerify && verifyStatus === 'pending' && (
+              <div style={{
+                marginTop: 12, padding: 14, display: 'flex', gap: 10,
+                background: 'var(--amber-soft)', border: '1px solid rgba(154,110,31,0.20)', borderRadius: 'var(--r-md)',
+              }}>
+                <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div>
+                  <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>ยังไม่พบใน BigQuery</p>
+                  <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0 }}>ระบบจะตรวจสอบอัตโนมัติ คุณสามารถลงทะเบียนต่อได้</p>
+                </div>
               </div>
-            </div>
-          )}
-          {verifyStatus === 'bq_error' && (
-            <div style={{
-              marginTop: 12, padding: 14, display: 'flex', gap: 10,
-              background: 'var(--amber-soft)', border: '1px solid rgba(154,110,31,0.20)', borderRadius: 'var(--r-md)',
-            }}>
-              <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
-              <div>
-                <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>ตรวจสอบ BigQuery ไม่สำเร็จ</p>
-                <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0 }}>ลงทะเบียนต่อได้ แอดมินจะตรวจสอบให้</p>
+            )}
+            {showVerify && verifyStatus === 'bq_error' && (
+              <div style={{
+                marginTop: 12, padding: 14, display: 'flex', gap: 10,
+                background: 'var(--amber-soft)', border: '1px solid rgba(154,110,31,0.20)', borderRadius: 'var(--r-md)',
+              }}>
+                <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div>
+                  <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>ตรวจสอบ BigQuery ไม่สำเร็จ</p>
+                  <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0 }}>ลงทะเบียนต่อได้ แอดมินจะตรวจสอบให้</p>
+                </div>
               </div>
-            </div>
-          )}
-          {verifyStatus === 'error' && (
-            <div style={{
-              marginTop: 12, padding: 14,
-              background: 'var(--red-soft)', border: '1px solid rgba(139,58,58,0.18)', borderRadius: 'var(--r-md)',
-            }}>
-              <p style={{ fontSize: 12.5, color: 'var(--red)', margin: 0, fontWeight: 600 }}>
-                ไม่พบ Order ID นี้ กรุณาตรวจสอบอีกครั้ง
-              </p>
-            </div>
-          )}
-          {verifyStatus === 'claimed' && (
-            <div style={{
-              marginTop: 12, padding: 14, display: 'flex', gap: 10,
-              background: 'var(--red-soft)', border: '1px solid rgba(139,58,58,0.18)', borderRadius: 'var(--r-md)',
-            }}>
-              <X size={15} color="var(--red)" style={{ flexShrink: 0, marginTop: 1 }} />
-              <div>
-                <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--red)', margin: '0 0 2px' }}>ออเดอร์นี้ใช้ไม่ได้</p>
-                <p style={{ fontSize: 11, color: 'var(--red)', margin: 0 }}>
-                  {verifyMsg || 'ออเดอร์นี้ถูกใช้ลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้'}
+            )}
+            {showVerify && verifyStatus === 'error' && (
+              <div style={{
+                marginTop: 12, padding: 14,
+                background: 'var(--red-soft)', border: '1px solid rgba(139,58,58,0.18)', borderRadius: 'var(--r-md)',
+              }}>
+                <p style={{ fontSize: 12.5, color: 'var(--red)', margin: 0, fontWeight: 600 }}>
+                  ไม่พบ Order ID นี้ กรุณาตรวจสอบอีกครั้ง
                 </p>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+            {showVerify && verifyStatus === 'claimed' && (
+              <div style={{
+                marginTop: 12, padding: 14, display: 'flex', gap: 10,
+                background: 'var(--red-soft)', border: '1px solid rgba(139,58,58,0.18)', borderRadius: 'var(--r-md)',
+              }}>
+                <X size={15} color="var(--red)" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div>
+                  <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--red)', margin: '0 0 2px' }}>ออเดอร์นี้ใช้ไม่ได้</p>
+                  <p style={{ fontSize: 11, color: 'var(--red)', margin: 0 }}>
+                    {verifyMsg || 'ออเดอร์นี้ถูกใช้ลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* ── Serial Number (optional) — online after verify, onsite always ── */}
-        {((isOnline && currentReady) || !isOnline) && (
+        {/* ── Serial Number ── */}
+        {showSnCard && (
           <div className="surface" style={{ padding: 18 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
               <p className="kicker" style={{ margin: 0 }}>Serial Number (SN)</p>
-              <span style={{ fontSize: 10, color: 'var(--ink-faint)', letterSpacing: '0.04em', fontWeight: 600 }}>
-                ไม่จำเป็น
+              <span style={{
+                fontSize: 10, letterSpacing: '0.04em', fontWeight: snReq ? 700 : 600,
+                color: snReq ? 'var(--red)' : 'var(--ink-faint)',
+              }}>
+                {snReq ? 'จำเป็น' : 'ไม่จำเป็น'}
               </span>
             </div>
             <input
@@ -488,20 +556,16 @@ export default function RegisterPage() {
           </div>
         )}
 
-        {/* ── Add-another (online) ── */}
-        {isOnline && currentReady && (
-          <button onClick={addAnother} className="btn btn-ghost tap-down" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <Plus size={16} /> เพิ่มออเดอร์อีก
-          </button>
-        )}
-
-        {/* ── Receipt (onsite REQUIRED) ── */}
-        {!isOnline && (
+        {/* ── Receipt (Brand Shop / หน้าร้าน — REQUIRED) ── */}
+        {showReceipt && (
           <div className="surface" style={{ padding: 18 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
               <p className="kicker" style={{ margin: 0 }}>Receipt · ใบเสร็จ</p>
-              <span style={{ fontSize: 10, color: 'var(--red)', letterSpacing: '0.04em', fontWeight: 700 }}>
-                จำเป็น
+              <span style={{
+                fontSize: 10, letterSpacing: '0.04em', fontWeight: receiptReq ? 700 : 600,
+                color: receiptReq ? 'var(--red)' : 'var(--ink-faint)',
+              }}>
+                {receiptReq ? 'จำเป็น' : 'ไม่จำเป็น'}
               </span>
             </div>
             {!previewUrl ? (
@@ -528,7 +592,7 @@ export default function RegisterPage() {
               <div style={{ position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={previewUrl} alt="receipt" style={{ width: '100%', objectFit: 'contain', maxHeight: 300 }} />
-                <button onClick={() => { setReceipt(null); setPreviewUrl(null) }} className="tap-down" style={{
+                <button onClick={() => { if (previewUrl) URL.revokeObjectURL(previewUrl); setReceipt(null); setPreviewUrl(null) }} className="tap-down" style={{
                   position: 'absolute', top: 8, right: 8,
                   width: 30, height: 30, borderRadius: '50%',
                   background: 'rgba(10,9,7,0.85)', border: 'none',
@@ -543,6 +607,13 @@ export default function RegisterPage() {
           </div>
         )}
 
+        {/* ── Add-another ── */}
+        {currentValid() && (
+          <button onClick={addAnother} className="btn btn-ghost tap-down" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <Plus size={16} /> เพิ่มรายการอีก
+          </button>
+        )}
+
         {error && (
           <div style={{
             padding: '12px 14px',
@@ -555,19 +626,12 @@ export default function RegisterPage() {
         )}
 
         {/* ── Submit ── */}
-        {isOnline ? (
-          <button onClick={submitOnline} disabled={submitting || totalOrders === 0}
-            className="btn btn-ink tap-down">
-            {submitting
-              ? <><Loader2 size={14} className="spinner" /> กำลังบันทึก...</>
-              : `ยืนยัน${totalOrders > 1 ? ` ${totalOrders} ออเดอร์` : ''} ✓`}
-          </button>
-        ) : (
-          <button onClick={submitOnsite} disabled={submitting || !orderSn.trim() || !receipt}
-            className="btn btn-ink tap-down">
-            {submitting ? <><Loader2 size={14} className="spinner" /> กำลังบันทึก...</> : 'ยืนยัน ✓'}
-          </button>
-        )}
+        <button onClick={submitAll} disabled={submitting || totalEntries === 0}
+          className="btn btn-ink tap-down">
+          {submitting
+            ? <><Loader2 size={14} className="spinner" /> กำลังบันทึก...</>
+            : `ยืนยัน${totalEntries > 1 ? ` ${totalEntries} รายการ` : ''} ✓`}
+        </button>
       </div>
     </div>
   )

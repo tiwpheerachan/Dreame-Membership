@@ -79,9 +79,13 @@ export default function CouponDetail({ coupon, status, onClose }: Props) {
   }
 
   // ── Self-refund eligibility ──
+  // ปิดปุ่ม "แลกคืนเพื่อรับแต้มกลับ" ชั่วคราว — ซ่อนจากหน้าลูกค้าไว้ก่อน
+  // (ไม่ลบ logic/route; แค่ตั้ง flag=false — เปิดกลับได้โดยเปลี่ยนเป็น true)
+  const SELF_REFUND_ENABLED = false
   // coupon มาจาก reward redemption + ไม่ใช่ PREMIUM (ส่งของจริง)
   const isRewardCoupon = !!coupon.auto_issue_key?.startsWith('REWARD_')
-  const canRefund = isActive
+  const canRefund = SELF_REFUND_ENABLED
+    && isActive
     && isRewardCoupon
     && coupon.reward_meta?.redeem_type !== 'PREMIUM'
 

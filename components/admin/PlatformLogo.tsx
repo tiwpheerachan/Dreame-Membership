@@ -14,27 +14,29 @@
 
 'use client'
 import { useState, type CSSProperties } from 'react'
-import { Globe, Store } from 'lucide-react'
+import { Globe, Store, Building2 } from 'lucide-react'
 
-type Channel = 'SHOPEE' | 'LAZADA' | 'TIKTOK' | 'WEBSITE' | 'STORE' | 'OTHER' | string
+type Channel = 'SHOPEE' | 'LAZADA' | 'TIKTOK' | 'WEBSITE' | 'BRANDSHOP' | 'STORE' | 'OTHER' | string
 
 const LABELS: Record<string, string> = {
-  SHOPEE:  'Shopee',
-  LAZADA:  'Lazada',
-  TIKTOK:  'TikTok',
-  WEBSITE: 'Website',
-  STORE:   'หน้าร้าน',
-  OTHER:   'อื่นๆ',
+  SHOPEE:    'Shopee',
+  LAZADA:    'Lazada',
+  TIKTOK:    'TikTok',
+  WEBSITE:   'Website',
+  BRANDSHOP: 'Brand Shop',
+  STORE:     'หน้าร้าน',
+  OTHER:     'อื่นๆ',
 }
 
 // Brand metadata
 const BRAND: Record<string, { color: string; bg: string; logo?: string; logoColor?: string }> = {
-  SHOPEE:  { color: '#EE4D2D', bg: '#FFF4F1', logo: 'shopee',  logoColor: 'EE4D2D' },
-  LAZADA:  { color: '#0F146D', bg: '#EEEEF6', logo: 'lazada',  logoColor: '0F146D' },
-  TIKTOK:  { color: '#000000', bg: '#F4F4F4', logo: 'tiktok',  logoColor: '000000' },
-  WEBSITE: { color: '#A0782B', bg: '#F8F2E5' },  // Dreame brand
-  STORE:   { color: '#6B5A48', bg: '#F3EBDB' },
-  OTHER:   { color: '#A0907A', bg: '#F3EBDB' },
+  SHOPEE:    { color: '#EE4D2D', bg: '#FFF4F1', logo: 'shopee',  logoColor: 'EE4D2D' },
+  LAZADA:    { color: '#0F146D', bg: '#EEEEF6', logo: 'lazada',  logoColor: '0F146D' },
+  TIKTOK:    { color: '#000000', bg: '#F4F4F4', logo: 'tiktok',  logoColor: '000000' },
+  WEBSITE:   { color: '#A0782B', bg: '#F8F2E5' },  // Dreame brand
+  BRANDSHOP: { color: '#9A6E1F', bg: '#F6EFDC' },  // Dreame Brand Shop (official retail)
+  STORE:     { color: '#6B5A48', bg: '#F3EBDB' },
+  OTHER:     { color: '#A0907A', bg: '#F3EBDB' },
 }
 
 interface Props {
@@ -84,6 +86,8 @@ export default function PlatformLogo({ channel, size = 20, withLabel, className,
       <img src="/website-logo.png" alt="Dreame"
         style={{ width: '78%', height: '78%', objectFit: 'contain' }} />
     )
+  } else if (c === 'BRANDSHOP') {
+    inner = <Building2 size={innerSize} strokeWidth={1.8} style={{ color: brand.color }} />
   } else if (c === 'STORE') {
     inner = <Store size={innerSize} strokeWidth={1.8} style={{ color: brand.color }} />
   } else {
