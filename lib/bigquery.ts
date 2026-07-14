@@ -188,6 +188,58 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
 }
 
 // ============================================================
+// Verify by SERIAL NUMBER — for หน้าร้าน (STORE) which has no Order ID.
+// `serial_numbers` in order_items is a comma-separated list (an order can ship
+// several units), so we match the entered SN as a *member* of that list, not
+// by equality. A physical SN belongs to exactly one order, so a hit is unique.
+// ============================================================
+export async function verifyBySerialInBQVerbose(serial: string): Promise<VerifyResult> {
+  let bq: BigQuery
+  try {
+    bq = getBQClient()
+  } catch (e) {
+    return { status: 'error', error: (e as Error).message, attempted: [] }
+  }
+
+  const normalized = serial.trim().toUpperCase()
+  try {
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          order_sn,
+          ANY_VALUE(platform)     AS platform,
+          ANY_VALUE(order_status) AS order_status,
+          CAST(ANY_VALUE(order_create_time) AS STRING) AS order_create_time,
+          CAST(ANY_VALUE(order_date)        AS STRING) AS order_date,
+          SUM(buyer_paid) AS total_amount,
+          ARRAY_AGG(STRUCT(
+            item_id, model_id, item_name, item_sku,
+            model_name, model_sku, quantity, price, buyer_paid, image_url
+          )) AS items
+        FROM \`${PROJECT}.${DATASET}.${T_ITEMS}\`
+        WHERE serial_numbers IS NOT NULL AND serial_numbers != ''
+          AND EXISTS (
+            SELECT 1 FROM UNNEST(SPLIT(UPPER(serial_numbers), ',')) s
+            WHERE TRIM(s) = @serial
+          )
+        GROUP BY order_sn
+        LIMIT 2
+      `,
+      params: { serial: normalized },
+    })
+    if (rows && rows.length === 1) return { status: 'found', data: mapRow(rows[0]) }
+    if (rows && rows.length > 1) {
+      // A single physical SN shouldn't map to >1 order — treat as inconclusive.
+      console.warn(`[BQ] serial "${normalized}" matched ${rows.length}+ orders — ambiguous, not matching`)
+      return { status: 'not_found' }
+    }
+    return { status: 'not_found' }
+  } catch (e) {
+    return { status: 'error', error: (e as Error).message, attempted: [{ view: `${T_ITEMS} (serial)`, error: (e as Error).message }] }
+  }
+}
+
+// ============================================================
 // Verify single order by order_sn (back-compat helper for user-facing code).
 // Returns null on either "not found" or "error" — callers that need to
 // distinguish should use verifyOrderInBQVerbose instead.

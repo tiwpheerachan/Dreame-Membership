@@ -24,16 +24,17 @@ export async function GET(req: Request) {
   const supabase = createServiceClient()
 
   try {
-    // Self-heal: any PENDING registration with a real Order ID that's missing
-    // from the queue (legacy rows, or an insert that raced with a queue failure)
-    // would never get re-checked. Backfill them before reading the queue.
-    // Excludes หน้าร้าน (STORE): it has no Order ID, so BQ can't match it —
-    // an admin verifies it via the receipt instead.
+    // Self-heal: any PENDING+ONLINE registration missing from the queue (legacy
+    // rows, or an insert that raced with a queue failure) would never get
+    // re-checked. Backfill them before reading the queue.
+    // ONLY ONLINE auto-verifies. Brand Shop & หน้าร้าน (ONSITE) always go through
+    // admin confirmation — even when their order/SN exists in BQ — so the cron
+    // must never auto-promote them.
     const { data: orphans } = await supabase
       .from('purchase_registrations')
       .select('id, order_sn')
       .eq('status', 'PENDING')
-      .neq('channel', 'STORE')
+      .eq('channel_type', 'ONLINE')
       .limit(500)
     if (orphans && orphans.length > 0) {
       const orphanIds = orphans.map(o => o.id)
@@ -51,14 +52,13 @@ export async function GET(req: Request) {
       }
     }
 
-    // Retry every order with a real Order ID (online marketplaces + Brand Shop).
-    // Only หน้าร้าน (STORE) is excluded — it has no Order ID for BQ to match and
-    // must be admin-approved via receipt. The register endpoint already gates
-    // inserts, but the inner join here also protects against legacy queue rows.
+    // Retry ONLINE orders only. Brand Shop & หน้าร้าน (ONSITE) are admin-confirmed
+    // and must never auto-promote — the register endpoint already keeps them out
+    // of the queue, and this inner join also guards against legacy queue rows.
     const { data: pendingQueue } = await supabase
       .from('pending_verifications')
-      .select('id, purchase_reg_id, order_sn, retry_count, purchase_registrations!inner(channel)')
-      .neq('purchase_registrations.channel', 'STORE')
+      .select('id, purchase_reg_id, order_sn, retry_count, purchase_registrations!inner(channel_type)')
+      .eq('purchase_registrations.channel_type', 'ONLINE')
       .lt('retry_count', 168)  // 168 × 1h = 7 days; BQ refresh is ~6h so ~28 real chances
       .order('created_at', { ascending: true })
       .limit(200)

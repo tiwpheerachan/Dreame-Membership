@@ -27,14 +27,20 @@ export async function POST(req: Request) {
       try { bqData = JSON.parse(bqDataStr) } catch { /* ignore malformed */ }
     }
 
+    // BQ found → auto-award ONLY for online marketplaces. Brand Shop & หน้าร้าน
+    // may match BQ (we show the product) but an admin must confirm them, so we
+    // store the BQ data as reference yet keep the registration PENDING.
+    const autoVerify = bqData !== null && channel_type === 'ONLINE'
+
     // Claim key priority:
-    //  1) canonical BQ order_sn — a fuzzy verify means the buyer's typed order_sn
-    //     (e.g. 15-digit Lazada) differs from BQ's 16-digit canonical; storing the
-    //     canonical makes BOTH typed forms dedupe to a single claim.
-    //  2) the typed order_sn.
-    //  3) serial number — หน้าร้าน has no Order ID, so its SN is the unique key;
-    //     keeps the NOT NULL + global unique index on order_sn valid.
-    const claimKey = bqData?.order_sn?.trim() || order_sn || serial_number
+    //  - หน้าร้าน (STORE): the Serial Number IS the identity (BQ match returns a
+    //    marketplace order_sn that must NOT become the claim key, or two different
+    //    units from the same order would collide). Always dedupe on the SN.
+    //  - everyone else: canonical BQ order_sn (fuzzy verify may differ from the
+    //    typed one, e.g. 15- vs 16-digit Lazada) → falls back to typed order_sn.
+    const claimKey = channel === 'STORE'
+      ? serial_number
+      : (bqData?.order_sn?.trim() || order_sn || serial_number)
     if (!claimKey) {
       return NextResponse.json({ error: 'ต้องมี Order ID หรือ Serial Number อย่างน้อยหนึ่งอย่าง' }, { status: 400 })
     }
@@ -100,21 +106,22 @@ export async function POST(req: Request) {
         warranty_months: warrantyMonths,
         warranty_start: purchaseDate.toISOString().split('T')[0],
         warranty_end: warrantyEnd.toISOString().split('T')[0],
-        bq_verified: bqData !== null,
-        bq_verified_at: bqData ? new Date().toISOString() : null,
+        // Store BQ data as reference even for Brand Shop/หน้าร้าน (admin sees the
+        // product), but only ONLINE auto-verifies — ONSITE stays PENDING for admin.
+        bq_verified: autoVerify,
+        bq_verified_at: autoVerify ? new Date().toISOString() : null,
         bq_raw_data: bqData || null,
-        status: bqData ? 'BQ_VERIFIED' : 'PENDING',
+        status: autoVerify ? 'BQ_VERIFIED' : 'PENDING',
       })
       .select()
       .single()
 
     if (regError) throw regError
 
-    // Award points atomically if BQ-verified at registration time.
-    // Only enqueue for cron retry when the channel is ONLINE — STORE/ONSITE
-    // orders will never appear in BigQuery and must be approved by an admin,
-    // so adding them to pending_verifications wastes BQ quota and retry slots.
-    if (bqData) {
+    // Award points only for ONLINE BQ-verified registrations. Brand Shop &
+    // หน้าร้าน are never auto-awarded — an admin confirms them (even when found
+    // in BQ), so they get NO points here and are NOT enqueued for the cron.
+    if (autoVerify) {
       // Award immediately. CHECK the result — a swallowed RPC error here is how
       // a BQ-verified registration ends up with 0 points and no recovery path.
       // On failure, enqueue so the cron sweep re-awards it (award fn is idempotent).
@@ -125,13 +132,10 @@ export async function POST(req: Request) {
           .insert({ purchase_reg_id: reg.id, order_sn: claimKey })
           .then(() => {}, () => {})
       }
-    } else if (order_sn) {
-      // Retroactive BQ verification: every channel that supplies a REAL Order ID
-      // (online marketplaces AND Brand Shop) eventually lands in BigQuery — BQ
-      // just isn't real-time. Enqueue so the cron re-checks it over the next
-      // 1–2 days and auto-promotes it to BQ_VERIFIED + awards points.
-      // หน้าร้าน (STORE) has no Order ID (order_sn falls back to the serial
-      // number, which BQ can't match) → an admin verifies it via the receipt.
+    } else if (channel_type === 'ONLINE') {
+      // ONLINE order not yet in BQ → enqueue for the cron to re-check & auto-award
+      // over the next 1–2 days (BQ isn't real-time). Brand Shop/หน้าร้าน are
+      // excluded on purpose — they always route through admin confirmation.
       await service.from('pending_verifications').insert({
         purchase_reg_id: reg.id,
         order_sn: claimKey,

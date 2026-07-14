@@ -18,22 +18,23 @@ interface ChannelDef {
   orderId: Req
   sn: Req
   receipt: Req
-  bqVerify: boolean            // ตรวจสอบกับ BigQuery หรือไม่ (เฉพาะช่องทางออนไลน์)
+  lookupBy: 'order' | 'serial' | null  // ค้นหา BQ ด้วยอะไร (order id / serial / ไม่ค้น)
+  autoAward: boolean                    // เจอใน BQ แล้วให้แต้มทันทีไหม (เฉพาะออนไลน์)
   channelType: 'ONLINE' | 'ONSITE'
 }
 
 // Matrix (ยืนยันกับลูกค้าแล้ว):
-//   Platform (Shopee/Lazada/TikTok) : OrderID บังคับ · SN ไม่บังคับ · ใบเสร็จ ไม่ต้อง · verify BQ
-//   Website (Shopify)               : OrderID บังคับ · SN ไม่บังคับ · ใบเสร็จ ไม่ต้อง · verify BQ
-//   Brand Shop                      : OrderID บังคับ · SN ไม่บังคับ · ใบเสร็จ บังคับ
-//   หน้าร้าน                          : OrderID ไม่ต้อง · SN บังคับ · ใบเสร็จ บังคับ
+//   Platform (Shopee/Lazada/TikTok) : OrderID บังคับ · SN ไม่บังคับ · ใบเสร็จ ไม่ต้อง · ค้น BQ (order) · ให้แต้มอัตโนมัติ
+//   Website (Shopify)               : OrderID บังคับ · SN ไม่บังคับ · ใบเสร็จ ไม่ต้อง · ค้น BQ (order) · ให้แต้มอัตโนมัติ
+//   Brand Shop                      : OrderID บังคับ · SN ไม่บังคับ · ใบเสร็จ บังคับ · ค้น BQ (order) · รอแอดมินยืนยัน
+//   หน้าร้าน                          : OrderID ไม่ต้อง · SN บังคับ · ใบเสร็จ บังคับ · ค้น BQ (serial) · รอแอดมินยืนยัน
 const CHANNELS: ChannelDef[] = [
-  { value: 'SHOPEE',    label: 'Shopee',     orderId: 'req', sn: 'opt', receipt: 'off', bqVerify: true,  channelType: 'ONLINE' },
-  { value: 'LAZADA',    label: 'Lazada',     orderId: 'req', sn: 'opt', receipt: 'off', bqVerify: true,  channelType: 'ONLINE' },
-  { value: 'TIKTOK',    label: 'TikTok',     orderId: 'req', sn: 'opt', receipt: 'off', bqVerify: true,  channelType: 'ONLINE' },
-  { value: 'WEBSITE',   label: 'Website',    orderId: 'req', sn: 'opt', receipt: 'off', bqVerify: true,  channelType: 'ONLINE' },
-  { value: 'BRANDSHOP', label: 'Brand Shop', orderId: 'req', sn: 'opt', receipt: 'req', bqVerify: false, channelType: 'ONSITE' },
-  { value: 'STORE',     label: 'หน้าร้าน',    orderId: 'off', sn: 'req', receipt: 'req', bqVerify: false, channelType: 'ONSITE' },
+  { value: 'SHOPEE',    label: 'Shopee',     orderId: 'req', sn: 'opt', receipt: 'off', lookupBy: 'order',  autoAward: true,  channelType: 'ONLINE' },
+  { value: 'LAZADA',    label: 'Lazada',     orderId: 'req', sn: 'opt', receipt: 'off', lookupBy: 'order',  autoAward: true,  channelType: 'ONLINE' },
+  { value: 'TIKTOK',    label: 'TikTok',     orderId: 'req', sn: 'opt', receipt: 'off', lookupBy: 'order',  autoAward: true,  channelType: 'ONLINE' },
+  { value: 'WEBSITE',   label: 'Website',    orderId: 'req', sn: 'opt', receipt: 'off', lookupBy: 'order',  autoAward: true,  channelType: 'ONLINE' },
+  { value: 'BRANDSHOP', label: 'Brand Shop', orderId: 'req', sn: 'opt', receipt: 'req', lookupBy: 'order',  autoAward: false, channelType: 'ONSITE' },
+  { value: 'STORE',     label: 'หน้าร้าน',    orderId: 'off', sn: 'req', receipt: 'req', lookupBy: 'serial', autoAward: false, channelType: 'ONSITE' },
 ]
 const defOf = (v: string): ChannelDef => CHANNELS.find(c => c.value === v) ?? CHANNELS[0]
 
@@ -75,16 +76,20 @@ export default function RegisterPage() {
   const [failMsgs, setFailMsgs] = useState<string[]>([])
 
   // Derived per-channel flags
-  const showOrderId  = def.orderId !== 'off'
-  const orderIdReq   = def.orderId === 'req'
-  const showVerify   = def.bqVerify
-  const snReq        = def.sn === 'req'
-  const showReceipt  = def.receipt !== 'off'
-  const receiptReq   = def.receipt === 'req'
+  const showOrderId    = def.orderId !== 'off'
+  const orderIdReq     = def.orderId === 'req'
+  const snReq          = def.sn === 'req'
+  const showReceipt    = def.receipt !== 'off'
+  const receiptReq     = def.receipt === 'req'
+  const lookupOnOrder  = def.lookupBy === 'order'   // ค้น BQ ด้วย Order ID
+  const lookupOnSerial = def.lookupBy === 'serial'  // ค้น BQ ด้วย Serial Number (หน้าร้าน)
+  const showVerify     = def.lookupBy !== null      // ทุกช่องค้น BQ ได้
+  const autoAward      = def.autoAward              // ออนไลน์เท่านั้นที่ให้แต้มอัตโนมัติ
 
   // Order-ID step satisfied enough to reveal SN/receipt.
-  // BQ channels: needs a resolved verify state. Others: always ready.
-  const currentReady = !showVerify
+  // ONLINE (auto-award): needs a resolved verify state. ONSITE: always ready
+  // (การค้น BQ เป็นแค่ข้อมูลประกอบ ไม่บังคับ — ลูกค้ากรอกใบเสร็จแล้วส่งได้เลย).
+  const currentReady = !autoAward
     || verifyStatus === 'verified' || verifyStatus === 'pending' || verifyStatus === 'bq_error'
 
   // Show SN card: for req channels always; for opt channels once the order-id step is ready.
@@ -93,9 +98,11 @@ export default function RegisterPage() {
   // Is the "current entry" complete enough to add/submit?
   function currentValid(): boolean {
     if (orderIdReq && !orderSn.trim()) return false
-    if (showVerify && !(verifyStatus === 'verified' || verifyStatus === 'pending' || verifyStatus === 'bq_error')) return false
     if (snReq && !serialNumber.trim()) return false
     if (receiptReq && !receipt) return false
+    // ONLINE must resolve the BQ verify so bq_data attaches for auto-award.
+    // ONSITE (Brand Shop / หน้าร้าน) don't require the search — admin confirms them.
+    if (autoAward && !(verifyStatus === 'verified' || verifyStatus === 'pending' || verifyStatus === 'bq_error')) return false
     return true
   }
 
@@ -116,21 +123,23 @@ export default function RegisterPage() {
   }
 
   async function verifyOrder() {
-    const sn = orderSn.trim()
-    if (!sn) return
-    if (orders.some(o => o.order_sn === sn)) {
-      setVerifyStatus('claimed'); setVerifyMsg('คุณเพิ่มออเดอร์นี้ไว้แล้ว')
+    // Brand Shop searches by Order ID; หน้าร้าน searches by Serial Number.
+    const q = lookupOnSerial ? serialNumber.trim() : orderSn.trim()
+    if (!q) return
+    if (orders.some(o => (o.order_sn || o.serial_number) === q)) {
+      setVerifyStatus('claimed')
+      setVerifyMsg(lookupOnSerial ? 'คุณเพิ่ม Serial Number นี้ไว้แล้ว' : 'คุณเพิ่มออเดอร์นี้ไว้แล้ว')
       return
     }
     setVerifyStatus('loading')
     try {
       const res = await fetch('/api/purchases/verify-order', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_sn: sn, channel }),
+        body: JSON.stringify(lookupOnSerial ? { serial_number: q, channel } : { order_sn: q, channel }),
       })
       const data = await res.json()
       if (data.status === 'VERIFIED') { setVerifiedData(data.order); setVerifyStatus('verified') }
-      else if (data.status === 'ALREADY_CLAIMED') { setVerifyMsg(data.message || 'ออเดอร์นี้ถูกใช้ลงทะเบียนไปแล้ว'); setVerifyStatus('claimed') }
+      else if (data.status === 'ALREADY_CLAIMED') { setVerifyMsg(data.message || 'รายการนี้ถูกใช้ลงทะเบียนไปแล้ว'); setVerifyStatus('claimed') }
       else if (data.status === 'PENDING') setVerifyStatus('pending')
       else if (data.status === 'BQ_ERROR') setVerifyStatus('bq_error')
       else setVerifyStatus('error')
@@ -143,8 +152,10 @@ export default function RegisterPage() {
       channel,
       order_sn: orderSn.trim(),
       serial_number: serialNumber.trim(),
+      // Keep the BQ data even for Brand Shop/หน้าร้าน — admin sees the product —
+      // but their state is 'manual' (รอแอดมินยืนยัน), never auto-verified.
       bqData: verifiedData,
-      state: showVerify ? (verifyStatus as OrderEntry['state']) : 'manual',
+      state: autoAward ? (verifyStatus as OrderEntry['state']) : 'manual',
       receipt,
       receiptPreview: previewUrl,
     }
@@ -221,16 +232,171 @@ export default function RegisterPage() {
     }
   }
 
-  const helpText = def.bqVerify
+  const helpText = autoAward
     ? 'กรอก Order ID เพื่อตรวจสอบ · Serial Number ไม่บังคับ · เพิ่มได้หลายออเดอร์'
-    : def.orderId === 'off'
-      ? 'กรอก Serial Number และแนบใบเสร็จ (จำเป็น) · ไม่ต้องมี Order ID · เพิ่มได้หลายรายการ'
-      : 'กรอก Order ID และแนบใบเสร็จ (จำเป็น) · Serial Number ไม่บังคับ · เพิ่มได้หลายรายการ'
+    : lookupOnSerial
+      ? 'กรอก Serial Number (ค้นหาสินค้าได้) และแนบใบเสร็จ · ไม่ต้องมี Order ID · รอแอดมินยืนยัน'
+      : 'กรอก Order ID (ค้นหาสินค้าได้) และแนบใบเสร็จ · Serial Number ไม่บังคับ · รอแอดมินยืนยัน'
 
   function stateLabel(s: OrderEntry['state']) {
     if (s === 'verified') return '✓ ตรวจสอบแล้ว'
     if (s === 'manual') return 'รอแอดมินตรวจสอบ'
     return 'รอตรวจสอบ'
+  }
+
+  // Shared BQ-lookup result UI — rendered under whichever field does the lookup
+  // (Order ID for online/Brand Shop, Serial Number for หน้าร้าน).
+  function renderVerifyResult() {
+    if (verifyStatus === 'verified' && verifiedData) {
+      const items = (verifiedData.items as Array<Record<string, unknown>>) || []
+      const orderDate = verifiedData.order_date as string | undefined
+      const totalQty = items.reduce((s, it) => s + Number(it.quantity || 0), 0)
+      return (
+        <div style={{
+          marginTop: 12, padding: 14,
+          background: 'var(--green-soft)',
+          border: '1px solid rgba(64,107,63,0.18)',
+          borderRadius: 'var(--r-md)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+            <CheckCircle size={14} color="var(--green)" />
+            <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--green)', margin: 0 }}>
+              {autoAward ? 'ตรวจสอบสำเร็จ' : 'พบข้อมูลสินค้าในระบบ'}
+            </p>
+          </div>
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1fr 1fr',
+            gap: '6px 14px', fontSize: 12, color: 'var(--ink-soft)',
+            paddingBottom: items.length > 0 ? 10 : 0,
+            marginBottom: items.length > 0 ? 10 : 0,
+            borderBottom: items.length > 0 ? '1px solid rgba(64,107,63,0.18)' : 'none',
+          }}>
+            <div>Platform: <strong>{verifiedData.platform as string}</strong></div>
+            {orderDate && (<div>วันที่ซื้อ: <strong>{orderDate}</strong></div>)}
+            <div>ยอดรวม: <strong>฿{Number(verifiedData.total_amount).toLocaleString()}</strong></div>
+            {totalQty > 0 && (<div>จำนวน: <strong>{totalQty} ชิ้น</strong></div>)}
+          </div>
+          {items.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <p style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>
+                รายการสินค้า ({items.length})
+              </p>
+              {items.map((it, i) => {
+                const qty = Number(it.quantity || 0)
+                const price = Number(it.price || 0)
+                const itemName = (it.item_name as string) || ''
+                const modelName = (it.model_name as string) || ''
+                const sku = (it.item_sku as string) || (it.model_sku as string) || ''
+                const imageUrl = (it.image_url as string | null) || null
+                const showModel = modelName && itemName && modelName !== itemName
+                return (
+                  <div key={i} style={{
+                    padding: '8px 10px',
+                    background: 'rgba(255,255,255,0.6)',
+                    borderRadius: 'var(--r-sm)',
+                    fontSize: 11.5, color: 'var(--ink)',
+                    display: 'flex', gap: 10, alignItems: 'flex-start',
+                  }}>
+                    {imageUrl && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={imageUrl} alt={itemName || modelName || 'product'}
+                        style={{
+                          width: 48, height: 48, flexShrink: 0,
+                          objectFit: 'cover', borderRadius: 'var(--r-sm)',
+                          background: 'var(--bg-soft)', border: '1px solid var(--hair)',
+                        }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: '0 0 2px', fontWeight: 600, lineHeight: 1.35 }}>
+                        {itemName || modelName || '—'}
+                      </p>
+                      {showModel && (
+                        <p style={{ margin: '0 0 2px', fontSize: 10.5, color: 'var(--ink-mute)' }}>
+                          รุ่น: {modelName}
+                        </p>
+                      )}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+                        <span>{sku}</span>
+                        <span>
+                          ฿{price.toLocaleString()} × {qty} ={' '}
+                          <strong style={{ color: 'var(--ink)' }}>฿{(price * qty).toLocaleString()}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          {!autoAward && (
+            <p style={{ fontSize: 11, color: 'var(--amber)', margin: '10px 0 0', lineHeight: 1.5, fontWeight: 600 }}>
+              ⏳ พบข้อมูลแล้ว — แนบใบเสร็จและกดยืนยัน จากนั้นรอแอดมินตรวจสอบอีกครั้ง
+            </p>
+          )}
+        </div>
+      )
+    }
+    if (verifyStatus === 'pending') {
+      return (
+        <div style={{
+          marginTop: 12, padding: 14, display: 'flex', gap: 10,
+          background: 'var(--amber-soft)', border: '1px solid rgba(154,110,31,0.20)', borderRadius: 'var(--r-md)',
+        }}>
+          <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>ยังไม่พบข้อมูลในระบบ</p>
+            <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0, lineHeight: 1.5 }}>
+              กรุณาตรวจสอบความถูกต้องของข้อมูล — สถานะการสั่งซื้อจะได้รับการตรวจสอบภายใน 1–2 วัน คุณลงทะเบียนต่อได้เลย
+            </p>
+          </div>
+        </div>
+      )
+    }
+    if (verifyStatus === 'bq_error') {
+      return (
+        <div style={{
+          marginTop: 12, padding: 14, display: 'flex', gap: 10,
+          background: 'var(--amber-soft)', border: '1px solid rgba(154,110,31,0.20)', borderRadius: 'var(--r-md)',
+        }}>
+          <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>ตรวจสอบไม่สำเร็จชั่วคราว</p>
+            <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0, lineHeight: 1.5 }}>
+              ลงทะเบียนต่อได้เลย — สถานะการสั่งซื้อจะได้รับการตรวจสอบภายใน 1–2 วัน
+            </p>
+          </div>
+        </div>
+      )
+    }
+    if (verifyStatus === 'error') {
+      return (
+        <div style={{
+          marginTop: 12, padding: 14,
+          background: 'var(--red-soft)', border: '1px solid rgba(139,58,58,0.18)', borderRadius: 'var(--r-md)',
+        }}>
+          <p style={{ fontSize: 12.5, color: 'var(--red)', margin: 0, fontWeight: 600 }}>
+            {lookupOnSerial ? 'ไม่พบ Serial Number นี้ กรุณาตรวจสอบอีกครั้ง' : 'ไม่พบ Order ID นี้ กรุณาตรวจสอบอีกครั้ง'}
+          </p>
+        </div>
+      )
+    }
+    if (verifyStatus === 'claimed') {
+      return (
+        <div style={{
+          marginTop: 12, padding: 14, display: 'flex', gap: 10,
+          background: 'var(--red-soft)', border: '1px solid rgba(139,58,58,0.18)', borderRadius: 'var(--r-md)',
+        }}>
+          <X size={15} color="var(--red)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--red)', margin: '0 0 2px' }}>รายการนี้ใช้ไม่ได้</p>
+            <p style={{ fontSize: 11, color: 'var(--red)', margin: 0 }}>
+              {verifyMsg || 'รายการนี้ถูกใช้ลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้'}
+            </p>
+          </div>
+        </div>
+      )
+    }
+    return null
   }
 
   // ── DONE ──
@@ -384,9 +550,9 @@ export default function RegisterPage() {
               <input className="field" type="text" placeholder="เช่น 250123456789"
                 value={orderSn}
                 onChange={e => { setOrderSn(e.target.value); if (verifyStatus !== 'idle') { setVerifyStatus('idle'); setVerifiedData(null) } }}
-                onKeyDown={e => e.key === 'Enter' && showVerify && verifyOrder()}
+                onKeyDown={e => e.key === 'Enter' && lookupOnOrder && verifyOrder()}
                 style={{ flex: 1 }} />
-              {showVerify && (
+              {lookupOnOrder && (
                 <button onClick={verifyOrder} disabled={verifyStatus === 'loading' || !orderSn.trim()}
                   className="btn btn-ink tap-down" style={{ padding: '0 18px' }}>
                   {verifyStatus === 'loading' ? <Loader2 size={16} className="spinner" /> : <Search size={16} />}
@@ -394,157 +560,7 @@ export default function RegisterPage() {
               )}
             </div>
 
-            {/* Brand Shop: order id ไม่เรียลไทม์ — ไม่มีปุ่มค้นหา, แจ้งว่ารอตรวจสอบ */}
-            {showOrderId && !showVerify && (
-              <div style={{
-                marginTop: 12, padding: 14, display: 'flex', gap: 10,
-                background: 'var(--amber-soft)', border: '1px solid rgba(154,110,31,0.20)', borderRadius: 'var(--r-md)',
-              }}>
-                <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
-                <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0, lineHeight: 1.5 }}>
-                  หมายเลข Order ID ของ Brand Shop ไม่ใช่เรียลไทม์ — สถานะการสั่งซื้อจะได้รับการตรวจสอบภายใน 1–2 วัน
-                </p>
-              </div>
-            )}
-
-            {/* Verified BQ preview (online only) */}
-            {showVerify && verifyStatus === 'verified' && verifiedData && (() => {
-              const items = (verifiedData.items as Array<Record<string, unknown>>) || []
-              const orderDate = verifiedData.order_date as string | undefined
-              const totalQty = items.reduce((s, it) => s + Number(it.quantity || 0), 0)
-              return (
-                <div style={{
-                  marginTop: 12, padding: 14,
-                  background: 'var(--green-soft)',
-                  border: '1px solid rgba(64,107,63,0.18)',
-                  borderRadius: 'var(--r-md)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                    <CheckCircle size={14} color="var(--green)" />
-                    <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--green)', margin: 0 }}>
-                      ตรวจสอบสำเร็จ
-                    </p>
-                  </div>
-                  <div style={{
-                    display: 'grid', gridTemplateColumns: '1fr 1fr',
-                    gap: '6px 14px', fontSize: 12, color: 'var(--ink-soft)',
-                    paddingBottom: items.length > 0 ? 10 : 0,
-                    marginBottom: items.length > 0 ? 10 : 0,
-                    borderBottom: items.length > 0 ? '1px solid rgba(64,107,63,0.18)' : 'none',
-                  }}>
-                    <div>Platform: <strong>{verifiedData.platform as string}</strong></div>
-                    {orderDate && (<div>วันที่ซื้อ: <strong>{orderDate}</strong></div>)}
-                    <div>ยอดรวม: <strong>฿{Number(verifiedData.total_amount).toLocaleString()}</strong></div>
-                    {totalQty > 0 && (<div>จำนวน: <strong>{totalQty} ชิ้น</strong></div>)}
-                  </div>
-                  {items.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <p style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>
-                        รายการสินค้า ({items.length})
-                      </p>
-                      {items.map((it, i) => {
-                        const qty = Number(it.quantity || 0)
-                        const price = Number(it.price || 0)
-                        const itemName = (it.item_name as string) || ''
-                        const modelName = (it.model_name as string) || ''
-                        const sku = (it.item_sku as string) || (it.model_sku as string) || ''
-                        const imageUrl = (it.image_url as string | null) || null
-                        const showModel = modelName && itemName && modelName !== itemName
-                        return (
-                          <div key={i} style={{
-                            padding: '8px 10px',
-                            background: 'rgba(255,255,255,0.6)',
-                            borderRadius: 'var(--r-sm)',
-                            fontSize: 11.5, color: 'var(--ink)',
-                            display: 'flex', gap: 10, alignItems: 'flex-start',
-                          }}>
-                            {imageUrl && (
-                              /* eslint-disable-next-line @next/next/no-img-element */
-                              <img src={imageUrl} alt={itemName || modelName || 'product'}
-                                style={{
-                                  width: 48, height: 48, flexShrink: 0,
-                                  objectFit: 'cover', borderRadius: 'var(--r-sm)',
-                                  background: 'var(--bg-soft)', border: '1px solid var(--hair)',
-                                }} />
-                            )}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ margin: '0 0 2px', fontWeight: 600, lineHeight: 1.35 }}>
-                                {itemName || modelName || '—'}
-                              </p>
-                              {showModel && (
-                                <p style={{ margin: '0 0 2px', fontSize: 10.5, color: 'var(--ink-mute)' }}>
-                                  รุ่น: {modelName}
-                                </p>
-                              )}
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
-                                <span>{sku}</span>
-                                <span>
-                                  ฿{price.toLocaleString()} × {qty} ={' '}
-                                  <strong style={{ color: 'var(--ink)' }}>฿{(price * qty).toLocaleString()}</strong>
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
-
-            {showVerify && verifyStatus === 'pending' && (
-              <div style={{
-                marginTop: 12, padding: 14, display: 'flex', gap: 10,
-                background: 'var(--amber-soft)', border: '1px solid rgba(154,110,31,0.20)', borderRadius: 'var(--r-md)',
-              }}>
-                <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
-                <div>
-                  <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>ยังไม่พบข้อมูลออเดอร์</p>
-                  <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0, lineHeight: 1.5 }}>
-                    กรุณาตรวจสอบความถูกต้องของข้อมูล — สถานะการสั่งซื้อจะได้รับการตรวจสอบภายใน 1–2 วัน คุณลงทะเบียนต่อได้เลย
-                  </p>
-                </div>
-              </div>
-            )}
-            {showVerify && verifyStatus === 'bq_error' && (
-              <div style={{
-                marginTop: 12, padding: 14, display: 'flex', gap: 10,
-                background: 'var(--amber-soft)', border: '1px solid rgba(154,110,31,0.20)', borderRadius: 'var(--r-md)',
-              }}>
-                <Clock size={15} color="var(--amber)" style={{ flexShrink: 0, marginTop: 1 }} />
-                <div>
-                  <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--amber)', margin: '0 0 2px' }}>ตรวจสอบไม่สำเร็จชั่วคราว</p>
-                  <p style={{ fontSize: 11, color: 'var(--amber)', margin: 0, lineHeight: 1.5 }}>
-                    ลงทะเบียนต่อได้เลย — สถานะการสั่งซื้อจะได้รับการตรวจสอบภายใน 1–2 วัน
-                  </p>
-                </div>
-              </div>
-            )}
-            {showVerify && verifyStatus === 'error' && (
-              <div style={{
-                marginTop: 12, padding: 14,
-                background: 'var(--red-soft)', border: '1px solid rgba(139,58,58,0.18)', borderRadius: 'var(--r-md)',
-              }}>
-                <p style={{ fontSize: 12.5, color: 'var(--red)', margin: 0, fontWeight: 600 }}>
-                  ไม่พบ Order ID นี้ กรุณาตรวจสอบอีกครั้ง
-                </p>
-              </div>
-            )}
-            {showVerify && verifyStatus === 'claimed' && (
-              <div style={{
-                marginTop: 12, padding: 14, display: 'flex', gap: 10,
-                background: 'var(--red-soft)', border: '1px solid rgba(139,58,58,0.18)', borderRadius: 'var(--r-md)',
-              }}>
-                <X size={15} color="var(--red)" style={{ flexShrink: 0, marginTop: 1 }} />
-                <div>
-                  <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--red)', margin: '0 0 2px' }}>ออเดอร์นี้ใช้ไม่ได้</p>
-                  <p style={{ fontSize: 11, color: 'var(--red)', margin: 0 }}>
-                    {verifyMsg || 'ออเดอร์นี้ถูกใช้ลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้'}
-                  </p>
-                </div>
-              </div>
-            )}
+            {lookupOnOrder && renderVerifyResult()}
           </div>
         )}
 
@@ -560,16 +576,28 @@ export default function RegisterPage() {
                 {snReq ? 'จำเป็น' : 'ไม่จำเป็น'}
               </span>
             </div>
-            <input
-              className="field" type="text" placeholder="เช่น SN-ABCD1234567"
-              value={serialNumber}
-              onChange={e => setSerialNumber(e.target.value.toUpperCase())}
-              autoCapitalize="characters" autoComplete="off" spellCheck={false} maxLength={50}
-              style={{ width: '100%', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}
-            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="field" type="text" placeholder="เช่น SN-ABCD1234567"
+                value={serialNumber}
+                onChange={e => { setSerialNumber(e.target.value.toUpperCase()); if (lookupOnSerial && verifyStatus !== 'idle') { setVerifyStatus('idle'); setVerifiedData(null) } }}
+                onKeyDown={e => e.key === 'Enter' && lookupOnSerial && verifyOrder()}
+                autoCapitalize="characters" autoComplete="off" spellCheck={false} maxLength={50}
+                style={{ flex: 1, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}
+              />
+              {lookupOnSerial && (
+                <button onClick={verifyOrder} disabled={verifyStatus === 'loading' || !serialNumber.trim()}
+                  className="btn btn-ink tap-down" style={{ padding: '0 18px' }}>
+                  {verifyStatus === 'loading' ? <Loader2 size={16} className="spinner" /> : <Search size={16} />}
+                </button>
+              )}
+            </div>
             <p style={{ fontSize: 10.5, color: 'var(--ink-mute)', margin: '8px 0 0', lineHeight: 1.5 }}>
-              เลขเครื่องด้านล่าง/หลังกล่องสินค้า — ใช้สำหรับ <strong>การรับประกัน</strong> และ service
+              {lookupOnSerial
+                ? <>เลขเครื่องด้านล่าง/หลังกล่องสินค้า — กด <strong>ค้นหา</strong> เพื่อดึงข้อมูลสินค้า (ถ้ามีในระบบ)</>
+                : <>เลขเครื่องด้านล่าง/หลังกล่องสินค้า — ใช้สำหรับ <strong>การรับประกัน</strong> และ service</>}
             </p>
+            {lookupOnSerial && renderVerifyResult()}
           </div>
         )}
 

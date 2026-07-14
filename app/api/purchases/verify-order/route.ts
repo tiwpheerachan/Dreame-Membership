@@ -1,6 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { verifyOrderInBQVerbose } from '@/lib/bigquery'
+import { verifyOrderInBQVerbose, verifyBySerialInBQVerbose } from '@/lib/bigquery'
 
 export async function POST(req: Request) {
   try {
@@ -8,35 +8,41 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { order_sn, channel } = await req.json()
-    if (!order_sn) return NextResponse.json({ error: 'order_sn required' }, { status: 400 })
+    const body = await req.json()
+    const order_sn = (body.order_sn as string | undefined)?.trim() || ''
+    const serial_number = (body.serial_number as string | undefined)?.trim() || ''
+    const channel = body.channel as string | undefined
 
-    // ── Already claimed? 1 order = 1 claim across the whole system ──
-    // Block early (before BQ) if this order_sn already has a non-REJECTED
+    // หน้าร้าน (STORE) has no Order ID → look up BQ by Serial Number instead.
+    // The SN is also its claim key (stored in order_sn), so dedupe on it too.
+    const bySerial = channel === 'STORE' || (!order_sn && !!serial_number)
+    const claimKey = bySerial ? serial_number : order_sn
+    if (!claimKey) return NextResponse.json({ error: 'order_sn or serial_number required' }, { status: 400 })
+
+    // ── Already claimed? 1 order/unit = 1 claim across the whole system ──
+    // Block early (before BQ) if this key already has a non-REJECTED
     // registration by anyone. Service client needed — RLS hides other users.
     const service = createServiceClient()
     const { data: claimed } = await service
       .from('purchase_registrations')
       .select('user_id, status')
-      .eq('order_sn', String(order_sn).trim())
+      .eq('order_sn', claimKey)
       .neq('status', 'REJECTED')
       .limit(1)
       .maybeSingle()
     if (claimed) {
+      const mine = claimed.user_id === user.id
       return NextResponse.json({
         status: 'ALREADY_CLAIMED',
-        message: claimed.user_id === user.id
-          ? 'คุณลงทะเบียนออเดอร์นี้ไปแล้ว'
-          : 'ออเดอร์นี้ถูกใช้ลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้',
+        message: bySerial
+          ? (mine ? 'คุณลงทะเบียน Serial Number นี้ไปแล้ว' : 'Serial Number นี้ถูกใช้ลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้')
+          : (mine ? 'คุณลงทะเบียนออเดอร์นี้ไปแล้ว' : 'ออเดอร์นี้ถูกใช้ลงทะเบียนไปแล้ว ไม่สามารถใช้ซ้ำได้'),
       })
     }
 
-    // For STORE channel, skip BQ verification
-    if (channel === 'STORE') {
-      return NextResponse.json({ status: 'PENDING', message: 'คำสั่งซื้อหน้าร้านจะได้รับการตรวจสอบโดย Admin' })
-    }
-
-    const result = await verifyOrderInBQVerbose(order_sn.trim())
+    const result = bySerial
+      ? await verifyBySerialInBQVerbose(serial_number)
+      : await verifyOrderInBQVerbose(order_sn)
 
     if (result.status === 'found') {
       return NextResponse.json({ status: 'VERIFIED', order: result.data })
