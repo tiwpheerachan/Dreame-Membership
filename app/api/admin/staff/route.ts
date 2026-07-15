@@ -1,6 +1,9 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
+import { ADMIN_TABS } from '@/lib/admin-tabs'
+
+const VALID_TAB_KEYS = new Set(ADMIN_TABS.map(t => t.key))
 
 async function requireSuperAdmin() {
   const supabase = createClient()
@@ -21,7 +24,7 @@ export async function GET() {
 
   const { data, error } = await auth.service
     .from('admin_staff')
-    .select('id, name, email, role, channel_access, is_active, created_at')
+    .select('id, name, email, role, channel_access, tab_access, is_active, created_at')
     .order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ staff: data })
@@ -35,6 +38,14 @@ export async function POST(req: Request) {
   const { email, name, role, channel_access } = body
   if (!email || !name || !role) {
     return NextResponse.json({ error: 'email, name, role required' }, { status: 400 })
+  }
+
+  // Sanitize per-tab RBAC map { tabKey: view|edit } — drop unknown keys/levels.
+  const tab_access: Record<string, 'view' | 'edit'> = {}
+  if (body.tab_access && typeof body.tab_access === 'object' && !Array.isArray(body.tab_access)) {
+    for (const [k, v] of Object.entries(body.tab_access as Record<string, unknown>)) {
+      if (VALID_TAB_KEYS.has(k) && (v === 'view' || v === 'edit')) tab_access[k] = v
+    }
   }
 
   // Find auth user by email
@@ -52,6 +63,7 @@ export async function POST(req: Request) {
     name,
     role,
     channel_access: channel_access || ['ONLINE'],
+    tab_access,
     is_active: true,
   }).select().single()
 

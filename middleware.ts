@@ -15,6 +15,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 // ──────────────────────────────────────────────────────────────────
 
 export async function middleware(request: NextRequest) {
+  // Expose the pathname to server components — the admin layout reads this to
+  // gate per-tab access (RBAC). Set on request headers so it forwards downstream.
+  request.headers.set('x-admin-pathname', request.nextUrl.pathname)
+
   let response = NextResponse.next({ request: { headers: request.headers } })
 
   const supabase = createServerClient(

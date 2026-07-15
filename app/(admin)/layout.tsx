@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import AdminSidebar from '@/components/admin/AdminSidebar'
 import CommandPalette from '@/components/admin/CommandPalette'
+import { tabKeyForPath, canViewTab, firstAllowedHref, type TabAccess } from '@/lib/admin-tabs'
 import './admin.css'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -19,9 +21,21 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   if (!staff) redirect('/home')
 
+  const role = staff.role as string
+  const tabAccess = (staff.tab_access ?? {}) as TabAccess
+
+  // ── RBAC gate: block direct navigation to a tab the admin can't view ──
+  const path = headers().get('x-admin-pathname') || '/admin'
+  const tabKey = tabKeyForPath(path)
+  if (tabKey && !canViewTab(role, tabAccess, tabKey)) {
+    const fallback = firstAllowedHref(role, tabAccess)
+    // Avoid a redirect loop if even the fallback is the denied path.
+    if (fallback !== path) redirect(fallback)
+  }
+
   return (
     <div className="admin-shell" style={{ display: 'flex' }}>
-      <AdminSidebar staff={staff} />
+      <AdminSidebar staff={{ name: staff.name, role, tab_access: tabAccess }} />
       <main style={{ flex: 1, overflow: 'auto' }}>
         {children}
       </main>

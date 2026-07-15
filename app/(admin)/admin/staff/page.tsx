@@ -2,11 +2,22 @@
 import { useState, useEffect } from 'react'
 import { Plus, X, Edit2, ToggleLeft, ToggleRight } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import { ADMIN_TABS } from '@/lib/admin-tabs'
+
+type TabLevel = 'view' | 'edit'
+type TabAccess = Record<string, TabLevel>
 
 interface Staff {
   id: string; auth_user_id?: string; name: string; email: string;
-  role: string; channel_access: string[]; is_active: boolean; created_at: string;
+  role: string; channel_access: string[]; tab_access?: TabAccess; is_active: boolean; created_at: string;
 }
+
+// Tabs with their section carried down (registry only tags section-starters).
+const TABS_WITH_SECTION = (() => {
+  let sec = 'GENERAL'
+  return ADMIN_TABS.map(t => { if (t.group) sec = t.group; return { ...t, section: sec } })
+})()
+const TAB_SECTIONS = Array.from(new Set(TABS_WITH_SECTION.map(t => t.section)))
 
 const ROLES = [
   { value: 'SUPER_ADMIN',  label: 'Super Admin' },
@@ -30,8 +41,22 @@ export default function AdminStaffPage() {
   const [showForm, setShowForm] = useState(false)
   const [edit, setEdit] = useState<Staff | null>(null)
   const [form, setForm] = useState({ email: '', name: '', role: 'STAFF_ONLINE', online: true, onsite: false })
+  const [tabAccess, setTabAccess] = useState<TabAccess>({})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+
+  function setTabLevel(key: string, level: '' | TabLevel) {
+    setTabAccess(prev => {
+      const next = { ...prev }
+      if (level === '') delete next[key]
+      else next[key] = level
+      return next
+    })
+  }
+  function setAllTabs(level: '' | TabLevel) {
+    if (level === '') { setTabAccess({}); return }
+    setTabAccess(Object.fromEntries(ADMIN_TABS.map(t => [t.key, level])))
+  }
 
   async function load() {
     setLoading(true)
@@ -45,6 +70,7 @@ export default function AdminStaffPage() {
   function openCreate() {
     setEdit(null)
     setForm({ email: '', name: '', role: 'STAFF_ONLINE', online: true, onsite: false })
+    setTabAccess({})  // new staff sees nothing until granted (agreed policy)
     setShowForm(true); setMsg('')
   }
   function openEdit(s: Staff) {
@@ -54,6 +80,7 @@ export default function AdminStaffPage() {
       online: s.channel_access.includes('ONLINE'),
       onsite: s.channel_access.includes('ONSITE'),
     })
+    setTabAccess(s.tab_access || {})
     setShowForm(true); setMsg('')
   }
 
@@ -65,9 +92,11 @@ export default function AdminStaffPage() {
     ]
     const url = edit ? `/api/admin/staff/${edit.id}` : '/api/admin/staff'
     const method = edit ? 'PATCH' : 'POST'
+    // SUPER_ADMIN bypasses tab_access — don't bother sending a map for them.
+    const tab_access = form.role === 'SUPER_ADMIN' ? {} : tabAccess
     const body = edit
-      ? { name: form.name, role: form.role, channel_access }
-      : { email: form.email, name: form.name, role: form.role, channel_access }
+      ? { name: form.name, role: form.role, channel_access, tab_access }
+      : { email: form.email, name: form.name, role: form.role, channel_access, tab_access }
     const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const d = await r.json()
     setSaving(false)
@@ -117,6 +146,7 @@ export default function AdminStaffPage() {
               <th>Email</th>
               <th>Role</th>
               <th>Channel</th>
+              <th>สิทธิ์แท็บ</th>
               <th>วันสร้าง</th>
               <th>สถานะ</th>
               <th></th>
@@ -124,7 +154,7 @@ export default function AdminStaffPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--ink-mute)' }}>กำลังโหลด...</td></tr>
+              <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--ink-mute)' }}>กำลังโหลด...</td></tr>
             ) : list.map(s => (
               <tr key={s.id} style={{ opacity: s.is_active ? 1 : 0.5 }}>
                 <td style={{ fontWeight: 600 }}>{s.name}</td>
@@ -136,6 +166,17 @@ export default function AdminStaffPage() {
                       <span key={c} className="admin-pill">{c}</span>
                     ))}
                   </div>
+                </td>
+                <td style={{ fontSize: 11 }}>
+                  {s.role === 'SUPER_ADMIN'
+                    ? <span className="admin-pill admin-pill-gold">ทุกแท็บ</span>
+                    : (() => {
+                        const n = Object.keys(s.tab_access || {}).length
+                        const e = Object.values(s.tab_access || {}).filter(v => v === 'edit').length
+                        return n === 0
+                          ? <span className="muted">ไม่มีสิทธิ์</span>
+                          : <span className="muted">{n} แท็บ{e > 0 ? ` · แก้ ${e}` : ''}</span>
+                      })()}
                 </td>
                 <td className="muted" style={{ fontSize: 11 }}>{formatDate(s.created_at)}</td>
                 <td>
@@ -214,6 +255,53 @@ export default function AdminStaffPage() {
                   </label>
                 </div>
               </div>
+
+              {/* ── Per-tab permissions (RBAC) ── */}
+              {form.role === 'SUPER_ADMIN' ? (
+                <p style={{ fontSize: 11.5, color: 'var(--ink-mute)', padding: '10px 12px', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)' }}>
+                  ⭐ Super Admin เห็นและจัดการ<strong>ทุกแท็บ</strong>โดยอัตโนมัติ
+                </p>
+              ) : (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-mute)' }}>สิทธิ์รายแท็บ</label>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button type="button" onClick={() => setAllTabs('view')} className="admin-btn admin-btn-ghost" style={{ padding: '3px 8px', fontSize: 10.5 }}>ดูทั้งหมด</button>
+                      <button type="button" onClick={() => setAllTabs('edit')} className="admin-btn admin-btn-ghost" style={{ padding: '3px 8px', fontSize: 10.5 }}>แก้ทั้งหมด</button>
+                      <button type="button" onClick={() => setAllTabs('')} className="admin-btn admin-btn-ghost" style={{ padding: '3px 8px', fontSize: 10.5 }}>ล้าง</button>
+                    </div>
+                  </div>
+                  <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--admin-border)', borderRadius: 'var(--r-md)', padding: 8 }}>
+                    {TAB_SECTIONS.map(sec => (
+                      <div key={sec} style={{ marginBottom: 6 }}>
+                        <p style={{ margin: '4px 0 2px', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>{sec}</p>
+                        {TABS_WITH_SECTION.filter(t => t.section === sec).map(t => {
+                          const lvl: '' | TabLevel = tabAccess[t.key] || ''
+                          return (
+                            <div key={t.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 2px' }}>
+                              <span style={{ fontSize: 12 }}>{t.label}</span>
+                              <div style={{ display: 'flex', gap: 3 }}>
+                                {([['', 'ไม่มี'], ['view', 'ดู'], ['edit', 'แก้']] as Array<['' | TabLevel, string]>).map(([v, lab]) => {
+                                  const on = lvl === v
+                                  return (
+                                    <button key={v} type="button" onClick={() => setTabLevel(t.key, v)} style={{
+                                      padding: '3px 9px', fontSize: 11, borderRadius: 6, cursor: 'pointer',
+                                      border: '1px solid var(--admin-border)', fontFamily: 'inherit',
+                                      fontWeight: on ? 700 : 500,
+                                      background: on ? (v === 'edit' ? 'var(--green)' : v === 'view' ? 'var(--ink)' : 'var(--bg-soft)') : '#fff',
+                                      color: on ? (v ? '#fff' : 'var(--ink)') : 'var(--ink-mute)',
+                                    }}>{lab}</button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {msg && <p style={{ fontSize: 12, marginTop: 12, color: msg === 'สำเร็จ' ? 'var(--green)' : 'var(--red)' }}>{msg}</p>}

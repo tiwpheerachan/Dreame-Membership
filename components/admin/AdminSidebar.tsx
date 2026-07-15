@@ -8,39 +8,30 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { ADMIN_TABS, canViewTab, type TabAccess } from '@/lib/admin-tabs'
 
-const NAV: Array<{ href: string; icon: typeof Users; label: string; group?: string }> = [
-  { href: '/admin',                    icon: LayoutDashboard, label: 'Dashboard' },
+// Icon per tab key (kept here — icons are client-only; the registry is server-safe)
+const TAB_ICONS: Record<string, typeof Users> = {
+  dashboard: LayoutDashboard, members: Users, segments: BarChart3,
+  purchases: Package, pending: Clock, import: Activity,
+  coupons: Tag, promotions: Megaphone, branches: Store, announcements: Bell,
+  campaigns: CalendarHeart, 'tier-up': TrendingUp,
+  rewards: Gift, redemptions: Truck, privileges: Sparkles, 'points-expiring': AlertTriangle,
+  staff: UserCog, audit: History, health: Heart, 'my-activity': History,
+}
 
-  { href: '/admin/members',            icon: Users,           label: 'สมาชิก',          group: 'CUSTOMERS' },
-  { href: '/admin/segments',           icon: BarChart3,       label: 'Segmentation' },
-
-  { href: '/admin/purchases',          icon: Package,         label: 'สินค้าทั้งหมด',     group: 'OPERATIONS' },
-  { href: '/admin/pending',            icon: Clock,           label: 'รอตรวจสอบ' },
-  { href: '/admin/import',             icon: Activity,        label: 'นำเข้า CSV' },
-
-  { href: '/admin/coupons',            icon: Tag,             label: 'คูปอง',           group: 'MARKETING' },
-  { href: '/admin/promotions',         icon: Megaphone,       label: 'โปรโมชั่น' },
-  { href: '/admin/branches',           icon: Store,           label: 'สาขา' },
-  { href: '/admin/announcements',      icon: Bell,            label: 'ประกาศ' },
-  { href: '/admin/campaigns',          icon: CalendarHeart,   label: 'แคมเปญ' },
-  { href: '/admin/insights/tier-up',   icon: TrendingUp,      label: 'Tier-up forecast' },
-
-  { href: '/admin/rewards',            icon: Gift,            label: 'ของรางวัล',        group: 'LOYALTY' },
-  { href: '/admin/redemptions',        icon: Truck,           label: 'การจัดส่ง' },
-  { href: '/admin/privileges',         icon: Sparkles,        label: 'สิทธิพิเศษ (น้ำยาฟรี)' },
-  { href: '/admin/points/expiring',    icon: AlertTriangle,   label: 'แต้มจะหมดอายุ' },
-
-  { href: '/admin/staff',              icon: UserCog,         label: 'พนักงาน',         group: 'SETTINGS' },
-  { href: '/admin/audit',              icon: History,         label: 'Audit log' },
-  { href: '/admin/health',             icon: Heart,           label: 'System health' },
-  { href: '/admin/my-activity',        icon: History,         label: 'ประวัติของฉัน' },
-]
-
-interface Staff { name: string; role: string }
+interface Staff { name: string; role: string; tab_access?: TabAccess }
 
 export default function AdminSidebar({ staff }: { staff: Staff }) {
   const pathname = usePathname()
+  // Carry each tab's section down (registry only tags section-starters), then
+  // filter — so a visible tab always keeps its group header even if the
+  // section-starter above it was hidden by permissions.
+  let curSection: string | undefined
+  const NAV = ADMIN_TABS
+    .map(t => { if (t.group) curSection = t.group; return { ...t, section: curSection } })
+    .filter(t => canViewTab(staff.role, staff.tab_access, t.key))
+    .map(t => ({ href: t.href, icon: TAB_ICONS[t.key] || Package, label: t.label, section: t.section }))
   const router = useRouter()
   const supabase = createClient()
 
@@ -98,19 +89,20 @@ export default function AdminSidebar({ staff }: { staff: Staff }) {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: 12, overflowY: 'auto' }}>
-        {NAV.map(({ href, icon: Icon, label, group }, i) => {
+        {NAV.map(({ href, icon: Icon, label, section }, i) => {
           const exact = href === '/admin'
           const active = exact ? pathname === href : pathname.startsWith(href)
+          const showHeader = !!section && section !== NAV[i - 1]?.section
           return (
             <div key={href}>
-              {group && (
+              {showHeader && (
                 <p style={{
                   margin: i === 0 ? '0 0 4px' : '14px 0 4px',
                   padding: '0 14px',
                   fontSize: 9.5, fontWeight: 700, letterSpacing: '0.16em',
                   color: 'var(--ink-faint)', textTransform: 'uppercase',
                 }}>
-                  {group}
+                  {section}
                 </p>
               )}
               <Link href={href} className={`admin-side-link ${active ? 'admin-side-link-active' : ''}`}>

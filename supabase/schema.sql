@@ -248,6 +248,7 @@ CREATE TABLE public.admin_staff (
   email           VARCHAR(255),
   role            admin_role NOT NULL DEFAULT 'STAFF_ONLINE',
   channel_access  TEXT[] NOT NULL DEFAULT ARRAY['ONLINE'],
+  tab_access      JSONB NOT NULL DEFAULT '{}'::jsonb,  -- RBAC per-tab {tabKey: view|edit}; SUPER_ADMIN bypasses
   is_active       BOOLEAN NOT NULL DEFAULT true,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
