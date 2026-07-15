@@ -11,13 +11,14 @@ import { logAdminAction } from '@/lib/audit'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ArrowLeft, Phone, Mail, MapPin, Award, Star, Shield,
+  ArrowLeft, Phone, Mail, Award, Star, Shield,
   TrendingUp, Ticket, ShoppingBag, Activity as ActivityIcon,
   Calendar, Sparkles, CheckCircle, AlertCircle, XCircle,
   ExternalLink, FileText, CreditCard, ChevronRight, Clock,
 } from 'lucide-react'
 import { formatDate, formatDateTime, warrantyDaysLeft } from '@/lib/utils'
 import AdjustPointsForm from '@/components/admin/AdjustPointsForm'
+import MemberAccountActions from '@/components/admin/MemberAccountActions'
 import MemberTags from '@/components/admin/MemberTags'
 import MemberNotes from '@/components/admin/MemberNotes'
 import ApprovePurchaseButtons from '@/components/admin/ApprovePurchaseButtons'
@@ -131,14 +132,17 @@ export default async function MemberDetailPage({
 
   if (!user) notFound()
 
-  // Audit "viewed" (fire-and-forget)
+  // Audit "viewed" (fire-and-forget) + capture the viewing admin's role so we
+  // can gate the sensitive account actions (password / login-link) to SUPER_ADMIN.
+  let currentStaffRole: string | null = null
   try {
     const auth = createClient()
     const { data: { user: authUser } } = await auth.auth.getUser()
     if (authUser) {
       const { data: staff } = await supabase.from('admin_staff')
-        .select('id, name').eq('auth_user_id', authUser.id).eq('is_active', true).single()
+        .select('id, name, role').eq('auth_user_id', authUser.id).eq('is_active', true).single()
       if (staff) {
+        currentStaffRole = staff.role
         await logAdminAction({
           staffId: staff.id, action: 'MEMBER_VIEWED', targetType: 'user',
           targetId: user.id, userId: user.id,
@@ -147,6 +151,7 @@ export default async function MemberDetailPage({
       }
     }
   } catch {/* don't break render */}
+  const isSuperAdmin = currentStaffRole === 'SUPER_ADMIN'
 
   const staffMap: Record<string, string> = Object.fromEntries(
     (staffList || []).map((s: { id: string; name: string }) => [s.id, s.name])
@@ -276,16 +281,18 @@ export default async function MemberDetailPage({
             <PropRow label="คูปองหมดอายุ" value={expiredCoupons.length} />
           </div>
 
-          {/* Contact */}
-          {(user.address) && (
-            <div className="admin-card">
-              <PropHeader>ที่อยู่</PropHeader>
-              <div className="px-4 py-3 text-xs flex items-start gap-2" style={{ color: 'var(--admin-ink-soft)' }}>
-                <MapPin size={12} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--admin-ink-mute)' }} />
-                <span className="break-words">{user.address}</span>
-              </div>
-            </div>
-          )}
+          {/* Contact / account — view + edit + (super-admin) password & login link */}
+          <MemberAccountActions
+            userId={user.id}
+            isSuperAdmin={isSuperAdmin}
+            initial={{
+              full_name: user.full_name ?? null,
+              email: user.email ?? null,
+              phone: user.phone ?? null,
+              address: user.address ?? null,
+              date_of_birth: user.date_of_birth ?? null,
+            }}
+          />
 
           {/* Tags & flags */}
           <div className="admin-card p-4">

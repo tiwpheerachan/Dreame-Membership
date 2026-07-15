@@ -496,6 +496,9 @@ function PendingDetail({ item, onRemove }: { item: PendingPurchase; onRemove: ()
         </span>
       </div>
 
+      {/* Products the customer registered (images + items + serial numbers) */}
+      <ProductsCard item={item} />
+
       {/* Action panel */}
       <div className="admin-card" style={{ padding: 14 }}>
         <p style={{ fontSize: 10, color: 'var(--ink-mute)', fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', margin: '0 0 10px' }}>
@@ -586,7 +589,6 @@ function PendingDetail({ item, onRemove }: { item: PendingPurchase; onRemove: ()
           {item.invoice_no && <Info label="Invoice" value={item.invoice_no} mono />}
           <Info label="ช่องทาง" value={channelLabel(item.channel)} />
           {item.purchase_date && <Info label="วันที่ซื้อ" value={formatDate(item.purchase_date)} />}
-          {item.serial_number && <Info label="Serial" value={item.serial_number} mono />}
           {item.sku && <Info label="SKU" value={item.sku} mono />}
           {Number(item.total_amount || 0) > 0 && <Info label="ยอดรวม" value={`฿${Number(item.total_amount).toLocaleString()}`} bold />}
           <Info label="ลงทะเบียนเมื่อ" value={formatDateTime(item.created_at)} />
@@ -604,8 +606,9 @@ function PendingDetail({ item, onRemove }: { item: PendingPurchase; onRemove: ()
         </p>
         {item.user_id && (
           <Link href={`/admin/members/${item.user_id}`}
-            style={{ marginTop: 8, fontSize: 11, color: 'var(--gold-deep)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
-            ดูโปรไฟล์เต็ม <ChevronRight size={11} />
+            className="admin-btn admin-btn-ghost"
+            style={{ marginTop: 10, width: '100%', justifyContent: 'center', fontSize: 12, gap: 6, fontWeight: 600 }}>
+            <ExternalLink size={12} /> ดูโปรไฟล์ลูกค้า
           </Link>
         )}
       </div>
@@ -625,6 +628,82 @@ function PendingDetail({ item, onRemove }: { item: PendingPurchase; onRemove: ()
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={item.receipt_image_url} alt="receipt"
             style={{ width: '100%', maxHeight: 320, objectFit: 'contain', borderRadius: 'var(--r-sm)', background: 'var(--bg-soft)' }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Product(s) the customer registered — pulls images/items from the BQ snapshot
+// when available, falls back to the stored model_name/SKU otherwise. Also lists
+// every serial number (an order can carry several, stored comma-separated).
+function ProductsCard({ item }: { item: PendingPurchase }) {
+  const bq = item.bq_raw_data as { items?: Array<Record<string, unknown>> } | null
+  const items = Array.isArray(bq?.items) ? (bq!.items as Array<Record<string, unknown>>) : []
+  const serials = (item.serial_number || '').split(',').map(s => s.trim()).filter(Boolean)
+
+  return (
+    <div className="admin-card" style={{ padding: 14 }}>
+      <p style={{ fontSize: 10, color: 'var(--ink-mute)', fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', margin: '0 0 10px' }}>
+        สินค้าที่ลงทะเบียน{items.length > 1 ? ` (${items.length})` : ''}
+      </p>
+
+      {items.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {items.map((it, i) => {
+            const itemName = (it.item_name as string) || ''
+            const modelName = (it.model_name as string) || ''
+            const name = itemName || modelName || '—'
+            const showModel = modelName && itemName && modelName !== itemName
+            const sku = (it.item_sku as string) || (it.model_sku as string) || ''
+            const qty = Number(it.quantity || 0)
+            const price = Number(it.price || 0)
+            const img = (it.image_url as string | null) || null
+            return (
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: 8, background: 'var(--bg-soft)', borderRadius: 'var(--r-sm)' }}>
+                {img ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={img} alt={name} style={{ width: 52, height: 52, flexShrink: 0, objectFit: 'cover', borderRadius: 'var(--r-sm)', background: '#fff', border: '1px solid var(--admin-border)' }} />
+                ) : (
+                  <ProductThumb bqRaw={item.bq_raw_data} channel={item.channel} size={52} />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: '0 0 2px', fontSize: 12.5, fontWeight: 600, lineHeight: 1.35 }}>{name}</p>
+                  {showModel && <p style={{ margin: '0 0 2px', fontSize: 10.5, color: 'var(--ink-mute)' }}>รุ่น: {modelName}</p>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11, color: 'var(--ink-soft)' }}>
+                    <span className="num" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sku}</span>
+                    {(qty > 0 || price > 0) && (
+                      <span style={{ flexShrink: 0 }}>฿{price.toLocaleString()} × {qty} = <strong style={{ color: 'var(--ink)' }}>฿{(price * qty).toLocaleString()}</strong></span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ProductThumb bqRaw={item.bq_raw_data} channel={item.channel} size={48} />
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600 }}>{item.model_name || 'ยังไม่มีข้อมูลสินค้า (รอตรวจสอบ)'}</p>
+            {item.sku && <p className="num muted" style={{ margin: '2px 0 0', fontSize: 10.5 }}>SKU: {item.sku}</p>}
+          </div>
+        </div>
+      )}
+
+      {serials.length > 0 && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--admin-border)' }}>
+          <p style={{ fontSize: 9.5, color: 'var(--ink-mute)', margin: '0 0 6px', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }}>
+            Serial Number{serials.length > 1 ? ` (${serials.length})` : ''}
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {serials.map(s => (
+              <span key={s} style={{
+                padding: '4px 9px', background: 'var(--bg-soft)', border: '1px solid var(--admin-border)',
+                borderRadius: 'var(--r-pill)', fontSize: 11.5, fontFamily: 'var(--font-mono)', color: 'var(--ink)',
+              }}>{s}</span>
+            ))}
+          </div>
         </div>
       )}
     </div>

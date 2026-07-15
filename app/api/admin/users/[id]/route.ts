@@ -47,30 +47,71 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     reason = (body.reason || '').toString().trim() || null
   }
 
+  // ── Editable profile fields ──
+  // Trim strings; empty → null (so admins can clear a field). email/phone also
+  // sync to auth.users below (users.id IS the auth user id), because that's what
+  // the customer's OTP / magic-link login actually uses.
+  const norm = (v: unknown) => {
+    const s = (v ?? '').toString().trim()
+    return s === '' ? null : s
+  }
+  const PROFILE_FIELDS = ['full_name', 'email', 'phone', 'address', 'date_of_birth'] as const
+  for (const f of PROFILE_FIELDS) {
+    if (body[f] !== undefined) updates[f] = norm(body[f])
+  }
+  if (updates.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updates.email as string)) {
+    return NextResponse.json({ error: 'อีเมลไม่ถูกต้อง' }, { status: 400 })
+  }
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'no updatable fields provided' }, { status: 400 })
   }
 
-  // Read current to compare
-  const { data: before } = await service.from('users').select('tier').eq('id', params.id).single()
+  // Read current to compare (for audit + auth sync)
+  const { data: before } = await service.from('users')
+    .select('tier, full_name, email, phone, address, date_of_birth').eq('id', params.id).single()
   if (!before) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  // Sync EMAIL to auth.users (the email magic-link / email+password identity)
+  // BEFORE the profile row — if it fails (e.g. email already used by another
+  // auth user) we bail without a half-edit. email_confirm:true so the admin's
+  // value is authoritative (no confirmation email round-trip).
+  // PHONE is deliberately NOT synced to auth: this project's Supabase phone
+  // provider rejects admin phone writes (E.164 → "unexpected_failure"), and the
+  // phone-OTP flow sets auth.phone itself at login. Editing phone here updates
+  // the CRM contact value only.
+  if ('email' in updates && updates.email !== before.email && updates.email) {
+    const { error: authErr } = await service.auth.admin.updateUserById(
+      params.id, { email: updates.email as string, email_confirm: true },
+    )
+    if (authErr) {
+      return NextResponse.json({ error: `เปลี่ยนอีเมล login ไม่สำเร็จ: ${authErr.message}` }, { status: 400 })
+    }
+  }
 
   const { error } = await service.from('users').update(updates).eq('id', params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
   if (updates.tier && updates.tier !== before.tier) {
     await logAdminAction({
-      staffId: staff.id,
-      action: 'TIER_OVERRIDDEN',
-      targetType: 'user',
-      targetId: params.id,
-      userId: params.id,
-      detail: {
-        staff_name: staff.name,
-        old_tier: before.tier,
-        new_tier: updates.tier,
-        reason,
-      },
+      staffId: staff.id, action: 'TIER_OVERRIDDEN', targetType: 'user',
+      targetId: params.id, userId: params.id,
+      detail: { staff_name: staff.name, old_tier: before.tier, new_tier: updates.tier, reason },
+    })
+  }
+
+  // Audit profile-field changes (record only the fields that actually changed)
+  const changed: Record<string, { from: unknown; to: unknown }> = {}
+  for (const f of PROFILE_FIELDS) {
+    if (f in updates && updates[f] !== (before as Record<string, unknown>)[f]) {
+      changed[f] = { from: (before as Record<string, unknown>)[f], to: updates[f] }
+    }
+  }
+  if (Object.keys(changed).length > 0) {
+    await logAdminAction({
+      staffId: staff.id, action: 'MEMBER_EDITED', targetType: 'user',
+      targetId: params.id, userId: params.id,
+      detail: { staff_name: staff.name, changed },
     })
   }
 
