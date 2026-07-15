@@ -45,6 +45,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'ต้องมี Order ID หรือ Serial Number อย่างน้อยหนึ่งอย่าง' }, { status: 400 })
     }
 
+    // The single "หน้าร้าน" button (channel STORE) covers both Brand Shop and
+    // walk-in store. When the BQ serial lookup tells us the source, split it so
+    // the points rate + admin review queue are correct:
+    //   shop_type 'brand_shop' → Brand Shop (500฿=2pt) · else → หน้าร้าน (500฿=1pt)
+    // Claim key stays the SN (computed above) regardless of the detected channel.
+    let effectiveChannel = channel
+    if (channel === 'STORE' && bqData?.shop_type) {
+      effectiveChannel = bqData.shop_type === 'brand_shop' ? 'BRANDSHOP' : 'STORE'
+    }
+
     const service = createServiceClient()
 
     // ── Global duplicate guard: 1 order = 1 claim across the WHOLE system ──
@@ -95,7 +105,7 @@ export async function POST(req: Request) {
         user_id: user.id,
         order_sn: claimKey,
         invoice_no: invoice_no || null,
-        channel,
+        channel: effectiveChannel,
         channel_type,
         sku: firstItem?.item_sku || null,
         model_name: firstItem?.item_name || null,

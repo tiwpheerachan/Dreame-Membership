@@ -26,15 +26,15 @@ interface ChannelDef {
 // Matrix (ยืนยันกับลูกค้าแล้ว):
 //   Platform (Shopee/Lazada/TikTok) : OrderID บังคับ · SN ไม่บังคับ · ใบเสร็จ ไม่ต้อง · ค้น BQ (order) · ให้แต้มอัตโนมัติ
 //   Website (Shopify)               : OrderID บังคับ · SN ไม่บังคับ · ใบเสร็จ ไม่ต้อง · ค้น BQ (order) · ให้แต้มอัตโนมัติ
-//   Brand Shop                      : OrderID บังคับ · SN ไม่บังคับ · ใบเสร็จ บังคับ · ค้น BQ (order) · รอแอดมินยืนยัน
-//   หน้าร้าน                          : OrderID ไม่ต้อง · SN บังคับ · ใบเสร็จ บังคับ · ค้น BQ (serial) · รอแอดมินยืนยัน
+//   หน้าร้าน (รวม Brand Shop)          : OrderID ไม่บังคับ · SN บังคับ · ใบเสร็จ บังคับ · ค้น BQ (serial) · รอแอดมินยืนยัน
+//     → ปุ่มเดียว ค้นด้วย SN แล้วระบบแยกเองจาก BQ shop_type ว่าเป็น Brand Shop
+//       (คิดแต้ม 2×) หรือหน้าร้านทั่วไป (1×) — แอดมินหน้ารอตรวจสอบเห็นแยกให้
 const CHANNELS: ChannelDef[] = [
   { value: 'SHOPEE',    label: 'Shopee',     orderId: 'req', sn: 'opt', receipt: 'off', lookupBy: 'order',  autoAward: true,  channelType: 'ONLINE' },
   { value: 'LAZADA',    label: 'Lazada',     orderId: 'req', sn: 'opt', receipt: 'off', lookupBy: 'order',  autoAward: true,  channelType: 'ONLINE' },
   { value: 'TIKTOK',    label: 'TikTok',     orderId: 'req', sn: 'opt', receipt: 'off', lookupBy: 'order',  autoAward: true,  channelType: 'ONLINE' },
   { value: 'WEBSITE',   label: 'Website',    orderId: 'req', sn: 'opt', receipt: 'off', lookupBy: 'order',  autoAward: true,  channelType: 'ONLINE' },
-  { value: 'BRANDSHOP', label: 'Brand Shop', orderId: 'req', sn: 'opt', receipt: 'req', lookupBy: 'order',  autoAward: false, channelType: 'ONSITE' },
-  { value: 'STORE',     label: 'หน้าร้าน',    orderId: 'off', sn: 'req', receipt: 'req', lookupBy: 'serial', autoAward: false, channelType: 'ONSITE' },
+  { value: 'STORE',     label: 'หน้าร้าน',    orderId: 'opt', sn: 'req', receipt: 'req', lookupBy: 'serial', autoAward: false, channelType: 'ONSITE' },
 ]
 const defOf = (v: string): ChannelDef => CHANNELS.find(c => c.value === v) ?? CHANNELS[0]
 
@@ -256,7 +256,7 @@ export default function RegisterPage() {
   const helpText = autoAward
     ? 'กรอก Order ID เพื่อตรวจสอบ · Serial Number ไม่บังคับ · เพิ่มได้หลายออเดอร์'
     : lookupOnSerial
-      ? 'กรอก Serial Number (ค้นหาสินค้าได้) และแนบใบเสร็จ · ไม่ต้องมี Order ID · รอแอดมินยืนยัน'
+      ? 'กรอก Serial Number (ค้นหาสินค้าได้) และแนบใบเสร็จ · Order ID กรอกหรือไม่ก็ได้ · รอแอดมินยืนยัน'
       : 'กรอก Order ID (ค้นหาสินค้าได้) และแนบใบเสร็จ · Serial Number ไม่บังคับ · รอแอดมินยืนยัน'
 
   function stateLabel(s: OrderEntry['state']) {

@@ -186,6 +186,9 @@ export interface BQOrderData {
   order_status?: string | null
   total_amount: number
   items: BQOrderItem[]
+  // Offline source classifier from BQ (serial lookup only): 'brand_shop' →
+  // Brand Shop, else หน้าร้าน. Used to auto-assign the channel on register.
+  shop_type?: string | null
 }
 // Alias for back-compat
 export type BQOrder = BQOrderData

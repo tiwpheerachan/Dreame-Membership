@@ -189,9 +189,15 @@ export async function verifyOrderInBQVerbose(order_sn: string): Promise<VerifyRe
 
 // ============================================================
 // Verify by SERIAL NUMBER — for หน้าร้าน (STORE) which has no Order ID.
-// `serial_numbers` in order_items is a comma-separated list (an order can ship
-// several units), so we match the entered SN as a *member* of that list, not
-// by equality. A physical SN belongs to exactly one order, so a hit is unique.
+// `serial_numbers` in order_items is a comma-separated list (ONE order line can
+// carry MANY units, e.g. "SN1,SN2,...,SN6" = 6 units in a single row), so we
+// match the entered SN as a *member* of that list, not by equality.
+//
+// A serial = ONE physical unit. We return just THAT unit — item qty 1 at the
+// per-unit price — NOT the whole order line. Returning the line would overstate
+// quantity (6 ชิ้น) and amount (฿ ×6) vs what the customer actually owns.
+// `price` is per-unit; fall back to buyer_paid/quantity when price is 0 (some
+// b2b/jst rows have buyer_paid = 0 but a valid unit price).
 // ============================================================
 export async function verifyBySerialInBQVerbose(serial: string): Promise<VerifyResult> {
   let bq: BigQuery
@@ -203,6 +209,8 @@ export async function verifyBySerialInBQVerbose(serial: string): Promise<VerifyR
 
   const normalized = serial.trim().toUpperCase()
   try {
+    // The WHERE already narrows to the single SKU line holding this serial;
+    // GROUP BY order_sn collapses any duplicate source rows for that line.
     const [rows] = await bq.query({
       query: `
         SELECT
@@ -211,11 +219,17 @@ export async function verifyBySerialInBQVerbose(serial: string): Promise<VerifyR
           ANY_VALUE(order_status) AS order_status,
           CAST(ANY_VALUE(order_create_time) AS STRING) AS order_create_time,
           CAST(ANY_VALUE(order_date)        AS STRING) AS order_date,
-          SUM(buyer_paid) AS total_amount,
-          ARRAY_AGG(STRUCT(
-            item_id, model_id, item_name, item_sku,
-            model_name, model_sku, quantity, price, buyer_paid, image_url
-          )) AS items
+          ANY_VALUE(item_id)    AS item_id,
+          ANY_VALUE(model_id)   AS model_id,
+          ANY_VALUE(item_name)  AS item_name,
+          ANY_VALUE(item_sku)   AS item_sku,
+          ANY_VALUE(model_name) AS model_name,
+          ANY_VALUE(model_sku)  AS model_sku,
+          ANY_VALUE(price)      AS price,
+          ANY_VALUE(buyer_paid) AS buyer_paid,
+          ANY_VALUE(quantity)   AS quantity,
+          ANY_VALUE(image_url)  AS image_url,
+          ANY_VALUE(shop_type)  AS shop_type
         FROM \`${PROJECT}.${DATASET}.${T_ITEMS}\`
         WHERE serial_numbers IS NOT NULL AND serial_numbers != ''
           AND EXISTS (
@@ -227,13 +241,41 @@ export async function verifyBySerialInBQVerbose(serial: string): Promise<VerifyR
       `,
       params: { serial: normalized },
     })
-    if (rows && rows.length === 1) return { status: 'found', data: mapRow(rows[0]) }
-    if (rows && rows.length > 1) {
+    if (!rows || rows.length === 0) return { status: 'not_found' }
+    if (rows.length > 1) {
       // A single physical SN shouldn't map to >1 order — treat as inconclusive.
       console.warn(`[BQ] serial "${normalized}" matched ${rows.length}+ orders — ambiguous, not matching`)
       return { status: 'not_found' }
     }
-    return { status: 'not_found' }
+
+    const r = rows[0] as Record<string, unknown>
+    const priceNum  = Number(r.price || 0)
+    const qtyNum    = Number(r.quantity || 0)
+    const buyerPaid = Number(r.buyer_paid || 0)
+    const unitPrice = priceNum > 0 ? priceNum : (qtyNum > 0 ? buyerPaid / qtyNum : buyerPaid)
+    const data: BQOrderData = {
+      order_sn:          String(r.order_sn),
+      platform:          String(r.platform || ''),
+      order_status:      (r.order_status as string | null) ?? null,
+      order_create_time: r.order_create_time as string,
+      order_date:        r.order_date as string,
+      total_amount:      unitPrice,
+      // brand_shop → Brand Shop channel; anything else → หน้าร้าน (register maps this)
+      shop_type:         (r.shop_type as string | null) ?? null,
+      items: [{
+        item_id:    String(r.item_id ?? ''),
+        model_id:   String(r.model_id ?? ''),
+        item_name:  String(r.item_name ?? ''),
+        item_sku:   String(r.item_sku ?? ''),
+        model_name: String(r.model_name ?? ''),
+        model_sku:  String(r.model_sku ?? ''),
+        quantity:   1,
+        price:      unitPrice,
+        buyer_paid: unitPrice,
+        image_url:  (r.image_url as string | null) ?? null,
+      }],
+    }
+    return { status: 'found', data }
   } catch (e) {
     return { status: 'error', error: (e as Error).message, attempted: [{ view: `${T_ITEMS} (serial)`, error: (e as Error).message }] }
   }
