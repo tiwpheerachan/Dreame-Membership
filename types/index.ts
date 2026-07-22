@@ -48,6 +48,7 @@ export interface PurchaseRegistration {
   purchase_date: string | null
   total_amount: number
   receipt_image_url: string | null
+  receipt_image_urls?: string[] | null
   bq_verified: boolean
   bq_verified_at: string | null
   bq_raw_data: BQOrderData | null

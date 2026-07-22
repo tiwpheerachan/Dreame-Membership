@@ -26,6 +26,7 @@ export type PendingPurchase = {
   total_amount: number | null
   purchase_date?: string | null
   receipt_image_url: string | null
+  receipt_image_urls?: string[] | null
   admin_note?: string | null
   bq_raw_data?: Record<string, unknown> | null
   users: {
@@ -332,7 +333,7 @@ function PendingRow({
       <td className="num" style={{ fontSize: 11 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {item.order_sn}
-          {item.receipt_image_url && (
+          {(item.receipt_image_urls?.length || item.receipt_image_url) && (
             <ExternalLink size={10} color="var(--ink-faint)" />
           )}
         </div>
@@ -613,23 +614,30 @@ function PendingDetail({ item, onRemove }: { item: PendingPurchase; onRemove: ()
         )}
       </div>
 
-      {/* Receipt */}
-      {item.receipt_image_url && (
-        <div className="admin-card" style={{ padding: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <p style={{ fontSize: 10, color: 'var(--ink-mute)', fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', margin: 0 }}>
-              ใบเสร็จ
+      {/* Receipt (รองรับหลายรูป) */}
+      {(() => {
+        const imgs = item.receipt_image_urls?.length ? item.receipt_image_urls : (item.receipt_image_url ? [item.receipt_image_url] : [])
+        if (imgs.length === 0) return null
+        return (
+          <div className="admin-card" style={{ padding: 14 }}>
+            <p style={{ fontSize: 10, color: 'var(--ink-mute)', fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', margin: '0 0 8px' }}>
+              ใบเสร็จ{imgs.length > 1 ? ` (${imgs.length})` : ''}
             </p>
-            <a href={item.receipt_image_url} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: 11, color: 'var(--gold-deep)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-              เปิดเต็ม <ExternalLink size={11} />
-            </a>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {imgs.map((url, i) => (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', position: 'relative' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt={`receipt ${i + 1}`}
+                    style={{ width: '100%', maxHeight: 320, objectFit: 'contain', borderRadius: 'var(--r-sm)', background: 'var(--bg-soft)' }} />
+                  <span style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(10,9,7,0.7)', color: '#fff', fontSize: 10, padding: '2px 6px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                    เปิดเต็ม <ExternalLink size={10} />
+                  </span>
+                </a>
+              ))}
+            </div>
           </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.receipt_image_url} alt="receipt"
-            style={{ width: '100%', maxHeight: 320, objectFit: 'contain', borderRadius: 'var(--r-sm)', background: 'var(--bg-soft)' }} />
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

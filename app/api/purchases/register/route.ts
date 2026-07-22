@@ -19,7 +19,10 @@ export async function POST(req: Request) {
     const invoice_no    = (formData.get('invoice_no') as string | null)?.trim() || ''
     const address       = (formData.get('address') as string | null)?.trim() || ''
     const bqDataStr     = formData.get('bq_data') as string | null
-    const receiptFile   = formData.get('receipt') as File | null
+    // ใบเสร็จหลายรูปได้ (field 'receipt' ซ้ำได้) — กรองเฉพาะไฟล์ที่มีข้อมูลจริง
+    const receiptFiles  = formData.getAll('receipt').filter(
+      (f): f is File => f instanceof File && f.size > 0,
+    )
 
     // Parse BQ data early — we dedupe & store on the CANONICAL order_sn.
     let bqData: BQOrderData | null = null
@@ -82,13 +85,15 @@ export async function POST(req: Request) {
       }, { status: 409 })
     }
 
-    // Upload receipt with validation
-    let receipt_image_url: string | null = null
-    if (receiptFile && receiptFile.size > 0) {
-      const { url, error } = await uploadToSupabase(service, receiptFile, 'receipts', 'receipt')
+    // Upload every receipt image. receipt_image_url = รูปแรก (back-compat),
+    // receipt_image_urls = ทุกรูป.
+    const receiptUrls: string[] = []
+    for (const file of receiptFiles) {
+      const { url, error } = await uploadToSupabase(service, file, 'receipts', 'receipt')
       if (error) return NextResponse.json({ error }, { status: 400 })
-      receipt_image_url = url ?? null
+      if (url) receiptUrls.push(url)
     }
+    const receipt_image_url = receiptUrls[0] ?? null
 
     // First item from BQ
     const firstItem = bqData?.items?.[0]
@@ -113,6 +118,7 @@ export async function POST(req: Request) {
         purchase_date: bqData?.order_date || null,
         total_amount: bqData?.total_amount || 0,
         receipt_image_url,
+        receipt_image_urls: receiptUrls.length ? receiptUrls : null,
         warranty_months: warrantyMonths,
         warranty_start: purchaseDate.toISOString().split('T')[0],
         warranty_end: warrantyEnd.toISOString().split('T')[0],

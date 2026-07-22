@@ -338,26 +338,31 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
           </div>
         )}
 
-        {/* ── Receipt ── */}
-        {p.receipt_image_url && (
-          <div className="surface" style={{ padding: 18 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <FileText size={14} color="var(--ink-mute)" />
-              <p className="kicker" style={{ margin: 0 }}>ใบเสร็จ</p>
-              <a href={p.receipt_image_url} target="_blank" rel="noopener noreferrer"
-                style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--gold-deep)',
-                  display: 'inline-flex', alignItems: 'center', gap: 3, textDecoration: 'none' }}>
-                เปิดดูเต็ม <ExternalLink size={11} />
-              </a>
+        {/* ── Receipt (รองรับหลายรูป) ── */}
+        {(() => {
+          const imgs = p.receipt_image_urls?.length ? p.receipt_image_urls : (p.receipt_image_url ? [p.receipt_image_url] : [])
+          if (imgs.length === 0) return null
+          return (
+            <div className="surface" style={{ padding: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <FileText size={14} color="var(--ink-mute)" />
+                <p className="kicker" style={{ margin: 0 }}>ใบเสร็จ{imgs.length > 1 ? ` (${imgs.length})` : ''}</p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {imgs.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', position: 'relative' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={`receipt ${i + 1}`}
+                      style={{ width: '100%', maxHeight: 400, objectFit: 'contain', borderRadius: 'var(--r-sm)', background: 'var(--bg-soft)' }} />
+                    <span style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(10,9,7,0.7)', color: '#fff', fontSize: 10, padding: '3px 7px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      เปิดดูเต็ม <ExternalLink size={10} />
+                    </span>
+                  </a>
+                ))}
+              </div>
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.receipt_image_url} alt="receipt"
-              style={{
-                width: '100%', maxHeight: 400, objectFit: 'contain',
-                borderRadius: 'var(--r-sm)', background: 'var(--bg-soft)',
-              }} />
-          </div>
-        )}
+          )
+        })()}
 
         {/* ── Admin note (if any) ── */}
         {p.admin_note && (

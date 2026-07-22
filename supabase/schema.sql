@@ -102,6 +102,7 @@ CREATE TABLE public.purchase_registrations (
   purchase_date      DATE,
   total_amount       NUMERIC(12, 2) DEFAULT 0,
   receipt_image_url  TEXT,
+  receipt_image_urls TEXT[],   -- ใบเสร็จหลายรูป (receipt_image_url = urls[0])
 
   -- Verification
   bq_verified        BOOLEAN NOT NULL DEFAULT false,

@@ -35,6 +35,7 @@ export async function GET(req: Request) {
   const { data: privileges, error } = await service
     .from('refill_privileges')
     .select('*')
+    .is('deleted_at', null)   // ซ่อนสิทธิที่ถูกลบจากลูกค้า
     .or(filters.join(','))
     .order('purchased_at', { ascending: false })
 

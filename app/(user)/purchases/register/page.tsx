@@ -46,8 +46,6 @@ interface OrderEntry {
   serial_number: string
   bqData: Record<string, unknown> | null
   state: 'verified' | 'pending' | 'bq_error' | 'manual'
-  receipt: File | null
-  receiptPreview: string | null
 }
 
 export default function RegisterPage() {
@@ -65,8 +63,9 @@ export default function RegisterPage() {
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>('idle')
   const [verifyMsg, setVerifyMsg] = useState('')
   const [verifiedData, setVerifiedData] = useState<Record<string, unknown> | null>(null)
-  const [receipt, setReceipt] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  // ใบเสร็จหลายรูป (ใช้ร่วมทุกซีเรียลของหน้าร้าน)
+  const [receipts, setReceipts] = useState<File[]>([])
+  const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
   // ── queue of orders ──
@@ -102,19 +101,25 @@ export default function RegisterPage() {
   function currentValid(): boolean {
     if (orderIdReq && !orderSn.trim()) return false
     if (snReq && !serialNumber.trim()) return false
-    if (receiptReq && !receipt) return false
+    // ซีเรียล/ออเดอร์ที่ระบบแจ้งว่าซ้ำแล้ว ห้ามเพิ่ม/ส่ง (กัน 409 ตอน submit)
+    if (verifyStatus === 'claimed') return false
+    // ใบเสร็จ (หน้าร้าน) ใช้ร่วมทุกรายการ → เช็คเป็น gate รวมตอน submit (canSubmit)
     // ONLINE must resolve the BQ verify so bq_data attaches for auto-award.
-    // ONSITE (Brand Shop / หน้าร้าน) don't require the search — admin confirms them.
+    // ONSITE (หน้าร้าน) don't require the search — admin confirms them.
     if (autoAward && !(verifyStatus === 'verified' || verifyStatus === 'pending' || verifyStatus === 'bq_error')) return false
     return true
   }
 
   const entryKey = () => orderSn.trim() || serialNumber.trim()
 
+  // ล้างช่องกรอกปัจจุบัน (ไม่แตะใบเสร็จ — ใบเสร็จเป็น shared, ล้างตอนเปลี่ยนช่องทาง)
   function resetCurrent() {
     setOrderSn(''); setSerialNumber(''); setSerialList([]); setVerifyStatus('idle'); setVerifyMsg(''); setVerifiedData(null)
-    // A queued entry takes ownership of previewUrl — clear the ref WITHOUT revoking.
-    setReceipt(null); setPreviewUrl(null)
+  }
+
+  function clearReceipts() {
+    previewUrls.forEach(u => URL.revokeObjectURL(u))
+    setReceipts([]); setPreviewUrls([])
   }
 
   // Order-based channels: add the typed SN to the list (1 order → many SNs).
@@ -136,8 +141,7 @@ export default function RegisterPage() {
   function switchChannel(v: string) {
     if (v === channel) return
     setChannel(v); setError('')
-    // Current, un-queued receipt is discarded on switch — safe to revoke.
-    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    clearReceipts()  // ใบเสร็จของช่องเดิมถูกทิ้งเมื่อเปลี่ยนช่องทาง
     resetCurrent()
   }
 
@@ -177,8 +181,6 @@ export default function RegisterPage() {
       // but their state is 'manual' (รอแอดมินยืนยัน), never auto-verified.
       bqData: verifiedData,
       state: autoAward ? (verifyStatus as OrderEntry['state']) : 'manual',
-      receipt,
-      receiptPreview: previewUrl,
     }
   }
 
@@ -187,27 +189,33 @@ export default function RegisterPage() {
     if (!currentValid()) return
     const k = entryKey()
     if (orders.some(o => (o.order_sn || o.serial_number) === k)) {
-      setError('รายการนี้ถูกเพิ่มไว้แล้ว'); return
+      setError(lookupOnSerial ? 'ซีเรียลนี้ถูกเพิ่มไว้แล้ว' : 'รายการนี้ถูกเพิ่มไว้แล้ว'); return
     }
     setError('')
     setOrders(prev => [...prev, makeEntry(`o${keyRef.current++}`)])
-    resetCurrent()
+    if (lookupOnSerial) {
+      // หน้าร้าน: เก็บใบเสร็จ(ใช้ร่วม)ไว้ — ล้างแค่ช่องซีเรียล + ผลค้นหา เพื่อกรอกตัวถัดไป
+      setSerialNumber(''); setVerifyStatus('idle'); setVerifyMsg(''); setVerifiedData(null)
+    } else {
+      resetCurrent()
+    }
   }
 
   function removeOrder(key: string) {
-    setOrders(prev => {
-      const o = prev.find(x => x.key === key)
-      if (o?.receiptPreview) URL.revokeObjectURL(o.receiptPreview)
-      return prev.filter(x => x.key !== key)
-    })
+    setOrders(prev => prev.filter(x => x.key !== key))
   }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (previewUrl) URL.revokeObjectURL(previewUrl)
-    setReceipt(file)
-    setPreviewUrl(URL.createObjectURL(file))
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    setReceipts(prev => [...prev, ...files])
+    setPreviewUrls(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
+    if (fileRef.current) fileRef.current.value = ''  // อนุญาตให้เลือกไฟล์เดิมซ้ำได้
+  }
+
+  function removeReceipt(idx: number) {
+    setPreviewUrls(prev => { if (prev[idx]) URL.revokeObjectURL(prev[idx]); return prev.filter((_, i) => i !== idx) })
+    setReceipts(prev => prev.filter((_, i) => i !== idx))
   }
 
   // All entries to submit = queued + the current one (if valid & not already queued).
@@ -222,6 +230,9 @@ export default function RegisterPage() {
 
   const entries = collectEntries()
   const totalEntries = entries.length
+  // หน้าร้าน: ต้องมีใบเสร็จอย่างน้อย 1 รูป (ใช้ร่วมทุกซีเรียล) ก่อนยืนยัน
+  const receiptMissing = receiptReq && receipts.length === 0
+  const canSubmit = totalEntries > 0 && !receiptMissing
 
   async function submitAll() {
     if (entries.length === 0) { setError('กรุณาเพิ่มอย่างน้อย 1 รายการ'); return }
@@ -238,7 +249,8 @@ export default function RegisterPage() {
         fd.append('channel_type', d.channelType)
         if (o.serial_number) fd.append('serial_number', o.serial_number)
         if (o.bqData) fd.append('bq_data', JSON.stringify(o.bqData))
-        if (o.receipt) fd.append('receipt', o.receipt)
+        // ใบเสร็จ (หน้าร้าน) ใช้ร่วมทุกรายการ — แนบทุกรูปให้ทุก registration
+        if (d.receipt !== 'off') receipts.forEach(f => fd.append('receipt', f))
         const res = await fetch('/api/purchases/register', { method: 'POST', body: fd })
         const data = await res.json()
         if (!res.ok) fails.push(`${label}: ${data.error || 'ไม่สำเร็จ'}`)
@@ -256,7 +268,7 @@ export default function RegisterPage() {
   const helpText = autoAward
     ? 'กรอก Order ID เพื่อตรวจสอบ · Serial Number ไม่บังคับ · เพิ่มได้หลายออเดอร์'
     : lookupOnSerial
-      ? 'กรอก Serial Number (ค้นหาสินค้าได้) และแนบใบเสร็จ · Order ID กรอกหรือไม่ก็ได้ · รอแอดมินยืนยัน'
+      ? 'กรอก Serial Number (ค้นหาสินค้าได้) · เพิ่มได้หลายซีเรียล · แนบใบเสร็จได้หลายรูปใช้ร่วมกัน · Order ID กรอกหรือไม่ก็ได้ · รอแอดมินยืนยัน'
       : 'กรอก Order ID (ค้นหาสินค้าได้) และแนบใบเสร็จ · Serial Number ไม่บังคับ · รอแอดมินยืนยัน'
 
   function stateLabel(s: OrderEntry['state']) {
@@ -526,20 +538,17 @@ export default function RegisterPage() {
                   border: '1px solid var(--hair)', borderRadius: 'var(--r-md)',
                 }}>
                   <PlatformLogo channel={o.channel} size={18} />
-                  {o.receiptPreview && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={o.receiptPreview} alt="receipt" style={{
-                      width: 32, height: 32, flexShrink: 0, objectFit: 'cover',
-                      borderRadius: 'var(--r-sm)', border: '1px solid var(--hair)',
-                    }} />
-                  )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {o.order_sn || o.serial_number}
                     </p>
-                    <p style={{ margin: '2px 0 0', fontSize: 10.5, color: 'var(--ink-mute)' }}>
+                    <p style={{ margin: '2px 0 0', fontSize: 10.5, color: 'var(--ink-mute)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {stateLabel(o.state)}
                       {(() => {
+                        // ชื่อสินค้าจาก BQ (ถ้าค้นเจอ) — ช่วยยืนยันว่าซีเรียลตรงเครื่อง
+                        const items = (o.bqData?.items as Array<Record<string, unknown>> | undefined) || []
+                        const name = items[0]?.item_name as string | undefined
+                        if (name) return ` · ${name}`
                         const n = o.order_sn ? o.serial_number.split(',').filter(s => s.trim()).length : 0
                         return n > 0 ? ` · ${n} SN` : ''
                       })()}
@@ -654,14 +663,24 @@ export default function RegisterPage() {
                 : <>เลขเครื่องด้านล่าง/หลังกล่องสินค้า — <strong>1 ออเดอร์ใส่ได้หลาย SN</strong> (กด + เพื่อเพิ่มทีละตัว)</>}
             </p>
             {lookupOnSerial && renderVerifyResult()}
+
+            {/* หน้าร้าน: เพิ่มซีเรียลถัดไป (ใช้ใบเสร็จใบเดียวร่วมกัน) */}
+            {lookupOnSerial && currentValid() && (
+              <button onClick={addAnother} className="btn btn-ghost tap-down"
+                style={{ marginTop: 12, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Plus size={16} /> เพิ่มซีเรียลนี้ แล้วกรอกตัวถัดไป
+              </button>
+            )}
           </div>
         )}
 
-        {/* ── Receipt (Brand Shop / หน้าร้าน — REQUIRED) ── */}
+        {/* ── Receipt (หน้าร้าน — REQUIRED, ใช้ร่วมทุกซีเรียล) ── */}
         {showReceipt && (
           <div className="surface" style={{ padding: 18 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
-              <p className="kicker" style={{ margin: 0 }}>Receipt · ใบเสร็จ</p>
+              <p className="kicker" style={{ margin: 0 }}>
+                Receipt · ใบเสร็จ{previewUrls.length > 0 ? ` (${previewUrls.length})` : ''}{lookupOnSerial && orders.length > 0 ? ' · ใช้ร่วมทุกซีเรียล' : ''}
+              </p>
               <span style={{
                 fontSize: 10, letterSpacing: '0.04em', fontWeight: receiptReq ? 700 : 600,
                 color: receiptReq ? 'var(--red)' : 'var(--ink-faint)',
@@ -669,7 +688,8 @@ export default function RegisterPage() {
                 {receiptReq ? 'จำเป็น' : 'ไม่จำเป็น'}
               </span>
             </div>
-            {!previewUrl ? (
+
+            {previewUrls.length === 0 ? (
               <div onClick={() => fileRef.current?.click()} className="tap-down" style={{
                 border: '2px dashed var(--line)', borderRadius: 'var(--r-md)',
                 padding: 40, textAlign: 'center', cursor: 'pointer',
@@ -683,33 +703,50 @@ export default function RegisterPage() {
                   <Upload size={22} strokeWidth={1.5} />
                 </div>
                 <p style={{ fontSize: 13.5, color: 'var(--ink)', fontWeight: 700, margin: '0 0 4px' }}>
-                  กดเพื่อเลือกรูปใบเสร็จ
+                  กดเพื่อเลือกรูปใบเสร็จ (เลือกได้หลายรูป)
                 </p>
                 <p className="serif-i" style={{ fontSize: 11, color: 'var(--ink-mute)', margin: 0 }}>
-                  JPG · PNG · PDF · ไม่เกิน 10MB
+                  JPG · PNG · PDF · ไม่เกิน 10MB/รูป
                 </p>
               </div>
             ) : (
-              <div style={{ position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={previewUrl} alt="receipt" style={{ width: '100%', objectFit: 'contain', maxHeight: 300 }} />
-                <button onClick={() => { if (previewUrl) URL.revokeObjectURL(previewUrl); setReceipt(null); setPreviewUrl(null) }} className="tap-down" style={{
-                  position: 'absolute', top: 8, right: 8,
-                  width: 30, height: 30, borderRadius: '50%',
-                  background: 'rgba(10,9,7,0.85)', border: 'none',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', backdropFilter: 'blur(8px)',
-                }}>
-                  <X size={14} color="#fff" />
-                </button>
-              </div>
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))', gap: 8 }}>
+                  {previewUrls.map((url, i) => (
+                    <div key={url} style={{ position: 'relative', aspectRatio: '1', borderRadius: 'var(--r-md)', overflow: 'hidden', border: '1px solid var(--hair)', background: 'var(--bg-soft)' }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`receipt ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <button onClick={() => removeReceipt(i)} className="tap-down" style={{
+                        position: 'absolute', top: 4, right: 4,
+                        width: 24, height: 24, borderRadius: '50%',
+                        background: 'rgba(10,9,7,0.85)', border: 'none',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', backdropFilter: 'blur(8px)',
+                      }}>
+                        <X size={12} color="#fff" />
+                      </button>
+                    </div>
+                  ))}
+                  <button onClick={() => fileRef.current?.click()} className="tap-down" style={{
+                    aspectRatio: '1', borderRadius: 'var(--r-md)', border: '2px dashed var(--line)',
+                    background: 'var(--bg-soft)', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', color: 'var(--gold-deep)',
+                  }}>
+                    <Plus size={20} />
+                    <span style={{ fontSize: 10.5, fontWeight: 600 }}>เพิ่มรูป</span>
+                  </button>
+                </div>
+                <p style={{ fontSize: 10.5, color: 'var(--ink-mute)', margin: '8px 0 0' }}>
+                  แนบได้หลายรูป (เช่น ใบเสร็จยาว/หลายหน้า) — ใช้กับทุกรายการที่ลงทะเบียนครั้งนี้
+                </p>
+              </>
             )}
-            <input ref={fileRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleFile} />
+            <input ref={fileRef} type="file" accept="image/*,.pdf" multiple style={{ display: 'none' }} onChange={handleFile} />
           </div>
         )}
 
-        {/* ── Add-another ── */}
-        {currentValid() && (
+        {/* ── Add-another (online multi-order; หน้าร้าน ใช้ปุ่มในการ์ด SN แทน) ── */}
+        {!lookupOnSerial && currentValid() && (
           <button onClick={addAnother} className="btn btn-ghost tap-down" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             <Plus size={16} /> เพิ่มรายการอีก
           </button>
@@ -726,8 +763,15 @@ export default function RegisterPage() {
           </div>
         )}
 
+        {/* หน้าร้าน: เตือนแนบใบเสร็จเมื่อมีซีเรียลแล้วแต่ยังไม่แนบ */}
+        {receiptMissing && totalEntries > 0 && (
+          <p style={{ fontSize: 12, color: 'var(--red)', margin: '0 0 -4px', textAlign: 'center' }}>
+            ⚠️ แนบใบเสร็จก่อนยืนยัน (ใช้ใบเดียวกับทุกซีเรียล)
+          </p>
+        )}
+
         {/* ── Submit ── */}
-        <button onClick={submitAll} disabled={submitting || totalEntries === 0}
+        <button onClick={submitAll} disabled={submitting || !canSubmit}
           className="btn btn-ink tap-down">
           {submitting
             ? <><Loader2 size={14} className="spinner" /> กำลังบันทึก...</>

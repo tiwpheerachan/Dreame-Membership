@@ -18,11 +18,14 @@ export type AuditAction =
   | 'MEMBER_PASSWORD_SET'
   | 'MEMBER_LOGIN_LINK'
   | 'REFILL_ROUND_UPDATED'
+  | 'REFILL_PRIVILEGE_ADDED'
+  | 'REFILL_PRIVILEGE_DELETED'
+  | 'REFILL_PRIVILEGE_RESTORED'
 
 interface LogParams {
   staffId:     string
   action:      AuditAction
-  targetType:  'purchase' | 'user' | 'points' | 'coupon' | 'reward' | 'redemption' | 'refill_round'
+  targetType:  'purchase' | 'user' | 'points' | 'coupon' | 'reward' | 'redemption' | 'refill_round' | 'refill_privilege'
   targetId?:   string  // UUID; omit for actions that target a non-UUID identifier (e.g. an order_sn)
   userId?:     string
   detail?:     Record<string, unknown>
