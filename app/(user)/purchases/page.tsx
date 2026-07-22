@@ -12,6 +12,8 @@ import { formatDate, warrantyDaysLeft } from '@/lib/utils'
 import { computeWarranty, mainWarrantyMonths } from '@/lib/warranty'
 import { calculatePoints, normalizeTier } from '@/lib/points'
 import { batchVerifyOrders } from '@/lib/bigquery'
+import { getRefillRoundsByRegIds } from '@/lib/refill-server'
+import { RefillLine } from '@/components/user/RefillCard'
 
 const CHANNEL: Record<string, { Icon: typeof ShoppingBag; label: string }> = {
   SHOPEE:  { Icon: ShoppingBag, label: 'Shopee'   },
@@ -161,6 +163,9 @@ export default async function PurchasesPage() {
       console.error('[purchases] BQ enrichment failed:', e)
     }
   }
+
+  // สิทธิน้ำยาฟรี (auto-grant Brand Shop) ต่อสินค้าแต่ละชิ้น
+  const refillByReg = await getRefillRoundsByRegIds(supabase, purchases.map(p => p.id))
 
   return (
     <div className="page-enter" style={{
@@ -387,6 +392,9 @@ export default async function PurchasesPage() {
                     </span>
                   </div>
                 )}
+
+                {/* สิทธิน้ำยาฟรี (Brand Shop) — วันที่ต้องรับ + รับแล้วกี่รอบ */}
+                <RefillLine rounds={refillByReg.get(p.id) || []} />
               </div>
             </Link>
           )

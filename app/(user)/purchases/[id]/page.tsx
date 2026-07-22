@@ -16,6 +16,8 @@ import { computeWarranty } from '@/lib/warranty'
 import { calculatePoints, normalizeTier } from '@/lib/points'
 import { EARN_DIVISOR_BY_CHANNEL, TIER_MULTIPLIER } from '@/types'
 import InlineShippingStatus from '@/components/user/InlineShippingStatus'
+import { getRefillRoundsByRegIds } from '@/lib/refill-server'
+import { RefillDetail } from '@/components/user/RefillCard'
 
 const CHANNEL: Record<string, { Icon: typeof ShoppingBag; label: string }> = {
   SHOPEE:  { Icon: ShoppingBag, label: 'Shopee'   },
@@ -70,6 +72,9 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
   const showProjected = (p.points_awarded || 0) === 0 && projected > 0
   const divisor = EARN_DIVISOR_BY_CHANNEL[(p.channel as keyof typeof EARN_DIVISOR_BY_CHANNEL)] ?? 500
   const multiplier = TIER_MULTIPLIER[userTier] ?? 1.0
+
+  // สิทธิน้ำยาฟรี (auto-grant Brand Shop) ของสินค้าชิ้นนี้
+  const refillRounds = (await getRefillRoundsByRegIds(supabase, [p.id])).get(p.id) || []
 
   const totalQty = items.reduce((s, it) => s + Number(it.quantity || 0), 0)
 
@@ -337,6 +342,9 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
             </p>
           </div>
         )}
+
+        {/* ── สิทธิรับน้ำยาฟรี (Brand Shop) — รอบ + สถานะรับ ── */}
+        <RefillDetail rounds={refillRounds} />
 
         {/* ── Receipt (รองรับหลายรูป) ── */}
         {(() => {
