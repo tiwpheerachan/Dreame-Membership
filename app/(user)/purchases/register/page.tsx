@@ -68,6 +68,10 @@ export default function RegisterPage() {
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // หน้าร้าน: ค้นด้วย Order ID → ดึงซีเรียลของออเดอร์มาให้อัตโนมัติ
+  const [orderSearchStatus, setOrderSearchStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [orderSearchMsg, setOrderSearchMsg] = useState('')
+
   // ── queue of orders ──
   const [orders, setOrders] = useState<OrderEntry[]>([])
   const keyRef = useRef(0)
@@ -115,6 +119,7 @@ export default function RegisterPage() {
   // ล้างช่องกรอกปัจจุบัน (ไม่แตะใบเสร็จ — ใบเสร็จเป็น shared, ล้างตอนเปลี่ยนช่องทาง)
   function resetCurrent() {
     setOrderSn(''); setSerialNumber(''); setSerialList([]); setVerifyStatus('idle'); setVerifyMsg(''); setVerifiedData(null)
+    setOrderSearchStatus('idle'); setOrderSearchMsg('')
   }
 
   function clearReceipts() {
@@ -167,6 +172,58 @@ export default function RegisterPage() {
       else if (data.status === 'BQ_ERROR') setVerifyStatus('bq_error')
       else setVerifyStatus('error')
     } catch { setVerifyStatus('error') }
+  }
+
+  // หน้าร้าน: ค้นออเดอร์ด้วย Order ID → ดึงซีเรียลทั้งหมดมาเข้าคิวให้อัตโนมัติ
+  async function searchStoreOrder() {
+    const oid = orderSn.trim()
+    if (!oid) return
+    setOrderSearchStatus('loading'); setOrderSearchMsg(''); setError('')
+    try {
+      const res = await fetch('/api/purchases/verify-order', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_sn: oid, channel: 'STORE', lookup: 'order' }),
+      })
+      const data = await res.json()
+      if (data.status === 'FOUND_ORDER') {
+        type Unit = { serial: string; item_name: string; item_sku: string; model_name: string; unit_price: number; image_url: string | null; claimed: boolean }
+        const units = (data.units || []) as Unit[]
+        const fresh = units.filter(u => !u.claimed && !orders.some(o => o.serial_number === u.serial))
+        if (fresh.length > 0) {
+          const newEntries: OrderEntry[] = fresh.map(u => ({
+            key: `o${keyRef.current++}`,
+            channel: 'STORE',
+            order_sn: '',
+            serial_number: u.serial,
+            bqData: {
+              order_sn: data.order_sn, platform: data.platform, order_date: data.order_date,
+              shop_type: data.shop_type, total_amount: u.unit_price,
+              items: [{
+                item_id: '', model_id: '', item_name: u.item_name, item_sku: u.item_sku,
+                model_name: u.model_name, model_sku: '', quantity: 1, price: u.unit_price,
+                buyer_paid: u.unit_price, image_url: u.image_url,
+              }],
+            },
+            state: 'manual',
+          }))
+          setOrders(prev => [...prev, ...newEntries])
+          setOrderSn('')
+        }
+        const skipped = units.length - fresh.length
+        setOrderSearchStatus('done')
+        setOrderSearchMsg(
+          units.length === 0
+            ? 'ออเดอร์นี้ไม่มี Serial Number ในระบบ — กรอก SN เองได้เลย'
+            : `พบ ${units.length} ซีเรียล · เพิ่มให้ ${fresh.length}${skipped > 0 ? ` · ข้ามที่ลงแล้ว ${skipped}` : ''}`,
+        )
+      } else if (data.status === 'ORDER_NOT_FOUND' || data.status === 'BQ_ERROR') {
+        setOrderSearchStatus('error'); setOrderSearchMsg(data.message || 'ไม่พบออเดอร์')
+      } else {
+        setOrderSearchStatus('error'); setOrderSearchMsg('ค้นหาไม่สำเร็จ')
+      }
+    } catch {
+      setOrderSearchStatus('error'); setOrderSearchMsg('เกิดข้อผิดพลาด')
+    }
   }
 
   function makeEntry(key: string): OrderEntry {
@@ -531,39 +588,58 @@ export default function RegisterPage() {
           <div className="surface" style={{ padding: 18 }}>
             <p className="kicker" style={{ margin: '0 0 12px' }}>รายการที่เพิ่มแล้ว ({orders.length})</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {orders.map(o => (
-                <div key={o.key} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 12px', background: 'var(--bg-soft)',
-                  border: '1px solid var(--hair)', borderRadius: 'var(--r-md)',
-                }}>
-                  <PlatformLogo channel={o.channel} size={18} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {o.order_sn || o.serial_number}
-                    </p>
-                    <p style={{ margin: '2px 0 0', fontSize: 10.5, color: 'var(--ink-mute)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {stateLabel(o.state)}
-                      {(() => {
-                        // ชื่อสินค้าจาก BQ (ถ้าค้นเจอ) — ช่วยยืนยันว่าซีเรียลตรงเครื่อง
-                        const items = (o.bqData?.items as Array<Record<string, unknown>> | undefined) || []
-                        const name = items[0]?.item_name as string | undefined
-                        if (name) return ` · ${name}`
-                        const n = o.order_sn ? o.serial_number.split(',').filter(s => s.trim()).length : 0
-                        return n > 0 ? ` · ${n} SN` : ''
-                      })()}
-                    </p>
-                  </div>
-                  <button onClick={() => removeOrder(o.key)} className="tap-down" style={{
-                    width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-                    background: '#fff', border: '1px solid var(--line)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'var(--red)', cursor: 'pointer',
+              {orders.map(o => {
+                const items = (o.bqData?.items as Array<Record<string, unknown>> | undefined) || []
+                const it = items[0] || {}
+                const img = (it.image_url as string | null) || null
+                const name = (it.item_name as string) || (it.model_name as string) || ''
+                const price = Number(it.price || o.bqData?.total_amount || 0)
+                const primary = o.order_sn || o.serial_number
+                const snCount = o.order_sn ? o.serial_number.split(',').filter(s => s.trim()).length : 0
+                return (
+                  <div key={o.key} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 12px', background: 'var(--bg-soft)',
+                    border: '1px solid var(--hair)', borderRadius: 'var(--r-md)',
                   }}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
+                    {/* รูปสินค้า (ถ้ามีใน BQ) ไม่งั้นโลโก้ช่องทาง */}
+                    {img ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={img} alt={name || 'product'} style={{
+                        width: 44, height: 44, flexShrink: 0, objectFit: 'cover',
+                        borderRadius: 'var(--r-sm)', background: '#fff', border: '1px solid var(--hair)',
+                      }} />
+                    ) : (
+                      <div style={{
+                        width: 44, height: 44, flexShrink: 0, borderRadius: 'var(--r-sm)',
+                        background: '#fff', border: '1px solid var(--hair)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <PlatformLogo channel={o.channel} size={22} />
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {name || primary}
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: 10.5, color: 'var(--ink-mute)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {primary}{snCount > 0 ? ` · ${snCount} SN` : ''}{price > 0 ? ` · ฿${price.toLocaleString()}` : ''}
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: 10, color: o.state === 'verified' ? 'var(--green)' : 'var(--ink-faint)', fontWeight: 600 }}>
+                        {stateLabel(o.state)}
+                      </p>
+                    </div>
+                    <button onClick={() => removeOrder(o.key)} className="tap-down" style={{
+                      width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                      background: '#fff', border: '1px solid var(--line)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: 'var(--red)', cursor: 'pointer',
+                    }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
@@ -573,7 +649,7 @@ export default function RegisterPage() {
           <div className="surface" style={{ padding: 18 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
               <p className="kicker" style={{ margin: 0 }}>
-                {orders.length > 0 ? 'เพิ่มออเดอร์ถัดไป' : 'Order ID'}
+                {!lookupOnSerial && orders.length > 0 ? 'เพิ่มออเดอร์ถัดไป' : 'Order ID'}
               </p>
               {!orderIdReq && (
                 <span style={{ fontSize: 10, color: 'var(--ink-faint)', letterSpacing: '0.04em', fontWeight: 600 }}>ไม่จำเป็น</span>
@@ -582,8 +658,16 @@ export default function RegisterPage() {
             <div style={{ display: 'flex', gap: 8 }}>
               <input className="field" type="text" placeholder="เช่น 250123456789"
                 value={orderSn}
-                onChange={e => { setOrderSn(e.target.value); if (verifyStatus !== 'idle') { setVerifyStatus('idle'); setVerifiedData(null) } }}
-                onKeyDown={e => e.key === 'Enter' && lookupOnOrder && verifyOrder()}
+                onChange={e => {
+                  setOrderSn(e.target.value)
+                  if (verifyStatus !== 'idle') { setVerifyStatus('idle'); setVerifiedData(null) }
+                  if (orderSearchStatus !== 'idle') { setOrderSearchStatus('idle'); setOrderSearchMsg('') }
+                }}
+                onKeyDown={e => {
+                  if (e.key !== 'Enter') return
+                  if (lookupOnOrder) verifyOrder()
+                  else if (lookupOnSerial && orderSn.trim()) searchStoreOrder()
+                }}
                 style={{ flex: 1 }} />
               {lookupOnOrder && (
                 <button onClick={verifyOrder} disabled={verifyStatus === 'loading' || !orderSn.trim()}
@@ -591,7 +675,31 @@ export default function RegisterPage() {
                   {verifyStatus === 'loading' ? <Loader2 size={16} className="spinner" /> : <Search size={16} />}
                 </button>
               )}
+              {/* หน้าร้าน: ค้นด้วย Order ID → ดึงซีเรียลมาให้ */}
+              {lookupOnSerial && (
+                <button onClick={searchStoreOrder} disabled={orderSearchStatus === 'loading' || !orderSn.trim()}
+                  className="btn btn-ink tap-down" style={{ padding: '0 18px' }} title="ค้นออเดอร์เพื่อดึงซีเรียล">
+                  {orderSearchStatus === 'loading' ? <Loader2 size={16} className="spinner" /> : <Search size={16} />}
+                </button>
+              )}
             </div>
+
+            {lookupOnSerial && (
+              <p style={{ fontSize: 10.5, color: 'var(--ink-mute)', margin: '8px 0 0', lineHeight: 1.5 }}>
+                มี Order ID? กด <strong>ค้นหา</strong> เพื่อดึง Serial Number ทั้งหมดของออเดอร์มาให้อัตโนมัติ
+              </p>
+            )}
+            {lookupOnSerial && orderSearchMsg && (
+              <div style={{
+                marginTop: 10, padding: '10px 12px', borderRadius: 'var(--r-md)',
+                background: orderSearchStatus === 'error' ? 'var(--red-soft)' : 'var(--green-soft)',
+                border: `1px solid ${orderSearchStatus === 'error' ? 'rgba(139,58,58,0.18)' : 'rgba(64,107,63,0.18)'}`,
+              }}>
+                <p style={{ margin: 0, fontSize: 11.5, fontWeight: 600, color: orderSearchStatus === 'error' ? 'var(--red)' : 'var(--green)' }}>
+                  {orderSearchStatus !== 'error' && '✓ '}{orderSearchMsg}
+                </p>
+              </div>
+            )}
 
             {lookupOnOrder && renderVerifyResult()}
           </div>

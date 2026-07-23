@@ -13,7 +13,7 @@ import { computeWarranty, mainWarrantyMonths } from '@/lib/warranty'
 import { calculatePoints, normalizeTier } from '@/lib/points'
 import { batchVerifyOrders } from '@/lib/bigquery'
 import { getRefillRoundsByRegIds } from '@/lib/refill-server'
-import { RefillLine } from '@/components/user/RefillCard'
+import { RefillBar } from '@/components/user/RefillCard'
 
 const CHANNEL: Record<string, { Icon: typeof ShoppingBag; label: string }> = {
   SHOPEE:  { Icon: ShoppingBag, label: 'Shopee'   },
@@ -388,13 +388,14 @@ export default async function PurchasesPage() {
                       fontVariantNumeric: 'tabular-nums',
                       flexShrink: 0,
                     }}>
-                      {wOk ? `${daysLeft} วัน` : 'หมดอายุ'}
+                      {/* หลอดประกัน: โชว์วันที่หมดประกัน (แทนจำนวนวัน) */}
+                      {wOk && mainEnd ? formatDate(mainEnd) : 'หมดอายุ'}
                     </span>
                   </div>
                 )}
 
-                {/* สิทธิน้ำยาฟรี (Brand Shop) — วันที่ต้องรับ + รับแล้วกี่รอบ */}
-                <RefillLine rounds={refillByReg.get(p.id) || []} />
+                {/* หลอดน้ำยา (Brand Shop) — วันที่ใกล้สุดที่ต้องไปรับน้ำยา */}
+                <RefillBar rounds={refillByReg.get(p.id) || []} />
               </div>
             </Link>
           )

@@ -5,6 +5,47 @@ import {
   effectiveStatus, nextActionableRound, formatThaiDate, countdownText,
   daysBetween, ROUND_META, type RefillRound,
 } from '@/lib/refill'
+import { formatDate } from '@/lib/utils'
+
+// ── หลอดน้ำยา บนการ์ดสินค้า — โชว์ "วันที่ใกล้สุดที่จะรับน้ำยา" (คู่กับหลอดประกัน) ──
+export function RefillBar({ rounds }: { rounds: RefillRound[] }) {
+  if (!rounds || rounds.length === 0) return null
+  const total = rounds.length
+  const claimed = rounds.filter(r => effectiveStatus(r) === 'claimed').length
+  const claimable = rounds.find(r => effectiveStatus(r) === 'claimable')
+  const next = nextActionableRound(rounds)
+
+  let label: string
+  let accent = '#8A6D2B'
+  if (claimable) { label = `รอบ ${claimable.round_no} · รับได้เลย`; accent = '#1F7A4D' }
+  else if (next) { label = `รอบ ${next.round_no} · ${formatDate(next.due_date)}` }
+  else { label = 'รับครบแล้ว'; accent = '#6E6E6E' }
+
+  const pct = claimed > 0 ? Math.min(100, Math.max(6, (claimed / total) * 100)) : (claimable ? 100 : 0)
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }} title={`น้ำยาฟรี รับแล้ว ${claimed}/${total}`}>
+      {/* แท็ก "รับน้ำยาฟรี" */}
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
+        padding: '2px 7px', borderRadius: 999,
+        background: claimable ? '#E7F4EC' : '#F7F1E0',
+        color: accent, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.01em',
+      }}>
+        <Droplets size={10} strokeWidth={2.4} /> รับน้ำยาฟรี
+      </span>
+      <div style={{ flex: 1, height: 4, borderRadius: 100, overflow: 'hidden', background: 'rgba(160,120,43,0.14)' }}>
+        <div style={{
+          height: '100%', width: `${pct}%`, borderRadius: 100,
+          background: claimable ? 'linear-gradient(90deg,#2E8B47,#4FAA68)' : 'linear-gradient(90deg,#C9A24A,#E0C173)',
+        }} />
+      </div>
+      <span style={{ fontSize: 10, fontWeight: 800, color: accent, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+        {label}
+      </span>
+    </div>
+  )
+}
 
 // ── บรรทัดสรุปบนการ์ดสินค้า (list) ──
 export function RefillLine({ rounds }: { rounds: RefillRound[] }) {

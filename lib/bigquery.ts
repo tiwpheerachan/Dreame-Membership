@@ -282,6 +282,86 @@ export async function verifyBySerialInBQVerbose(serial: string): Promise<VerifyR
 }
 
 // ============================================================
+// ค้นออเดอร์หน้าร้านด้วย Order ID → คืน "รายซีเรียล" ทั้งหมดของออเดอร์นั้น
+// (order_items 1 แถว/SKU มี serial_numbers เป็น comma-list; แตกเป็น 1 unit/serial
+//  ที่ราคาต่อหน่วย). ให้ลูกค้าค้นด้วย Order ID แล้วได้ SN ขึ้นมาอัตโนมัติ.
+// ============================================================
+export interface StoreOrderUnit {
+  serial:     string
+  item_name:  string
+  item_sku:   string
+  model_name: string
+  unit_price: number
+  image_url:  string | null
+}
+export type StoreOrderResult =
+  | { status: 'found'; data: { order_sn: string; platform: string; order_date: string; shop_type: string | null; units: StoreOrderUnit[] } }
+  | { status: 'not_found' }
+  | { status: 'error'; error: string }
+
+export async function verifyStoreOrderInBQVerbose(order_sn: string): Promise<StoreOrderResult> {
+  let bq: BigQuery
+  try { bq = getBQClient() } catch (e) { return { status: 'error', error: (e as Error).message } }
+
+  const normalized = order_sn.trim().toUpperCase()
+  try {
+    const [rows] = await bq.query({
+      query: `
+        SELECT
+          order_sn,
+          ANY_VALUE(platform)   AS platform,
+          CAST(ANY_VALUE(order_date) AS STRING) AS order_date,
+          ANY_VALUE(shop_type)  AS shop_type,
+          ARRAY_AGG(STRUCT(item_name, item_sku, model_name, price, buyer_paid, quantity, image_url, serial_numbers)) AS items
+        FROM \`${PROJECT}.${DATASET}.${T_ITEMS}\`
+        WHERE UPPER(TRIM(order_sn)) = @order_sn
+        GROUP BY order_sn
+        LIMIT 1
+      `,
+      params: { order_sn: normalized },
+    })
+    if (!rows || rows.length === 0) return { status: 'not_found' }
+
+    const r = rows[0] as Record<string, unknown>
+    const itemRows = (r.items as Array<Record<string, unknown>>) || []
+    const units: StoreOrderUnit[] = []
+    const seen = new Set<string>()
+    for (const it of itemRows) {
+      const priceNum = Number(it.price || 0)
+      const qty = Number(it.quantity || 0)
+      const buyerPaid = Number(it.buyer_paid || 0)
+      const unitPrice = priceNum > 0 ? priceNum : (qty > 0 ? buyerPaid / qty : buyerPaid)
+      const serials = String(it.serial_numbers || '')
+        .split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
+      for (const serial of serials) {
+        if (seen.has(serial)) continue
+        seen.add(serial)
+        units.push({
+          serial,
+          item_name:  String(it.item_name ?? ''),
+          item_sku:   String(it.item_sku ?? ''),
+          model_name: String(it.model_name ?? ''),
+          unit_price: unitPrice,
+          image_url:  (it.image_url as string | null) ?? null,
+        })
+      }
+    }
+    return {
+      status: 'found',
+      data: {
+        order_sn:   String(r.order_sn),
+        platform:   String(r.platform || ''),
+        order_date: (r.order_date as string) || '',
+        shop_type:  (r.shop_type as string | null) ?? null,
+        units,
+      },
+    }
+  } catch (e) {
+    return { status: 'error', error: (e as Error).message }
+  }
+}
+
+// ============================================================
 // Verify single order by order_sn (back-compat helper for user-facing code).
 // Returns null on either "not found" or "error" — callers that need to
 // distinguish should use verifyOrderInBQVerbose instead.

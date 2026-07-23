@@ -1,6 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { verifyOrderInBQVerbose, verifyBySerialInBQVerbose } from '@/lib/bigquery'
+import { verifyOrderInBQVerbose, verifyBySerialInBQVerbose, verifyStoreOrderInBQVerbose } from '@/lib/bigquery'
 
 export async function POST(req: Request) {
   try {
@@ -12,6 +12,38 @@ export async function POST(req: Request) {
     const order_sn = (body.order_sn as string | undefined)?.trim() || ''
     const serial_number = (body.serial_number as string | undefined)?.trim() || ''
     const channel = body.channel as string | undefined
+    const lookup = body.lookup as string | undefined   // 'order' = หน้าร้านค้นด้วย Order ID → คืนซีเรียลทั้งหมด
+
+    // ── หน้าร้านค้นด้วย Order ID → ดึงซีเรียลทุกตัวของออเดอร์ ──
+    if (channel === 'STORE' && lookup === 'order') {
+      if (!order_sn) return NextResponse.json({ error: 'order_sn required' }, { status: 400 })
+      const result = await verifyStoreOrderInBQVerbose(order_sn)
+      if (result.status === 'found') {
+        const service = createServiceClient()
+        const serials = result.data.units.map(u => u.serial)
+        // ซีเรียลที่ถูกลงทะเบียนไปแล้ว (claim key = serial) — ข้ามให้ตอนเพิ่ม
+        let claimedSet = new Set<string>()
+        if (serials.length > 0) {
+          const { data: rows } = await service
+            .from('purchase_registrations')
+            .select('order_sn').in('order_sn', serials).neq('status', 'REJECTED')
+          claimedSet = new Set((rows || []).map(r => r.order_sn as string))
+        }
+        return NextResponse.json({
+          status: 'FOUND_ORDER',
+          order_sn: result.data.order_sn,
+          shop_type: result.data.shop_type,
+          platform: result.data.platform,
+          order_date: result.data.order_date,
+          units: result.data.units.map(u => ({ ...u, claimed: claimedSet.has(u.serial) })),
+        })
+      }
+      if (result.status === 'error') {
+        console.error('[API] verify-order (store order) BQ error:', result.error)
+        return NextResponse.json({ status: 'BQ_ERROR', message: 'ตรวจสอบกับ BigQuery ไม่สำเร็จ — กรอก Serial Number เองได้เลย' })
+      }
+      return NextResponse.json({ status: 'ORDER_NOT_FOUND', message: 'ไม่พบ Order ID นี้ในระบบ — กรอก Serial Number เองได้เลย' })
+    }
 
     // หน้าร้าน (STORE) has no Order ID → look up BQ by Serial Number instead.
     // The SN is also its claim key (stored in order_sn), so dedupe on it too.
