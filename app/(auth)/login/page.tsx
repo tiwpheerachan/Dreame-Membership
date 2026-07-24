@@ -205,7 +205,8 @@ function LoginForm() {
   const searchParams = useSearchParams()
   const supabase = createClient()
 
-  const [mode, setMode]         = useState<Mode>('login')
+  // ?mode=register (เช่นจากปุ่ม "สมัครสมาชิก" บนหน้า /stores) → เปิดแท็บสมัครเลย
+  const [mode, setMode]         = useState<Mode>(searchParams.get('mode') === 'register' ? 'register' : 'login')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
